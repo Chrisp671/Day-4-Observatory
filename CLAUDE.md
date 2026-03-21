@@ -2,7 +2,29 @@
 
 ## Project Overview
 
-Emerald Observatory is an iOS/iPad astronomical application (v1.5.5) that displays real-time celestial information including planetary positions, solar/lunar eclipses, Earth views, and alarm-based astronomical events. Built by Emerald Sequoia LLC, licensed under MIT.
+Emerald Observatory is an iOS/iPad astronomical application (v1.5.5) that displays real-time celestial information including planetary positions, solar/lunar eclipses, Earth views, and alarm-based astronomical events. Originally built by Emerald Sequoia LLC, licensed under MIT.
+
+## Project History & Status
+
+**This is a community fork** of the original Emerald Observatory, intended to revive and continue development of the app.
+
+Emerald Sequoia LLC was a two-person company that created acclaimed astronomical apps for iOS over 15 years. In late 2022, they announced the company would shut down at the end of 2023, citing:
+
+- **Unsustainable revenue** — app income no longer covered overhead costs
+- **Maintenance burden** — keeping up with new hardware and OS releases lost the fun of the original development
+- **Tiny team** — only two people maintaining everything
+
+The apps were removed from the App Store on November 1, 2023. Before shutting down, Emerald Sequoia open-sourced all their code across 11 GitHub repositories at [github.com/EmeraldSequoia](https://github.com/EmeraldSequoia). The last upstream commit was November 9, 2023.
+
+### Goals of This Fork
+
+This fork aims to bring Emerald Observatory back to life — updating it for modern iOS, fixing issues, and potentially republishing to the App Store.
+
+### Known Issues Inherited from Upstream
+
+- Help file links point to the now-defunct emeraldsequoia.com website — these need to be redirected to GitHub or removed
+- The codebase predates ARC and uses manual retain/release throughout
+- No automated tests exist
 
 ## Tech Stack
 

@@ -14,7 +14,9 @@ Emerald Sequoia LLC was a two-person company that created acclaimed astronomical
 - **Maintenance burden** — keeping up with new hardware and OS releases lost the fun of the original development
 - **Tiny team** — only two people maintaining everything
 
-The apps were removed from the App Store on November 1, 2023. Before shutting down, Emerald Sequoia open-sourced all their code across 11 GitHub repositories at [github.com/EmeraldSequoia](https://github.com/EmeraldSequoia). The last upstream commit was November 9, 2023.
+The apps were removed from the App Store on November 1, 2023. Before shutting down, Emerald Sequoia open-sourced all their code across 10 GitHub repositories at [github.com/EmeraldSequoia](https://github.com/EmeraldSequoia). The last upstream commit was November 9, 2023.
+
+Observatory requires only 5 of the 10 repos (this repo + 4 libraries + buildscripts). The others are separate apps (Chronometer, Timestamp) and supporting resources (docs, website).
 
 ### Goals of This Fork
 

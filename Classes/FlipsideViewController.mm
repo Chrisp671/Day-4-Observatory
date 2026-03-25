@@ -163,7 +163,10 @@ static NSDateFormatter	*dateFormatter, *alarmTimeFormatter;
 }
 
 - (IBAction)webAction:(id)sender {
-    [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"http://emeraldsequoia.com/"]];
+    NSURL *projectURL = [NSURL URLWithString:EOGitHubProjectURL];
+    if (projectURL) {
+        [[UIApplication sharedApplication] openURL:projectURL options:@{} completionHandler:nil];
+    }
 }
 
 - (IBAction)alarmSetAction:(id)sender {

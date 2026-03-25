@@ -132,6 +132,28 @@ Perl utility scripts in `scripts/`:
 - NSTimer-driven update loop in EOClock for real-time display updates
 - Copyright headers at top of every source file
 
+## AI Integration Roadmap
+
+### Phase 1 — On-Device (Free, No Network Required)
+- **Apple Vision framework** — sky/star identification via camera, built into iOS
+- **Core ML** — run open models (Gemma 2B, Phi-3 mini) on-device for natural language Q&A about what's on screen
+- **Create ML** — train a custom star/constellation classifier
+
+### Phase 2 — Free API Tiers (Network Required)
+- **Google Gemini Flash** — free tier (15 RPM), good for complex astronomical queries
+- **Groq** — free tier with fast inference on open models
+- **Hugging Face Inference API** — free tier for many open models
+
+### Planned AI Features
+1. **Sky object identification** — point camera, identify constellations/planets/deep-sky objects
+2. **Natural language queries** — "When's the next lunar eclipse from my location?"
+3. **Smart notifications** — AI-curated alerts for interesting events based on location and weather
+4. **Observation planner** — "What's worth looking at tonight?" with light pollution and weather awareness
+5. **Educational companion** — conversational explanations of on-screen astronomical data
+
+### Branding Note
+The MIT license covers the code but not the "Emerald Observatory" name or original artwork/logos. A rebrand (new name, icon, App Store listing) is needed before republishing.
+
 ## Important Notes for AI Assistants
 
 - **Do not add ARC annotations** (`strong`, `weak`) — this codebase uses manual retain/release

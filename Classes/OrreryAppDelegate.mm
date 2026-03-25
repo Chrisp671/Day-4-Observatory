@@ -223,7 +223,7 @@ nil,
 NSString *h8 = NSLocalizedStringWithDefaultValue(@"Help Text8",
 nil,
 [NSBundle mainBundle],
-@"Check our website at http://emeraldSequoia.com/eo/ for more details (tap our logo on the bottom of this page).  Don't hesitate to send mail if you have questions or problems.  Comments and suggestions are also welcome.",
+@"Check the project page on GitHub at https://github.com/Chrisp671/Day-4-Observatory for more details (tap our logo on the bottom of this page).  Don't hesitate to send mail if you have questions or problems.  Comments and suggestions are also welcome.",
 @"help message8");
 
 NSString *i0 = NSLocalizedStringWithDefaultValue(@"iTC description0",
@@ -251,7 +251,7 @@ NSString *i3 = NSLocalizedStringWithDefaultValue(@"iTC description3",
 NSString *i4 = NSLocalizedStringWithDefaultValue(@"iTC description4",
 				  nil,
 				  [NSBundle mainBundle],
-@"Tap on the display to move time forward or backward by a minute, hour, day, month, year or century.  A detailed manual for the operation of Emerald Observatory can be found at the 'Emerald Sequoia LLC Web Site' listed below, at http://emeraldsequoia.com/eo/",
+@"Tap on the display to move time forward or backward by a minute, hour, day, month, year or century.  Additional documentation for Emerald Observatory is available on the project's GitHub page at https://github.com/Chrisp671/Day-4-Observatory",
 				  @"iTC description4; terms here should match those in the other strings");
 NSString *i5 = NSLocalizedStringWithDefaultValue(@"iTC description5",
 				  nil,

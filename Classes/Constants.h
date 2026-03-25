@@ -37,6 +37,8 @@
 #define kSwitchButtonHeight		27.0
 #define kProgressIndicatorSize		20.0
 
+#define EOGitHubProjectURL              @"https://github.com/Chrisp671/Day-4-Observatory"
+
 // UITableView row heights
 #define kUIRowHeight			40.0
 #define kPrefFontSize			16

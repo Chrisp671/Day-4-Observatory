@@ -170,19 +170,20 @@ static int shouldShowQuickStart = false;
     if ([ECErrorReporter errorShowing] || !shouldShowQuickStart) {
 	return;
     }
-    NSBundle *mainBundle = [NSBundle mainBundle];
-    ESAssert(thisVersion != NULL);
-    NSString *versionSummaryString = NSLocalizedString(@"This app will be removed from the store on Nov 1 2023.\n\nPlease read the Details via the button below.", @"Version 2.3.5 first-run alert summary");
+    NSString *versionSummaryString = NSLocalizedString(@"This app is no longer distributed through the App Store.\n\nTap Details to open the GitHub project page for documentation and source code.", @"Version 2.3.5 first-run alert summary");
     NSString *quickStartButtonText = NSLocalizedString(@"Details", @"Details about Emerald Sequoia shutdown");
 
     UIAlertController* alert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"WARNING", @"WARNING")
-                                                                   message:[NSString stringWithFormat:versionSummaryString, thisVersion]
+                                                                   message:versionSummaryString
                                                             preferredStyle:UIAlertControllerStyleAlert];
     // Details
     UIAlertAction* quickStartAction = [UIAlertAction actionWithTitle:quickStartButtonText
                                                                style:UIAlertActionStyleDefault
                                                              handler:^(UIAlertAction *action) { 
-        [[UIApplication sharedApplication] openURL:[NSURL URLWithString:@"https://emeraldsequoia.com/esblog/2022/12/21/emerald-sequoias-future/"] options:@{} completionHandler:NULL];
+        NSURL *projectURL = [NSURL URLWithString:EOGitHubProjectURL];
+        if (projectURL) {
+            [[UIApplication sharedApplication] openURL:projectURL options:@{} completionHandler:nil];
+        }
     }];
     [alert addAction:quickStartAction];
     // Later

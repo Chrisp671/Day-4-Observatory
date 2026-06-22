@@ -2233,9 +2233,9 @@ static bool localeIsCyrillic() {
 	[self reorientSubView:eotDialView toOrientation:newOrientation offsetBy:CGPointMake(EOTX, EOTY)];
 	[self reorientSubView:earthBackView toOrientation:newOrientation offsetBy:CGPointMake(BMX, BMY)];
 
-	[self reorientSubView:utcdayLabel toOrientation:newOrientation offsetBy:CGPointMake(utcdayX, utcdayY+(UIDeviceOrientationIsLandscape(newOrientation)?3
+	[self reorientSubView:utcdayLabel toOrientation:newOrientation offsetBy:CGPointMake(utcdayX, utcdayY+(UIInterfaceOrientationIsLandscape(newOrientation)?3
                                                                                                               :0))];
-	[self reorientSubView:tzLabel toOrientation:newOrientation offsetBy:CGPointMake(tzX, tzY+(UIDeviceOrientationIsLandscape(newOrientation)?6:0))];
+	[self reorientSubView:tzLabel toOrientation:newOrientation offsetBy:CGPointMake(tzX, tzY+(UIInterfaceOrientationIsLandscape(newOrientation)?6:0))];
 	[self reorientSubView:NTPStatusLabel toOrientation:newOrientation offsetBy:CGPointMake(NTPStatusX, NTPStatusY)];
         [self reorientSubView:NTPStatusBut toOrientation:newOrientation offsetBy:CGPointMake(NTPStatusX, NTPStatusY)];
         

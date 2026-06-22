@@ -7,8 +7,12 @@
 //
 
 // Guard against multiple inclusion:
-#ifndef EO_CONSTANTS_H
-#define EO_CONSTANTS_H
+#ifndef EOGitHubProjectURL
+#define EOGitHubProjectURL              @"https://github.com/Chrisp671/Day-4-Observatory"
+#endif
+
+#ifndef EC_CONSTANTS
+#define EC_CONSTANTS
 #undef CAPTUREDEFAULTS
 #define CAPTURESPECIALS
 
@@ -36,8 +40,6 @@
 #define kSwitchButtonWidth		94.0
 #define kSwitchButtonHeight		27.0
 #define kProgressIndicatorSize		20.0
-
-#define EOGitHubProjectURL              @"https://github.com/Chrisp671/Day-4-Observatory"
 
 // UITableView row heights
 #define kUIRowHeight			40.0

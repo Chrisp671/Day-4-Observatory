@@ -7,8 +7,8 @@
 //
 
 // Guard against multiple inclusion:
-#ifndef EC_CONSTANTS
-#define EC_CONSTANTS
+#ifndef EO_CONSTANTS_H
+#define EO_CONSTANTS_H
 #undef CAPTUREDEFAULTS
 #define CAPTURESPECIALS
 

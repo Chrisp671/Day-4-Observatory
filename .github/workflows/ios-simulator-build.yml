@@ -44,6 +44,20 @@ jobs:
           set -o pipefail
           scripts/build_simulator.sh 2>&1 | tee build.log
 
+      - name: Package simulator app
+        run: |
+          app_path=".derivedData/Build/Products/Debug-iphonesimulator/Observatory.app"
+          test -d "$app_path"
+          ditto -c -k --keepParent "$app_path" Observatory-simulator-app.zip
+          ls -lh Observatory-simulator-app.zip
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Observatory-simulator-app
+          if-no-files-found: error
+          path: ${{ github.workspace }}/repo/Observatory-simulator-app.zip
+
       - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4

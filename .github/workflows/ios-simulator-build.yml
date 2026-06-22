@@ -58,6 +58,19 @@ jobs:
           if-no-files-found: error
           path: ${{ github.workspace }}/repo/Observatory-simulator-app.zip
 
+      - name: Summarize build artifacts
+        if: always()
+        run: |
+          {
+            echo "## iOS Simulator Build"
+            echo
+            echo '- Simulator app artifact: `Observatory-simulator-app`'
+            echo '- CI log artifact: `ios-simulator-ci-logs`'
+            echo '- Local app path in runner: `.derivedData/Build/Products/Debug-iphonesimulator/Observatory.app`'
+            echo
+            echo "Download artifacts from this workflow run's **Artifacts** section after the run finishes."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload CI logs
         if: always()
         uses: actions/upload-artifact@v4

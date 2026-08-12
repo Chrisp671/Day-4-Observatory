@@ -1,0 +1,111 @@
+# Observatory Web Port — Plan
+
+Canonical plan (plan-engineering format). This Markdown owns intent; any HTML cockpit is a regenerable projection; no tracker is configured yet.
+
+## 1. Outcome and status
+
+Revive Emerald Observatory as a modern, rebranded web app (TypeScript canvas UI, engine behind a stable seam), shipped to the public web and maintained. Pace: deliberate — every phase is also a learning vehicle for the owner (first TypeScript project, first multi-agent build). Status: **planning complete for v1 kickoff; visual mockup pending approval (QST-001).**
+
+**Definition of done (v1):** the v1 scope (REQ-001..REQ-006) renders correctly against reference data (CHK-001..CHK-004), deployed at a public URL as an installable PWA, under a fresh visual identity and working name.
+
+## 2. Evidence and context
+
+- `analysis/observatory/ASSESSMENT.md` — full modernization assessment (2026-08-06): inventory, architecture, debt, security, Rebuild recommendation.
+- `analysis/observatory/CALIBRATION.md` — 7-model delegation calibration with ground-truth scoring; team recorded in `opencode.json`.
+- Source of behavioral truth: the Objective-C++ sources in `Classes/` (esp. `EOClock.mm`), which act as the spec, not as code to preserve.
+
+## 3. Users and journeys
+
+Primary: astronomy-curious web users on desktop and tablet who want a live, beautiful "what's the sky doing now" clock. Secondary: the owner, learning TS/agent-orchestration by building. Journey v1: open URL → grant or type location → watch live astronomical clock → scrub time forward/backward.
+
+## 4. Scope and non-goals
+
+**v1 scope:** clock face; sun/moon rise-set rings; moon phase view; Earth/terminator view; time-travel controls; manual + geolocation location entry.
+**Non-goals (v1):** eclipses (defer), alarms (impossible on web in background; re-specify later), EOT/altitude/azimuth sub-dials, localization beyond English, AI features, iOS app work of any kind (parked — see DEC-006), App Store publishing.
+
+## 5. Requirements, assumptions, questions
+
+- REQ-001 — Live astronomical clock face driven by a single per-frame engine call (`frame()`), rendering at 60fps on a mid-range laptop.
+- REQ-002 — Sun and moon rise/set rings with correct geometry for the user's location and time.
+- REQ-003 — Moon phase display accurate to the day, visually smooth across the lunation.
+- REQ-004 — Earth view with day/night terminator for current time and location.
+- REQ-005 — Time-travel: step by minute/hour/day/month/year/century, forward and back, with resume-to-now (interaction semantics per `EOClock.mm:440-493,680-758`).
+- REQ-006 — Location: browser geolocation with graceful fallback to locale-aware manual lat/long entry (fixing the upstream `floatValue` locale bug by design).
+- ASM-001 — astronomy-engine (npm, MIT) meets v1 accuracy needs (~1 arcmin). Validate in WI-002.
+- QST-001 — RESOLVED 2026-08-11: owner approved the brand-aligned cyanotype instrument mockup (WI-001 complete). The mockup is the visual reference for WI-004+.
+- QST-002 — RESOLVED by DEC-008: the product is **Day4 Observatory**, under the Day4 Astronomy brand (day4.org).
+- QST-003 — Hosting target (GitHub Pages / Cloudflare Pages / other). Owner: user; default GitHub Pages unless objection.
+- QST-004 — Accuracy bar beyond v1 (arcsecond-class needs the Rust engine). Decide at DEC-002's phase-2 gate.
+
+## 6. Current state
+
+No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen sibling repos (not on disk). No tests anywhere. Delegation harness calibrated and ready (`opencode.json`; Claude Agent SDK installed).
+
+## 7. Options and decisions
+
+- DEC-001 — Purpose: ship a real public web app at a learning pace (not a throwaway or portfolio-only piece). Rationale: owner intent, 2026-08-09.
+- DEC-002 — Engine: TypeScript-first using astronomy-engine behind a stable `FrameState`/`frame()` seam; Rust/WASM engine is a named phase-2 option, gated on QST-004, swap-compatible by design. Rationale: fastest to pixels; math already solved; owner is learning TS; seam keeps the Rust door open honestly.
+- DEC-003 — v1 scope is the middle cut (Section 4). Rationale: exercises every architectural layer; defers the two subsystems the assessment flagged re-specify-don't-port.
+- DEC-004 — Fresh visual identity, not a faithful recreation. Original artwork is unlicensed to us; fresh design pairs with the required rebrand. Direction chosen via mockup (QST-001).
+- DEC-005 — Build in `web/` inside this repo; split to a branded repo at rebrand time. Rationale: the `.mm` files are the live spec during porting.
+- DEC-006 — iOS app fully parked; no iOS work in v1. The SEC-001 supply-chain fix (pin archived-org dependencies) is consciously deferred and tracked as RSK-002.
+- DEC-007 — Cadence: interactive sessions; standing loops/automation only after the port pattern stabilizes.
+- DEC-008 — Brand: the app ships as **Day4 Observatory** under Day4 Astronomy (day4.org, 501(c)(3)); amends DEC-004's "fresh identity" to "fresh identity within Day4's blue-and-gold." Palette: Prussian-blue cyanotype field + Day4 brand gold (#F0B310) reserved for the sun; Day4 wide logo (dark-background variant) in the header; Genesis 1:14 ("for signs and seasons, days and years") as the product motto. Resolves the ASSESSMENT's rebrand requirement — no separate rebrand needed. Rationale: owner direction, 2026-08-11. Note: mockup hotlinks the logo from day4.org; WI-002 must vendor a licensed copy of the logo asset into `web/` with the org's permission.
+
+## 8. Target architecture, contracts, and test seams
+
+```
+ui/ (TS, canvas)  ←  FrameState  ←  engine/ (TS now; Rust/WASM later)
+views: clock, rings, moon, earth   frame(unixMillis, lat, lon) → FrameState
+```
+
+- SEAM-001 — `frame(): FrameState` is the single engine/UI boundary: one coarse call per animation frame returns every number the views need. Views never call astronomy APIs directly. This seam is the Rust-swap contract and the primary test seam.
+- SEAM-002 — Each view module exposes `draw(ctx, state, layout)` with no hidden state, so views are testable headlessly and portable individually.
+- Layout: a single normalized layout table (transcribed from `EOClock.mm:1520-1729`) replaces the ~150 hardcoded 768×1024 constants; all views position from it.
+- Stack: Vite + TypeScript (strict), Canvas 2D, PWA manifest + service worker; no framework for the clock face.
+
+## 9. Risks and mitigations
+
+- RSK-001 — Silent geometry errors in ported views (empirically demonstrated: 3 of 7 calibrated models produced wrong-but-compiling transforms). Mitigation: every ported view gets a ground-truth rendering/unit check (CHK-002) before merge; coordinate-transform work routes only to calibration-validated agents.
+- RSK-002 — Deferred SEC-001: build scripts still clone the archived EmeraldSequoia org at unpinned HEAD. Accepted while iOS is parked and nobody runs those scripts; must be fixed before any iOS build resumes. Trigger: anyone runs `scripts/bootstrap_dependencies.sh`.
+- RSK-003 — TS-first comfort kills the Rust phase silently. Mitigation: DEC-002 records it as a gated decision, not a drift; QST-004 forces an explicit revisit.
+- RSK-004 — Owner is new to TypeScript; misread delegated code could merge unreviewed. Mitigation: learning output style stays on; every merge reviewed in-session; `/code-review` gate per PR.
+- RSK-005 — Scope creep toward the ~60-widget full face. Mitigation: Section 4 non-goals; new widgets require a DEC.
+
+## 10. Capability routing and work breakdown
+
+Capability routing: this session (Claude) orchestrates and owns judgment work; `opencode.json` agents (architect/builder/builder-alt/porter/worker) take specified implementation per `analysis/observatory/CALIBRATION.md`; workflows only on explicit "use a workflow"; rafter gates security surface; plan-engineering owns this plan; grilling/domain-modeling/tdd/prototype skills as named.
+
+Dependency frontier (→ = blocks):
+
+- WI-001 — Visual mockup(s) for DEC-004/QST-001 approval. → WI-004
+- WI-002 — Scaffold `web/` (Vite + strict TS), define `FrameState` + `frame()` against astronomy-engine, validate ASM-001 against JPL Horizons reference values. → WI-003..WI-006
+- WI-003 — COMPLETE 2026-08-11: `analysis/observatory/layout-table.md` (28KB) transcribed by builder-alt (DeepSeek Pro), verified in-session against source — ~30 sampled values/formulas exact, incl. override chains, derived-constant formulas kept symbolic, and commented-out alternates flagged. Input to WI-005/WI-006 layout decisions.
+- WI-004 — First two views (clock ring + one hand) drawn in approved visual language; establishes the port pattern. → WI-005
+- WI-005 — COMPLETE 2026-08-11: moon (phase-rendered disc at true hour-angle-relative dial position + earthshine), Earth (graticule sphere, night hemisphere opposite the sun), sidereal ring (GAST-driven). Engine gained sun/moon `hourAngleHours` with physics tests (hour angles coincide at the 2024 eclipse, oppose at full moon). 20 tests green; verified in browser. Done in-session — the three-file pattern is now demonstrated across five views, ready for porter delegation on future widgets.
+- WI-006 — COMPLETE 2026-08-11: time-travel strip (minute/hour/day/phase/month/year/century both directions + NOW reset; gold shifted-time indicator) with calendar-clamped stepping semantics (CHK-003: Jan 31 + 1mo = Feb 28/29, Feb 29 + 1y = Feb 28, wall-clock preserved); station entry with locale-tolerant reject-don't-clamp parsing (REQ-006 tests), geolocation, localStorage persistence.
+- WI-007 — IN PROGRESS 2026-08-11: relative-base Vite build (28KB gzip), PWA manifest + SVG icon (PNG icons for full installability = follow-up), `.github/workflows/deploy-web.yml` (test-gated GitHub Pages deploy; QST-003 defaulted to GitHub Pages). First deploy pending push.
+
+## 11. Verification and acceptance matrix
+
+- CHK-001 — Engine values vs JPL Horizons reference data: sun/moon positions, rise/set, phase for 3 locations × 4 dates within tolerance (covers REQ-001..004, ASM-001).
+- CHK-002 — Per-view ground-truth render check (golden-image or geometry assertion) against the `.mm` source semantics (covers RSK-001; gate for WI-004/005).
+- CHK-003 — Time-travel semantics match `EOClock.mm` stepping rules incl. edge cases (covers REQ-005).
+- CHK-004 — `tsc --strict` clean + tests green in CI on every PR (covers all).
+- Acceptance: all CHKs green + owner visual approval on the deployed URL.
+
+## 12. Rollout, observability, rollback
+
+Deploy static site from CI on merge to main; every deploy is reversible by re-deploying the previous commit (static hosting = trivial rollback). Add lightweight error reporting before public announcement; no analytics in v1 without a DEC.
+
+## 13. Open questions
+
+QST-001..QST-004 above. Next grilling round covers QST-002/003 once the mockup (WI-001) settles QST-001.
+
+## 14. Progress, discoveries, and change log
+
+- 2026-08-06 — Assessment, security scan, model calibration complete; harness built (see Section 2 artifacts).
+- 2026-08-09 — plan-engineering skill security-reviewed and installed; Round-1 grilling answered; DEC-001..007 recorded; this plan seeded. Next: WI-001 mockup.
+- 2026-08-11 — WI-001 mockup built (`analysis/observatory/mockups/meridian-v1.html`): live-canvas cyanotype instrument, sun-as-hour-hand, verified in browser. Owner supplied the brand (day4.org) → DEC-008; mockup brand-aligned (Day4 logo, brand-gold sun, Genesis 1:14 motto); QST-002 resolved.
+- 2026-08-11 — QST-001 approved by owner. WI-002 delivered: `web/` scaffold (Vite 8 + TS 7 strict + Vitest 4), SEAM-001 implemented in `web/src/engine/frame.ts` against astronomy-engine 2.1.19, first CHK-001 slice green (8 tests: known new/full moons, equinox declination and daylight, J2000 sidereal time, subsolar-point conventions, cross-time/place smoke). ASM-001 validated at display grade; full JPL Horizons table still open under CHK-001. Frontier now: WI-003 (layout table) and WI-004 (first views).
+- 2026-08-11 — WI-004 first slice delivered in-session (pattern-setting per capability routing): `web/src/ui/` with theme.ts (DEC-008 tokens), clockface.ts (pure dial math) + convention tests pinning noon-top/clockwise (CHK-002 seed), stars/dial/sun drawing modules, instrument shell in main.ts/index.html. 13 tests green, strict typecheck clean, verified rendering in browser with engine-real rise/set arcs. WI-003 delegated to builder-alt (DeepSeek Pro) in background. Port pattern established: pure-math module + convention test + thin draw module per view.

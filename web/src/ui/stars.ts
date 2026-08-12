@@ -1,0 +1,47 @@
+/**
+ * Seeded star field — still, like a print; never shimmers between frames.
+ */
+import { TAU } from "./clockface";
+import { THEME } from "./theme";
+
+function mulberry32(seed: number): () => number {
+  let a = seed | 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+interface Star {
+  readonly angle: number;
+  readonly radiusFrac: number;
+  readonly size: number;
+  readonly opacity: number;
+}
+
+const rnd = mulberry32(1826);
+const STARS: readonly Star[] = Array.from({ length: 110 }, () => ({
+  angle: rnd() * TAU,
+  radiusFrac: 0.42 + rnd() * 0.62,
+  size: rnd() < 0.12 ? 1.7 : 0.9,
+  opacity: 0.25 + rnd() * 0.5,
+}));
+
+export function drawStars(ctx: CanvasRenderingContext2D, faceRadius: number, dpr: number): void {
+  for (const s of STARS) {
+    ctx.globalAlpha = s.opacity;
+    ctx.fillStyle = THEME.inkMid;
+    ctx.beginPath();
+    ctx.arc(
+      Math.cos(s.angle) * s.radiusFrac * faceRadius * 1.06,
+      Math.sin(s.angle) * s.radiusFrac * faceRadius * 1.06,
+      s.size * dpr * 0.7,
+      0,
+      TAU,
+    );
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}

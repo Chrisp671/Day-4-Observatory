@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plan Review Cockpit</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f1ea; --panel: #fffdf8; --ink: #17202a; --muted: #5f6b76;
+      --line: #ccd2d8; --accent: #155eef; --focus: #f59e0b; --danger: #b42318;
+      --warn: #b54708; --good: #067647; --shadow: 0 10px 28px rgb(23 32 42 / .08);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 system-ui, sans-serif; }
+    button, input, select { font: inherit; }
+    button, select, input[type="search"] { border: 1px solid var(--line); border-radius: .5rem; background: var(--panel); color: var(--ink); padding: .55rem .7rem; }
+    button { cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    .shell { width: min(1440px, calc(100% - 2rem)); margin: 1rem auto 4rem; }
+    .plan-header { display: grid; gap: 1rem; padding: clamp(1.25rem, 3vw, 2.5rem); color: white; background: #102a43; border-radius: 1rem; box-shadow: var(--shadow); }
+    .eyebrow { margin: 0; font-size: .76rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { max-width: 24ch; margin: 0; font-size: clamp(2rem, 6vw, 4.5rem); line-height: .98; }
+    .summary { max-width: 75ch; margin: 0; font-size: 1.1rem; color: #d7e3ee; }
+    .status-grid { display: grid; grid-template-columns: repeat(5, minmax(8rem, 1fr)); gap: .75rem; margin: 0; }
+    .status-grid div { padding: .7rem; background: rgb(255 255 255 / .08); border: 1px solid rgb(255 255 255 / .2); border-radius: .65rem; }
+    dt { font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #b8c9d9; }
+    dd { margin: .2rem 0 0; font-weight: 700; }
+    .toolbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; margin: 1rem 0; padding: .75rem; background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: .8rem; }
+    .toolbar input[type="search"] { min-width: min(22rem, 100%); flex: 1; }
+    .toolbar label { display: inline-flex; gap: .4rem; align-items: center; }
+    nav { display: flex; gap: .35rem; overflow-x: auto; padding-bottom: .5rem; }
+    nav a { white-space: nowrap; color: var(--accent); font-weight: 700; text-decoration: none; padding: .35rem .55rem; border-radius: .4rem; }
+    nav a:hover { background: var(--panel); }
+    .notice { margin: 1rem 0; padding: .8rem 1rem; border-left: .35rem solid var(--accent); background: var(--panel); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+    section { scroll-margin-top: 6rem; padding: clamp(1rem, 2vw, 1.5rem); background: var(--panel); border: 1px solid var(--line); border-radius: .85rem; box-shadow: var(--shadow); }
+    section > header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; align-items: baseline; border-bottom: 1px solid var(--line); margin-bottom: 1rem; }
+    h2 { margin: 0 0 .65rem; font-size: 1.35rem; }
+    h3 { margin: 0; font-size: 1rem; }
+    .count { color: var(--muted); font-size: .9rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); gap: .75rem; }
+    .card { position: relative; padding: 1rem; border: 1px solid var(--line); border-radius: .65rem; background: color-mix(in srgb, var(--panel) 92%, var(--bg)); }
+    .card-head { display: flex; justify-content: space-between; gap: .7rem; align-items: start; margin-bottom: .55rem; }
+    .stable-id { color: var(--accent); font: 800 .78rem/1.2 ui-monospace, monospace; }
+    .badge { display: inline-block; padding: .18rem .5rem; border: 1px solid currentColor; border-radius: 999px; font-size: .75rem; font-weight: 800; text-transform: uppercase; }
+    .risk-high, .status-blocked { color: var(--danger); }
+    .risk-medium, .status-review { color: var(--warn); }
+    .risk-low, .status-done { color: var(--good); }
+    .meta { margin: .65rem 0 0; color: var(--muted); font-size: .88rem; }
+    .review { display: flex; gap: .45rem; align-items: center; margin-top: .75rem; padding-top: .6rem; border-top: 1px dashed var(--line); }
+    .review label { cursor: pointer; }
+    .architecture { white-space: pre-wrap; overflow-x: auto; padding: 1rem; border-radius: .55rem; background: #102a43; color: #edf4fa; font: .9rem/1.5 ui-monospace, monospace; }
+    .matrix { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .matrix th, .matrix td { padding: .6rem; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+    .matrix th { position: sticky; top: 4.7rem; background: var(--panel); }
+    .empty { color: var(--muted); font-style: italic; }
+    .hidden { display: none !important; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    dialog { max-width: min(40rem, calc(100% - 2rem)); border: 1px solid var(--line); border-radius: .8rem; background: var(--panel); color: var(--ink); }
+    dialog::backdrop { background: rgb(0 0 0 / .55); }
+    textarea { width: 100%; min-height: 12rem; font: .82rem/1.4 ui-monospace, monospace; }
+    @media (max-width: 760px) { .status-grid { grid-template-columns: repeat(2, 1fr); } .toolbar { position: static; } .matrix { display: block; overflow-x: auto; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::before, *::after { animation: none !important; transition: none !important; } }
+    @media print {
+      :root { color-scheme: light; --bg: white; --panel: white; --ink: black; --line: #777; --shadow: none; }
+      .shell { width: 100%; margin: 0; } .toolbar, nav, dialog, .review { display: none !important; }
+      .plan-header { color: black; background: white; border: 2px solid black; } .summary, dt { color: #333; }
+      section, .card { break-inside: avoid; box-shadow: none; } .hidden { display: block !important; }
+    }
+  </style>
+</head>
+<body>
+<main class="shell">
+  <header class="plan-header">
+    <p class="eyebrow">Plan cockpit · <span id="plan-status">Draft</span></p>
+    <h1 id="plan-title">Replace with project outcome</h1>
+    <p class="summary" id="plan-summary">Replace the embedded plan data below; this HTML is a generated review projection, not the canonical plan.</p>
+    <dl class="status-grid">
+      <div><dt>Owner</dt><dd id="plan-owner">Unassigned</dd></div>
+      <div><dt>Updated</dt><dd id="plan-updated">Unknown</dd></div>
+      <div><dt>Gate</dt><dd id="plan-gate">Discovery</dd></div>
+      <div><dt>Confidence</dt><dd id="plan-confidence">Low</dd></div>
+      <div><dt>Source</dt><dd id="plan-source">PLAN.md</dd></div>
+    </dl>
+  </header>
+
+  <div class="toolbar" aria-label="Review controls">
+    <label class="visually-hidden" for="search">Search plan</label>
+    <input id="search" type="search" placeholder="Search IDs, owners, decisions, risks…">
+    <label for="status-filter">Status</label>
+    <select id="status-filter"><option value="">All</option><option>open</option><option>review</option><option>blocked</option><option>done</option></select>
+    <label><input id="high-risk" type="checkbox"> Within risks: high only</label>
+    <button id="reset" type="button">Reset</button>
+    <button id="export" type="button">Export review</button>
+    <button id="import" type="button">Import review</button>
+    <button type="button" onclick="window.print()">Print</button>
+  </div>
+  <input id="import-file" class="visually-hidden" type="file" accept="application/json">
+  <p id="result-count" class="notice" role="status" aria-live="polite">Loading plan…</p>
+  <nav aria-label="Plan views">
+    <a href="#review">Review queue</a><a href="#requirements">Requirements</a><a href="#architecture">Architecture</a>
+    <a href="#decisions">Decisions</a><a href="#risks">Risks</a><a href="#execution">Execution</a>
+    <a href="#verification">Verification</a><a href="#sources">Sources</a>
+  </nav>
+
+  <div class="layout">
+    <section id="review"><header><h2>Review queue</h2><span class="count" data-count="reviewItems"></span></header><div class="grid" data-list="reviewItems"></div></section>
+    <section id="requirements"><header><h2>Requirements and assumptions</h2><span class="count" data-count="requirements"></span></header><div class="grid" data-list="requirements"></div></section>
+    <section id="architecture"><header><h2>Target architecture</h2></header><pre class="architecture" id="architecture-text">No architecture supplied.</pre></section>
+    <section id="decisions"><header><h2>Decisions</h2><span class="count" data-count="decisions"></span></header><div class="grid" data-list="decisions"></div></section>
+    <section id="risks"><header><h2>Risks</h2><span class="count" data-count="risks"></span></header><div class="grid" data-list="risks"></div></section>
+    <section id="execution"><header><h2>Execution frontier</h2><span class="count" data-count="workItems"></span></header><div class="grid" data-list="workItems"></div></section>
+    <section id="verification"><header><h2>Traceability and verification</h2></header><div class="matrix-wrap"><table class="matrix"><thead><tr><th>Requirement</th><th>Decision</th><th>Work</th><th>Check</th><th>Evidence</th></tr></thead><tbody data-list="traceability"></tbody></table></div></section>
+    <section id="sources"><header><h2>Sources</h2><span class="count" data-count="sources"></span></header><div class="grid" data-list="sources"></div></section>
+  </div>
+</main>
+
+<dialog id="review-dialog"><form method="dialog"><h2>Review state JSON</h2><p>Copy this state or replace it with a previously exported review.</p><textarea id="review-json"></textarea><p><button value="cancel">Close</button></p></form></dialog>
+
+<noscript>
+  <style>#plan-data { display: block; white-space: pre-wrap; padding: 1rem; margin: 1rem; border: 1px solid #777; font: .85rem/1.45 monospace; }</style>
+  <p class="notice">Interactive controls are unavailable. The complete embedded plan data follows; the canonical source named in it remains authoritative.</p>
+</noscript>
+<script id="plan-data" type="application/json">
+{
+  "meta": {"title":"Replace with project outcome","summary":"Replace this embedded JSON with data derived from the canonical plan.","status":"draft","owner":"Unassigned","updated":"YYYY-MM-DD","gate":"discovery","confidence":"low","source":"PLAN.md"},
+  "architecture": "Describe current → target relationships here. Keep a readable text alternative for every visual diagram.",
+  "reviewItems": [], "requirements": [], "decisions": [], "risks": [], "workItems": [], "traceability": [], "sources": []
+}
+</script>
+<script>
+(() => {
+  'use strict';
+  const data = JSON.parse(document.getElementById('plan-data').textContent);
+  const reviewKey = `plan-review:${data.meta.source || data.meta.title}`;
+  let review = JSON.parse(localStorage.getItem(reviewKey) || '{}');
+  const $ = (selector, root = document) => root.querySelector(selector);
+  const all = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = text; return el; };
+  const value = (item, ...keys) => keys.map(key => item[key]).find(itemValue => itemValue !== undefined && itemValue !== '') ?? '';
+  let generatedId = 0;
+  const safeId = raw => String(raw || `item-${++generatedId}`).replace(/[^A-Za-z0-9_-]/g, '-');
+
+  function setMeta() {
+    for (const key of ['title', 'summary', 'status', 'owner', 'updated', 'gate', 'confidence', 'source']) {
+      const target = $(`#plan-${key}`);
+      if (target) target.textContent = data.meta[key] || 'Unknown';
+    }
+    document.title = `${data.meta.title || 'Plan'} · Review Cockpit`;
+    $('#architecture-text').textContent = data.architecture || 'No architecture supplied.';
+  }
+
+  function renderCard(item, collection) {
+    const id = safeId(value(item, 'id', 'title'));
+    const card = node('article', 'card'); card.id = id; card.dataset.search = JSON.stringify(item).toLowerCase();
+    card.dataset.status = String(value(item, 'status')).toLowerCase(); card.dataset.risk = String(value(item, 'severity', 'level')).toLowerCase();
+    const head = node('div', 'card-head'); const titleWrap = node('div');
+    titleWrap.append(node('span', 'stable-id', value(item, 'id') || collection));
+    titleWrap.append(node('h3', '', value(item, 'title', 'name', 'question') || 'Untitled item'));
+    head.append(titleWrap);
+    const badgeValue = value(item, 'status', 'severity', 'level');
+    if (badgeValue) head.append(node('span', `badge status-${String(badgeValue).toLowerCase()} risk-${String(badgeValue).toLowerCase()}`, badgeValue));
+    card.append(head);
+    const body = value(item, 'summary', 'description', 'rationale', 'mitigation', 'outcome'); if (body) card.append(node('p', '', body));
+    const meta = [item.owner && `Owner: ${item.owner}`, item.blockedBy && `Blocked by: ${[].concat(item.blockedBy).join(', ')}`, item.covers && `Covers: ${[].concat(item.covers).join(', ')}`, item.trigger && `Trigger: ${item.trigger}`].filter(Boolean).join(' · ');
+    if (meta) card.append(node('p', 'meta', meta));
+    if (value(item, 'id')) {
+      const wrap = node('div', 'review'); const checkbox = node('input'); checkbox.type = 'checkbox'; checkbox.id = `review-${id}`; checkbox.checked = Boolean(review[item.id]);
+      checkbox.addEventListener('change', () => { review[item.id] = checkbox.checked; localStorage.setItem(reviewKey, JSON.stringify(review)); });
+      const label = node('label', '', 'Reviewed'); label.htmlFor = checkbox.id; wrap.append(checkbox, label); card.append(wrap);
+    }
+    return card;
+  }
+
+  function renderLists() {
+    for (const collection of ['reviewItems', 'requirements', 'decisions', 'risks', 'workItems', 'sources']) {
+      const target = $(`[data-list="${collection}"]`); const items = data[collection] || []; target.replaceChildren();
+      if (!items.length) target.append(node('p', 'empty', 'No items supplied.'));
+      for (const item of items) target.append(renderCard(item, collection));
+      $(`[data-count="${collection}"]`).textContent = `${items.length} items`;
+    }
+    const trace = $('[data-list="traceability"]'); trace.replaceChildren();
+    if (!(data.traceability || []).length) { const row = node('tr'); const cell = node('td', 'empty', 'No traceability rows supplied.'); cell.colSpan = 5; row.append(cell); trace.append(row); }
+    for (const item of data.traceability || []) {
+      const row = node('tr'); row.dataset.search = JSON.stringify(item).toLowerCase();
+      for (const key of ['requirement', 'decision', 'work', 'check', 'evidence']) row.append(node('td', '', value(item, key)));
+      trace.append(row);
+    }
+  }
+
+  function applyFilters() {
+    const query = $('#search').value.trim().toLowerCase(); const status = $('#status-filter').value.toLowerCase(); const highOnly = $('#high-risk').checked; let visible = 0;
+    for (const item of all('.card, tbody tr')) {
+      const queryMatch = !query || (item.dataset.search || item.textContent.toLowerCase()).includes(query);
+      const statusMatch = !status || item.dataset.status === status;
+      const riskMatch = !highOnly || item.dataset.risk === 'high' || !item.closest('#risks');
+      item.classList.toggle('hidden', !(queryMatch && statusMatch && riskMatch)); if (!item.classList.contains('hidden')) visible++;
+    }
+    $('#result-count').textContent = `${visible} visible review items. Filters do not change canonical plan data.`;
+  }
+
+  function exportReview() {
+    const payload = JSON.stringify({source: data.meta.source, exportedAt: new Date().toISOString(), reviewed: review}, null, 2);
+    const blob = new Blob([payload], {type: 'application/json'}); const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob); link.download = 'plan-review.json'; link.click(); URL.revokeObjectURL(link.href);
+  }
+
+  $('#search').addEventListener('input', applyFilters); $('#status-filter').addEventListener('change', applyFilters); $('#high-risk').addEventListener('change', applyFilters);
+  $('#reset').addEventListener('click', () => { $('#search').value = ''; $('#status-filter').value = ''; $('#high-risk').checked = false; applyFilters(); });
+  $('#export').addEventListener('click', exportReview); $('#import').addEventListener('click', () => $('#import-file').click());
+  $('#import-file').addEventListener('change', async event => { try { const parsed = JSON.parse(await event.target.files[0].text()); review = parsed.reviewed || {}; localStorage.setItem(reviewKey, JSON.stringify(review)); location.reload(); } catch { alert('That file is not valid review-state JSON.'); } });
+  setMeta(); renderLists(); applyFilters();
+})();
+</script>
+</body>
+</html>

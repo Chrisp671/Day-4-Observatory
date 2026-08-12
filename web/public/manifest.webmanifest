@@ -1,0 +1,12 @@
+{
+  "name": "Day4 Observatory",
+  "short_name": "Observatory",
+  "description": "A living astronomical clock: the sun, moon, and stars for signs and seasons, days and years.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#081627",
+  "theme_color": "#0E2440",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

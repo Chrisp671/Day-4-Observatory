@@ -1,0 +1,44 @@
+/**
+ * Pure dial mathematics — no canvas, no DOM, fully testable (CHK-002).
+ *
+ * Dial convention (per the approved WI-001 mockup): a 24-hour civil dial with
+ * NOON AT TOP, MIDNIGHT AT BOTTOM, hours increasing clockwise; 06 sits on the
+ * left, 18 on the right. Angles are canvas radians (0 = +x, y grows downward).
+ */
+
+export const TAU = Math.PI * 2;
+
+/** Map hours-of-day (0..24) to a canvas angle on the dial. */
+export function hourToAngle(hours: number): number {
+  return (hours / 24) * TAU + Math.PI / 2;
+}
+
+/** Hours-of-day (fractional, 0..24) of a timestamp in the viewer's timezone. */
+export function localHoursOfDay(unixMillis: number): number {
+  const d = new Date(unixMillis);
+  return (
+    d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600 + d.getMilliseconds() / 3.6e6
+  );
+}
+
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+export function pointOnCircle(angleRad: number, radius: number): Point {
+  return { x: Math.cos(angleRad) * radius, y: Math.sin(angleRad) * radius };
+}
+
+/** Normalized instrument layout: every radius as a fraction of the face radius. */
+export const FACE = {
+  dialOuter: 0.985,
+  dialInner: 0.875,
+  numerals: 0.82,
+  moonOrbit: 0.72, // WI-005
+  sidereal: 0.575, // WI-005
+  sunAnnotationInner: 0.32,
+  earth: 0.3, // WI-005
+  sunDisc: 0.03,
+  sunGlow: 0.085,
+} as const;

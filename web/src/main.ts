@@ -8,6 +8,7 @@ import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
 import { hourToAngle, localHoursOfDay } from "./ui/clockface";
 import { drawDial } from "./ui/dial";
 import { drawEarth } from "./ui/earth";
+import { buildGrain, drawGrain } from "./ui/grain";
 import { drawMoon, moonDialHours } from "./ui/moon";
 import { drawSidereal } from "./ui/sidereal";
 import { drawStars } from "./ui/stars";
@@ -39,6 +40,7 @@ function fit(): void {
   canvas.style.height = `${size}px`;
   W = size * DPR;
   R = W * 0.5 * 0.92;
+  if (ctx !== null) buildGrain(ctx);
 }
 
 /* ————— dom helpers ————— */
@@ -65,6 +67,7 @@ function draw(): void {
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, W);
+  drawGrain(ctx, W, W);
   ctx.translate(W / 2, W / 2);
 
   drawStars(ctx, R, DPR);

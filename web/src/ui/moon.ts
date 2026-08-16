@@ -59,12 +59,9 @@ export function drawMoonDisc(
   ctx.ellipse(0, 0, Math.abs(k) * r, r, 0, Math.PI / 2, -Math.PI / 2, k * (waxing ? 1 : -1) > 0);
   ctx.fill();
 
-  ctx.lineWidth = 1 * dpr;
-  ctx.strokeStyle = THEME.inkHi;
-  ctx.globalAlpha = 0.9;
-  ctx.beginPath();
-  ctx.arc(0, 0, r, 0, TAU);
-  ctx.stroke();
+  // No outline (DESIGN-CONSOLIDATED #5): moonlight↔shadow adjacency is
+  // 15.17:1 — the disc separates itself; an outline doubles a boundary
+  // that engraved lunar dials leave bare.
   ctx.restore();
   ctx.globalAlpha = 1;
 }
@@ -77,16 +74,22 @@ export function drawMoon(
   phaseAngleDeg: number,
 ): void {
   const orbitR = R * FACE.moonOrbit;
+  const discR = R * 0.075;
+  const a = hourToAngle(dialHours);
 
-  // Its orbit line, faint.
+  // Construction orbit, broken behind the moon (DESIGN-CONSOLIDATED #6):
+  // "fixed vs moving is read by openness, not color" — the gap demotes this
+  // to a construction line, leaving the sidereal ring as the only continuous
+  // articulated interior scale. Gap ≈ 2× disc angular width each side.
+  const gap = 2 * Math.atan(discR / orbitR) * 2;
   ctx.lineWidth = 0.7 * dpr;
   ctx.strokeStyle = THEME.inkLow;
   ctx.globalAlpha = 0.55;
   ctx.beginPath();
-  ctx.arc(0, 0, orbitR, 0, TAU);
+  ctx.arc(0, 0, orbitR, a + gap / 2, a - gap / 2 + TAU);
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  const pos = pointOnCircle(hourToAngle(dialHours), orbitR);
-  drawMoonDisc(ctx, pos.x, pos.y, R * 0.075, phaseAngleDeg, dpr);
+  const pos = pointOnCircle(a, orbitR);
+  drawMoonDisc(ctx, pos.x, pos.y, discR, phaseAngleDeg, dpr);
 }

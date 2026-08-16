@@ -31,7 +31,9 @@ export function drawDial(
     ctx.stroke();
   }
 
-  // Day and night arcs across the band, from the engine's real rise/set.
+  // Night arc as ambience; rise/set encoded by SHAPE — full-band boundary
+  // ticks — never by tint alone (DESIGN-CONSOLIDATED #2/#3: gold day-wash
+  // deleted; the sun disc itself is the day indicator).
   if (times.riseHours !== null && times.setHours !== null) {
     ctx.lineWidth = rOut - rIn;
     ctx.lineCap = "butt";
@@ -40,33 +42,46 @@ export function drawDial(
     ctx.beginPath();
     ctx.arc(0, 0, rMid, hourToAngle(times.setHours), hourToAngle(times.riseHours + 24));
     ctx.stroke();
-    ctx.strokeStyle = THEME.sunlight;
-    ctx.globalAlpha = 0.12;
-    ctx.beginPath();
-    ctx.arc(0, 0, rMid, hourToAngle(times.riseHours), hourToAngle(times.setHours));
-    ctx.stroke();
+    ctx.globalAlpha = 1;
+    for (const h of [times.riseHours, times.setHours]) {
+      const a = hourToAngle(h);
+      const inner = pointOnCircle(a, rIn - R * 0.012);
+      const outer = pointOnCircle(a, rOut);
+      ctx.lineWidth = 1.6 * dpr;
+      ctx.strokeStyle = THEME.inkHi;
+      ctx.globalAlpha = 0.95;
+      ctx.beginPath();
+      ctx.moveTo(inner.x, inner.y);
+      ctx.lineTo(outer.x, outer.y);
+      ctx.stroke();
+    }
     ctx.globalAlpha = 1;
   }
 
-  // Ticks and six-hour numerals.
+  // Three-level cadence (DESIGN-CONSOLIDATED #4): 6h major / hour / 30-min
+  // minor at ≥2:1 length steps — rank by length and weight before opacity.
   ctx.font = `300 ${Math.round(R * 0.052)}px ${THEME.fontMono}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  for (let h = 0; h < 24; h++) {
+  const bandW = rOut - rIn;
+  for (let i = 0; i < 48; i++) {
+    const h = i / 2;
     const a = hourToAngle(h);
     const major = h % 6 === 0;
-    const inner = pointOnCircle(a, major ? rIn - R * 0.012 : rIn);
+    const hourly = Number.isInteger(h);
+    const innerR = major ? rIn - R * 0.012 : hourly ? rOut - bandW * 0.5 : rOut - bandW * 0.25;
+    const inner = pointOnCircle(a, innerR);
     const outer = pointOnCircle(a, rOut);
-    ctx.lineWidth = (major ? 1.4 : 0.7) * dpr;
-    ctx.strokeStyle = major ? THEME.inkHi : THEME.inkMid;
-    ctx.globalAlpha = major ? 0.95 : 0.55;
+    ctx.lineWidth = (major ? 1.4 : hourly ? 1.0 : 0.75) * dpr;
+    ctx.strokeStyle = major ? THEME.inkHi : hourly ? THEME.inkMid : THEME.inkLow;
+    ctx.globalAlpha = major ? 0.95 : hourly ? 0.9 : 1;
     ctx.beginPath();
     ctx.moveTo(inner.x, inner.y);
     ctx.lineTo(outer.x, outer.y);
     ctx.stroke();
     if (major) {
       ctx.globalAlpha = 0.9;
-      ctx.fillStyle = THEME.inkMid;
+      ctx.fillStyle = THEME.inkHi;
       const p = pointOnCircle(a, rIn - R * 0.055);
       ctx.fillText(String(h).padStart(2, "0"), p.x, p.y);
     }

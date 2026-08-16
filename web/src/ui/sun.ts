@@ -27,14 +27,7 @@ export function drawSun(
   ctx.stroke();
   ctx.globalAlpha = 1;
 
-  const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, R * FACE.sunGlow);
-  glow.addColorStop(0, "rgba(240, 179, 16, 0.5)");
-  glow.addColorStop(1, "rgba(240, 179, 16, 0)");
-  ctx.fillStyle = glow;
-  ctx.beginPath();
-  ctx.arc(pos.x, pos.y, R * FACE.sunGlow, 0, TAU);
-  ctx.fill();
-
+  // No glow (DESIGN-CONSOLIDATED #1): a print reflects light, it does not emit.
   ctx.fillStyle = THEME.sunlight;
   ctx.beginPath();
   ctx.arc(pos.x, pos.y, R * FACE.sunDisc, 0, TAU);

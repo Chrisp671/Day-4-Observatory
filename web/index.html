@@ -25,12 +25,17 @@
       color:var(--ink-hi); font-family:var(--mono);
       display:flex; flex-direction:column; min-height:100dvh; overflow:hidden;
     }
-    header{display:flex;justify-content:space-between;align-items:baseline;
+    header{display:flex;justify-content:space-between;align-items:center;
       padding:clamp(14px,2.4vh,28px) clamp(18px,3vw,40px) 0}
     .wordmark{font-family:var(--serif);font-style:italic;
-      font-size:clamp(22px,3.2vh,34px)}
-    .wordmark b{font-style:normal;font-weight:700;color:var(--sunlight);
-      letter-spacing:.02em;margin-right:.35em}
+      font-size:clamp(22px,3.2vh,34px);display:flex;align-items:center;gap:.5em}
+    /* Maker's cartouche: the brand mark mounted as a pasted paper label,
+       the way an engraved chart carries its publisher. Warm paper, never
+       pure white; hairline ink border; sits ON the print, not in it. */
+    .plate{height:clamp(26px,4.2vh,40px);display:block;
+      padding:4px 7px;background:#F0EAD6;
+      border:1px solid var(--ink-low);
+      box-shadow:0 1px 0 rgba(8,22,39,.55)}
     .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;
       color:var(--ink-mid);font-weight:300}
     .clockline b{color:var(--ink-hi);font-weight:500}
@@ -77,7 +82,7 @@
 </head>
 <body>
   <header>
-    <div class="wordmark"><b>DAY4</b>Observatory</div>
+    <div class="wordmark"><img class="plate" src="day4-logo.png" alt="Day4 Astronomy">Observatory</div>
     <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b></div>
   </header>
   <main>

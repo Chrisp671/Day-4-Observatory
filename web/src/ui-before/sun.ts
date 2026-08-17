@@ -1,0 +1,49 @@
+/**
+ * The sun — the instrument's only hour hand (DEC-004/DEC-008): a brand-gold
+ * disc riding the dial band at the current civil time, with a faint
+ * chart-annotation radial tying it to the face center.
+ */
+import { FACE, hourToAngle, pointOnCircle, TAU } from "../ui/clockface";
+import { THEME } from "../ui/theme";
+
+export function drawSun(
+  ctx: CanvasRenderingContext2D,
+  R: number,
+  dpr: number,
+  nowHours: number,
+): void {
+  const a = hourToAngle(nowHours);
+  const rMid = (R * (FACE.dialOuter + FACE.dialInner)) / 2;
+  const pos = pointOnCircle(a, rMid);
+
+  // Annotation radial: the sun is the hand.
+  const from = pointOnCircle(a, R * FACE.sunAnnotationInner);
+  ctx.lineWidth = 0.7 * dpr;
+  ctx.strokeStyle = THEME.inkLow;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(pos.x, pos.y);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  const glow = ctx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, R * FACE.sunGlow);
+  glow.addColorStop(0, "rgba(240, 179, 16, 0.5)");
+  glow.addColorStop(1, "rgba(240, 179, 16, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, R * FACE.sunGlow, 0, TAU);
+  ctx.fill();
+
+  ctx.fillStyle = THEME.sunlight;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, R * FACE.sunDisc, 0, TAU);
+  ctx.fill();
+  ctx.lineWidth = 1 * dpr;
+  ctx.strokeStyle = THEME.inkHi;
+  ctx.globalAlpha = 0.9;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, R * FACE.sunDisc, 0, TAU);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}

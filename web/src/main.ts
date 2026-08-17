@@ -34,7 +34,12 @@ function fit(): void {
   if (canvas === null) return;
   const box = canvas.parentElement?.getBoundingClientRect();
   if (box === undefined) return;
-  const size = Math.floor(Math.min(box.width, box.height));
+  // Portrait stack: the dial takes the stage width (with its padding);
+  // desktop: fit the square inside the stage.
+  const portrait = window.matchMedia("(max-width: 720px)").matches;
+  const size = portrait
+    ? Math.floor(Math.min(box.width - 32, window.innerHeight * 0.52))
+    : Math.floor(Math.min(box.width, box.height));
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = size * DPR;
   canvas.height = size * DPR;

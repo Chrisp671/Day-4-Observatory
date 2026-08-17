@@ -93,12 +93,23 @@
       font-size:8.5px;letter-spacing:.22em;color:var(--ink-low);text-align:center}
 
     @media (max-width:720px){
-      header{flex-wrap:wrap;justify-content:center}
-      .hero{position:static;transform:none;width:100%;margin-top:6px}
-      .readout{max-width:44%}
+      /* Portrait is a STACK: logo, hero, dial with air, data grid, controls.
+         Nothing is absolutely positioned; nothing can overlap. */
+      body{overflow-y:auto;height:auto;min-height:100dvh}
+      header{flex-direction:column;gap:2px;padding-top:14px}
+      .hero{position:static;transform:none;width:100%;margin-top:4px}
       .clockline{display:none}
+      .stage{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;
+        place-items:stretch;padding:10px 16px 4px}
+      .stage canvas{grid-column:1/-1;justify-self:center;margin-bottom:12px}
+      .readout{position:static;max-width:none;pointer-events:auto;
+        padding:7px 0;border-top:1px solid var(--ink-low)}
+      .r-tl{order:1}.r-tr{order:2}.r-bl{order:3}.r-br{order:4}
+      .controls{padding:10px var(--pad) 8px}
+      #now{margin-left:0}
       .stepper span{min-width:38px;letter-spacing:.1em}
       .stepper button{padding:6px 7px}
+      .note{padding-bottom:16px}
     }
     :focus-visible{outline:2px solid var(--sunlight);outline-offset:2px}
   </style>

@@ -36,7 +36,7 @@
     .hero span{display:block;font-size:9px;letter-spacing:.34em;
       color:var(--ink-mid);font-weight:300}
     .hero b{font-family:var(--serif);font-style:italic;font-weight:400;
-      font-size:clamp(20px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
+      font-size:clamp(20px,3.4vh,32px);color:var(--sunlight);line-height:1.05}
     .brand{display:flex;align-items:center;gap:.55em;min-width:0}
     .brand img{height:clamp(22px,3.4vh,34px);display:block}
     .brand span{font-family:var(--serif);font-style:italic;
@@ -93,6 +93,8 @@
       font-size:8.5px;letter-spacing:.22em;color:var(--ink-low);text-align:center}
 
     @media (max-width:720px){
+      header{flex-wrap:wrap;justify-content:center}
+      .hero{position:static;transform:none;width:100%;margin-top:6px}
       .readout{max-width:44%}
       .clockline{display:none}
       .stepper span{min-width:38px;letter-spacing:.1em}
@@ -104,7 +106,7 @@
 <body>
   <header>
     <div class="brand">
-      <img src="day4-logo-dark.png" alt="Day4 Astronomy"><span>Observatory</span>
+      <img src="day4-logo-dark.png" alt="Day4 Astronomy Observatory">
     </div>
     <div class="hero"><span id="hero-k">—</span><b id="hero-v"></b></div>
     <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b></div>

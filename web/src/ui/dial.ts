@@ -50,6 +50,31 @@ export function drawDial(
     ctx.arc(0, 0, rMid, hourToAngle(times.riseHours), hourToAngle(times.setHours));
     ctx.stroke();
     ctx.globalAlpha = 1;
+
+    // Twilight (DEC-009): the band warms through amber around each boundary
+    // — the sky's actual dawn/dusk colors, and the Prussian blue's
+    // complementary partner. Alpha peaks at the boundary and fades over
+    // ~75 minutes each side.
+    const TWILIGHT_SPAN_HOURS = 1.25;
+    const TWILIGHT_STEPS = 24;
+    ctx.lineWidth = rOut - rIn;
+    ctx.strokeStyle = THEME.dawn;
+    for (const boundary of [times.riseHours, times.setHours]) {
+      for (let i = 0; i < TWILIGHT_STEPS; i++) {
+        const t0 = -1 + (2 * i) / TWILIGHT_STEPS;
+        const t1 = -1 + (2 * (i + 1)) / TWILIGHT_STEPS;
+        const mid = (t0 + t1) / 2;
+        ctx.globalAlpha = 0.38 * (1 - Math.abs(mid)) ** 1.5;
+        ctx.beginPath();
+        ctx.arc(
+          0, 0, rMid,
+          hourToAngle(boundary + t0 * TWILIGHT_SPAN_HOURS),
+          hourToAngle(boundary + t1 * TWILIGHT_SPAN_HOURS),
+        );
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
     for (const h of [times.riseHours, times.setHours]) {
       const a = hourToAngle(h);
       const inner = pointOnCircle(a, rIn - R * 0.012);

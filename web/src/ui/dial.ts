@@ -22,9 +22,9 @@ export function drawDial(
   const rIn = R * FACE.dialInner;
   const rMid = (rOut + rIn) / 2;
 
-  ctx.lineWidth = 1 * dpr;
-  ctx.strokeStyle = THEME.inkLow;
-  ctx.globalAlpha = 0.9;
+  ctx.lineWidth = 1.1 * dpr;
+  ctx.strokeStyle = THEME.inkMid;
+  ctx.globalAlpha = 0.85;
   for (const r of [rOut, rIn]) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);
@@ -37,10 +37,17 @@ export function drawDial(
   if (times.riseHours !== null && times.setHours !== null) {
     ctx.lineWidth = rOut - rIn;
     ctx.lineCap = "butt";
-    ctx.strokeStyle = THEME.night;
-    ctx.globalAlpha = 0.55;
+    // Night is DARKER than the field, day is LIGHTER: a value ladder, so the
+    // day/night read survives without spending a hue on it.
+    ctx.strokeStyle = THEME.shadow;
+    ctx.globalAlpha = 0.75;
     ctx.beginPath();
     ctx.arc(0, 0, rMid, hourToAngle(times.setHours), hourToAngle(times.riseHours + 24));
+    ctx.stroke();
+    ctx.strokeStyle = THEME.inkHi;
+    ctx.globalAlpha = 0.08;
+    ctx.beginPath();
+    ctx.arc(0, 0, rMid, hourToAngle(times.riseHours), hourToAngle(times.setHours));
     ctx.stroke();
     ctx.globalAlpha = 1;
     for (const h of [times.riseHours, times.setHours]) {

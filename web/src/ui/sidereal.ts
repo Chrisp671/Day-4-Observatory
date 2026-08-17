@@ -16,9 +16,9 @@ export function drawSidereal(
   ctx.save();
   ctx.rotate(-(siderealHours / 24) * TAU);
 
-  ctx.lineWidth = 0.7 * dpr;
-  ctx.strokeStyle = THEME.inkLow;
-  ctx.globalAlpha = 0.8;
+  ctx.lineWidth = 0.9 * dpr;
+  ctx.strokeStyle = THEME.inkMid;
+  ctx.globalAlpha = 0.55;
   ctx.beginPath();
   ctx.arc(0, 0, r, 0, TAU);
   ctx.stroke();
@@ -27,7 +27,7 @@ export function drawSidereal(
     const a = (i / 72) * TAU;
     const major = i % 6 === 0;
     const t = major ? R * 0.018 : R * 0.009;
-    ctx.globalAlpha = major ? 0.9 : 0.45;
+    ctx.globalAlpha = major ? 0.95 : 0.6;
     ctx.beginPath();
     ctx.moveTo(Math.cos(a) * (r - t), Math.sin(a) * (r - t));
     ctx.lineTo(Math.cos(a) * (r + t), Math.sin(a) * (r + t));

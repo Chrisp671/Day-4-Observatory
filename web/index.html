@@ -17,96 +17,113 @@
       --sunlight:#F0B310;
       --serif:'Instrument Serif', Georgia, serif;
       --mono:'IBM Plex Mono', ui-monospace, monospace;
+      --pad: clamp(16px, 3vw, 40px);
     }
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{height:100%}
     body{
-      background:radial-gradient(120% 120% at 50% 42%, var(--print-1) 0%, var(--print-0) 78%);
+      background:radial-gradient(125% 125% at 50% 45%, var(--print-1) 0%, var(--print-0) 80%);
       color:var(--ink-hi); font-family:var(--mono);
-      display:flex; flex-direction:column; min-height:100dvh; overflow:hidden;
+      display:flex; flex-direction:column; height:100dvh; overflow:hidden;
     }
+
+    /* ————— header ————— */
     header{display:flex;justify-content:space-between;align-items:center;
-      padding:clamp(14px,2.4vh,28px) clamp(18px,3vw,40px) 0}
-    .wordmark{font-family:var(--serif);font-style:italic;
-      font-size:clamp(22px,3.2vh,34px);display:flex;align-items:center;gap:.5em}
-    /* Maker's cartouche: the brand mark mounted as a pasted paper label,
-       the way an engraved chart carries its publisher. Warm paper, never
-       pure white; hairline ink border; sits ON the print, not in it. */
-    .plate{height:clamp(26px,4.2vh,40px);display:block;
-      padding:4px 7px;background:#F0EAD6;
-      border:1px solid var(--ink-low);
-      box-shadow:0 1px 0 rgba(8,22,39,.55)}
-    .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;
-      color:var(--ink-mid);font-weight:300}
-    .clockline b{color:var(--ink-hi);font-weight:500}
-    main{flex:1;display:grid;place-items:center;min-height:0;padding:0 12px}
-    canvas{display:block;max-width:100%;max-height:100%}
-    footer{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
-      border:1px solid var(--ink-low);background:var(--ink-low);
-      margin:0 clamp(18px,3vw,40px) clamp(10px,1.8vh,20px)}
-    .cell{background:var(--print-0);padding:10px 14px 12px}
-    .cell .k{font-size:9px;letter-spacing:.28em;color:var(--ink-mid);font-weight:300}
-    .cell .v{font-size:clamp(12px,1.9vh,16px);letter-spacing:.06em;margin-top:4px}
-    .note{padding:0 clamp(18px,3vw,40px) 10px;font-size:9px;letter-spacing:.2em;
-      color:var(--ink-low);text-align:center}
-    .controls{display:flex;justify-content:center;align-items:center;gap:8px;
-      flex-wrap:wrap;padding:4px clamp(18px,3vw,40px) 10px}
-    .stepgroup{display:flex;gap:2px}
-    .controls button{
-      font-family:var(--mono);font-size:10px;letter-spacing:.08em;
-      color:var(--ink-mid);background:transparent;
-      border:1px solid var(--ink-low);padding:5px 7px;cursor:pointer}
-    .controls button:hover{color:var(--ink-hi);border-color:var(--ink-mid)}
-    .controls #now{color:var(--ink-hi);padding:5px 14px}
-    .controls #now.armed{color:var(--sunlight);border-color:var(--sunlight)}
-    .timeline.shifted, #timeline.shifted{color:var(--sunlight)}
-    .stationbar{display:flex;justify-content:center;align-items:center;gap:6px;
-      padding:0 clamp(18px,3vw,40px) 8px;font-size:10px;color:var(--ink-mid)}
-    .stationbar input{
-      font-family:var(--mono);font-size:11px;width:90px;
-      color:var(--ink-hi);background:transparent;
-      border:1px solid var(--ink-low);padding:4px 6px}
-    .stationbar button{
-      font-family:var(--mono);font-size:10px;letter-spacing:.08em;
-      color:var(--ink-mid);background:transparent;
-      border:1px solid var(--ink-low);padding:4px 8px;cursor:pointer}
+      gap:16px; padding:clamp(12px,2vh,22px) var(--pad) 0; flex:none}
+    .brand{display:flex;align-items:center;gap:.55em;min-width:0}
+    .brand img{height:clamp(22px,3.4vh,34px);display:block}
+    .brand span{font-family:var(--serif);font-style:italic;
+      font-size:clamp(19px,2.9vh,30px);color:var(--ink-hi);
+      letter-spacing:.01em;white-space:nowrap}
+    .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.16em;
+      color:var(--ink-mid);font-weight:300;white-space:nowrap}
+    .clockline b{color:var(--ink-hi);font-weight:500;font-size:1.15em}
+    .clockline b.shifted{color:var(--sunlight)}
+
+    /* ————— stage: dial centred, readouts in the corners ————— */
+    .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;
+      padding:clamp(8px,1.6vh,18px) var(--pad)}
+    canvas{display:block}
+    .readout{position:absolute;pointer-events:none;max-width:38%}
+    .readout .k{font-size:9px;letter-spacing:.3em;color:var(--ink-mid);font-weight:300}
+    .readout .v{font-size:clamp(15px,2.4vh,22px);letter-spacing:.02em;
+      margin-top:3px;color:var(--ink-hi);line-height:1.15}
+    .r-tl{top:clamp(8px,3vh,30px);left:var(--pad)}
+    .r-tr{top:clamp(8px,3vh,30px);right:var(--pad);text-align:right}
+    .r-bl{bottom:clamp(8px,2vh,20px);left:var(--pad)}
+    .r-br{bottom:clamp(8px,2vh,20px);right:var(--pad);text-align:right;pointer-events:auto}
+
+    /* station entry lives with the station readout */
+    .stationbar{display:flex;gap:4px;justify-content:flex-end;margin-top:7px;flex-wrap:wrap}
+    .stationbar input{font-family:var(--mono);font-size:11px;width:66px;text-align:right;
+      color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
+      padding:3px 5px}
+    .stationbar input:focus{border-color:var(--ink-mid);outline:none}
+    .stationbar button{font-family:var(--mono);font-size:9px;letter-spacing:.14em;
+      color:var(--ink-mid);background:transparent;border:1px solid var(--ink-low);
+      padding:3px 7px;cursor:pointer}
     .stationbar button:hover{color:var(--ink-hi);border-color:var(--ink-mid)}
-    #station-status{color:var(--sunlight);letter-spacing:.06em}
-    @media (max-width:560px){
-      footer{grid-template-columns:repeat(2,1fr)}
+    #station-status{display:block;margin-top:5px;font-size:9px;letter-spacing:.1em;
+      color:var(--sunlight)}
+
+    /* ————— time travel ————— */
+    .controls{flex:none;display:flex;justify-content:center;align-items:center;
+      gap:6px;flex-wrap:wrap;padding:0 var(--pad) clamp(6px,1.2vh,12px)}
+    .stepper{display:flex;align-items:stretch;border:1px solid var(--ink-low)}
+    .stepper span{font-size:9px;letter-spacing:.16em;color:var(--ink-mid);
+      padding:6px 7px;align-self:center;min-width:44px;text-align:center}
+    .stepper button{font-family:var(--mono);font-size:13px;line-height:1;
+      color:var(--ink-mid);background:transparent;border:none;
+      padding:6px 9px;cursor:pointer}
+    .stepper button:hover{color:var(--ink-hi);background:rgba(215,230,242,.07)}
+    #now{font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+      color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
+      padding:7px 16px;cursor:pointer;margin-left:6px}
+    #now:hover{border-color:var(--ink-mid)}
+    #now.armed{color:var(--sunlight);border-color:var(--sunlight)}
+
+    .note{flex:none;padding:0 var(--pad) clamp(8px,1.4vh,14px);
+      font-size:8.5px;letter-spacing:.22em;color:var(--ink-low);text-align:center}
+
+    @media (max-width:720px){
+      .readout{max-width:44%}
       .clockline span.date{display:none}
-      .stepgroup button{padding:4px 4px}
+      .stepper span{min-width:38px;letter-spacing:.1em}
+      .stepper button{padding:6px 7px}
     }
-    :focus-visible{outline:2px solid var(--sunlight);outline-offset:3px}
+    :focus-visible{outline:2px solid var(--sunlight);outline-offset:2px}
   </style>
 </head>
 <body>
   <header>
-    <div class="wordmark"><img class="plate" src="day4-logo.png" alt="Day4 Astronomy">Observatory</div>
+    <div class="brand">
+      <img src="day4-logo-dark.png" alt="Day4 Astronomy"><span>Observatory</span>
+    </div>
     <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b></div>
   </header>
-  <main>
+
+  <div class="stage">
+    <div class="readout r-tl"><div class="k">SUNRISE</div><div class="v" id="rise">—</div></div>
+    <div class="readout r-tr"><div class="k">SUNSET</div><div class="v" id="set">—</div></div>
     <canvas id="sky" role="img"
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
-  </main>
+    <div class="readout r-bl"><div class="k">MOON</div><div class="v" id="moon">—</div></div>
+    <div class="readout r-br">
+      <div class="k">STATION</div><div class="v" id="station">—</div>
+      <div class="stationbar">
+        <input id="lat-in" inputmode="decimal" autocomplete="off" aria-label="Latitude">
+        <input id="lon-in" inputmode="decimal" autocomplete="off" aria-label="Longitude">
+        <button id="set-station">SET</button>
+        <button id="locate">LOCATE</button>
+      </div>
+      <span id="station-status"></span>
+    </div>
+  </div>
+
   <div class="controls" role="group" aria-label="Time travel">
-    <div class="stepgroup" id="back"></div>
+    <div id="steppers" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
     <button id="now" aria-label="Return to the present">NOW</button>
-    <div class="stepgroup" id="fwd"></div>
   </div>
-  <div class="stationbar" role="group" aria-label="Observer location">
-    <label for="lat-in">LAT</label><input id="lat-in" inputmode="decimal" autocomplete="off">
-    <label for="lon-in">LON</label><input id="lon-in" inputmode="decimal" autocomplete="off">
-    <button id="set-station">SET</button>
-    <button id="locate">LOCATE ME</button>
-    <span id="station-status"></span>
-  </div>
-  <footer>
-    <div class="cell"><div class="k">SUNRISE</div><div class="v" id="rise">—</div></div>
-    <div class="cell"><div class="k">SUNSET</div><div class="v" id="set">—</div></div>
-    <div class="cell"><div class="k">MOON</div><div class="v" id="moon">—</div></div>
-    <div class="cell"><div class="k">STATION</div><div class="v" id="station">—</div></div>
-  </footer>
   <div class="note">"AND LET THEM BE FOR SIGNS AND SEASONS, AND FOR DAYS AND YEARS" — GENESIS 1:14</div>
   <script type="module" src="/src/main.ts"></script>
 </body>

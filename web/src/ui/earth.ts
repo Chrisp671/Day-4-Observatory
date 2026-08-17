@@ -21,7 +21,7 @@ export function drawEarth(
   const r = R * FACE.earth;
 
   // Limb — strongest line on the body.
-  ctx.lineWidth = 1.5 * dpr;
+  ctx.lineWidth = 1.9 * dpr;
   ctx.strokeStyle = THEME.inkHi;
   ctx.globalAlpha = 0.95;
   ctx.beginPath();
@@ -34,9 +34,9 @@ export function drawEarth(
   ctx.clip();
 
   // Equator and central meridian — mid-weight.
-  ctx.lineWidth = 1.0 * dpr;
+  ctx.lineWidth = 1.1 * dpr;
   ctx.strokeStyle = THEME.inkMid;
-  ctx.globalAlpha = 0.9;
+  ctx.globalAlpha = 1;
   ctx.beginPath();
   ctx.moveTo(-r, 0);
   ctx.lineTo(r, 0);
@@ -45,9 +45,9 @@ export function drawEarth(
   ctx.stroke();
 
   // Tropics: straight chords at y = ±r·sin(23.44°) — hairline.
-  ctx.lineWidth = 0.6 * dpr;
-  ctx.strokeStyle = THEME.inkLow;
-  ctx.globalAlpha = 1;
+  ctx.lineWidth = 0.8 * dpr;
+  ctx.strokeStyle = THEME.inkMid;
+  ctx.globalAlpha = 0.5;
   for (const s of [-1, 1]) {
     const y = s * r * TROPIC_SIN;
     const halfChord = Math.sqrt(Math.max(0, r * r - y * y));
@@ -68,7 +68,7 @@ export function drawEarth(
   // Night hemisphere: one crisp analytic shape, away from the sun.
   ctx.rotate(sunDialAngleRad + Math.PI);
   ctx.fillStyle = THEME.shadow;
-  ctx.globalAlpha = 0.72;
+  ctx.globalAlpha = 0.85;
   ctx.beginPath();
   ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2);
   ctx.closePath();

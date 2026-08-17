@@ -82,9 +82,9 @@ export function drawMoon(
   // to a construction line, leaving the sidereal ring as the only continuous
   // articulated interior scale. Gap ≈ 2× disc angular width each side.
   const gap = 2 * Math.atan(discR / orbitR) * 2;
-  ctx.lineWidth = 0.7 * dpr;
+  ctx.lineWidth = 0.8 * dpr;
   ctx.strokeStyle = THEME.inkLow;
-  ctx.globalAlpha = 0.55;
+  ctx.globalAlpha = 0.95;
   ctx.beginPath();
   ctx.arc(0, 0, orbitR, a + gap / 2, a - gap / 2 + TAU);
   ctx.stroke();

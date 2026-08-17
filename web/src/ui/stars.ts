@@ -25,8 +25,8 @@ const rnd = mulberry32(1826);
 const STARS: readonly Star[] = Array.from({ length: 110 }, () => ({
   angle: rnd() * TAU,
   radiusFrac: 0.42 + rnd() * 0.62,
-  size: rnd() < 0.12 ? 1.7 : 0.9,
-  opacity: 0.25 + rnd() * 0.5,
+  size: rnd() < 0.14 ? 2.0 : 1.1,
+  opacity: 0.4 + rnd() * 0.5,
 }));
 
 export function drawStars(ctx: CanvasRenderingContext2D, faceRadius: number, dpr: number): void {

@@ -104,24 +104,30 @@ function stepDisplayed(unit: StepUnit, dir: 1 | -1): void {
   draw();
 }
 
-function buildStepButtons(): void {
-  const back = el("back");
-  const fwd = el("fwd");
-  if (back === null || fwd === null) return;
-  // Back buttons mirror the original's layout: largest unit outermost.
-  for (const { unit, label } of [...STEP_UNITS].reverse()) {
-    const b = document.createElement("button");
-    b.textContent = `‹${label}`;
-    b.setAttribute("aria-label", `Back one ${unit}`);
-    b.addEventListener("click", () => stepDisplayed(unit, -1));
-    back.appendChild(b);
-  }
+function buildSteppers(): void {
+  const host = el("steppers");
+  if (host === null) return;
+  // One control per unit — a labelled cell flanked by its two chevrons —
+  // instead of fourteen identical boxes.
   for (const { unit, label } of STEP_UNITS) {
-    const b = document.createElement("button");
-    b.textContent = `${label}›`;
-    b.setAttribute("aria-label", `Forward one ${unit}`);
-    b.addEventListener("click", () => stepDisplayed(unit, 1));
-    fwd.appendChild(b);
+    const group = document.createElement("div");
+    group.className = "stepper";
+
+    const back = document.createElement("button");
+    back.textContent = "‹";
+    back.setAttribute("aria-label", `Back one ${unit}`);
+    back.addEventListener("click", () => stepDisplayed(unit, -1));
+
+    const name = document.createElement("span");
+    name.textContent = label;
+
+    const fwd = document.createElement("button");
+    fwd.textContent = "›";
+    fwd.setAttribute("aria-label", `Forward one ${unit}`);
+    fwd.addEventListener("click", () => stepDisplayed(unit, 1));
+
+    group.append(back, name, fwd);
+    host.appendChild(group);
   }
   el("now")?.addEventListener("click", () => {
     offsetMillis = 0;
@@ -183,7 +189,7 @@ window.addEventListener("resize", () => {
   fit();
   draw();
 });
-buildStepButtons();
+buildSteppers();
 buildStationControls();
 fit();
 draw();

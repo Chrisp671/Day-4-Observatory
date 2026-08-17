@@ -13,6 +13,7 @@ import { drawEarth } from "./ui/earth";
 import { buildGrain, drawGrain } from "./ui/grain";
 import { drawMoon, moonDialHours } from "./ui/moon";
 import { drawSidereal } from "./ui/sidereal";
+import { skyPalette } from "./ui/sky";
 import { drawStars } from "./ui/stars";
 import { drawSun } from "./ui/sun";
 
@@ -72,12 +73,18 @@ function draw(): void {
   const s = frame(t, station.lat, station.lon);
   const tHours = localHoursOfDay(t);
 
+  // The whole page follows the light: field, stars, and the sun's own
+  // colour are keyed to the real solar altitude (DEC-010).
+  const pal = skyPalette(s.sun.altitudeDeg);
+  document.documentElement.style.setProperty("--print-0", pal.deep);
+  document.documentElement.style.setProperty("--print-1", pal.field);
+
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, W);
   drawGrain(ctx, W, W);
   ctx.translate(W / 2, W / 2);
 
-  drawStars(ctx, R, DPR);
+  drawStars(ctx, R, DPR, pal.starAlpha);
   drawSidereal(ctx, R, DPR, s.siderealHours);
   drawDial(ctx, R, DPR, {
     riseHours: s.sun.nextRiseUnixMillis === null ? null : localHoursOfDay(s.sun.nextRiseUnixMillis),
@@ -85,7 +92,7 @@ function draw(): void {
   });
   drawEarth(ctx, R, DPR, hourToAngle(tHours));
   drawMoon(ctx, R, DPR, moonDialHours(tHours, s.sun.hourAngleHours, s.moon.hourAngleHours), s.moon.phaseAngleDeg);
-  drawSun(ctx, R, DPR, tHours);
+  drawSun(ctx, R, DPR, tHours, pal.sunCore);
 
   setText("rise", s.sun.nextRiseUnixMillis === null ? "—" : hhmm(s.sun.nextRiseUnixMillis));
   setText("set", s.sun.nextSetUnixMillis === null ? "—" : hhmm(s.sun.nextSetUnixMillis));

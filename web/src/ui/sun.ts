@@ -11,6 +11,7 @@ export function drawSun(
   R: number,
   dpr: number,
   nowHours: number,
+  coreColor: string = THEME.sunlight,
 ): void {
   const a = hourToAngle(nowHours);
   const rMid = (R * (FACE.dialOuter + FACE.dialInner)) / 2;
@@ -28,7 +29,7 @@ export function drawSun(
   ctx.globalAlpha = 1;
 
   // No glow (DESIGN-CONSOLIDATED #1): a print reflects light, it does not emit.
-  ctx.fillStyle = THEME.sunlight;
+  ctx.fillStyle = coreColor;
   ctx.beginPath();
   ctx.arc(pos.x, pos.y, R * FACE.sunDisc, 0, TAU);
   ctx.fill();

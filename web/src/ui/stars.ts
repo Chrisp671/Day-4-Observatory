@@ -29,9 +29,15 @@ const STARS: readonly Star[] = Array.from({ length: 110 }, () => ({
   opacity: 0.4 + rnd() * 0.5,
 }));
 
-export function drawStars(ctx: CanvasRenderingContext2D, faceRadius: number, dpr: number): void {
+export function drawStars(
+  ctx: CanvasRenderingContext2D,
+  faceRadius: number,
+  dpr: number,
+  visibility = 1,
+): void {
+  if (visibility < 0.02) return; // daylight: the stars are still there — unseen
   for (const s of STARS) {
-    ctx.globalAlpha = s.opacity;
+    ctx.globalAlpha = s.opacity * visibility;
     ctx.fillStyle = THEME.inkMid;
     ctx.beginPath();
     ctx.arc(

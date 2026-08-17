@@ -29,7 +29,14 @@
 
     /* ————— header ————— */
     header{display:flex;justify-content:space-between;align-items:center;
-      gap:16px; padding:clamp(12px,2vh,22px) var(--pad) 0; flex:none}
+      gap:16px; padding:clamp(12px,2vh,22px) var(--pad) 0; flex:none;
+      position:relative}
+    .hero{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);
+      text-align:center;pointer-events:none;white-space:nowrap}
+    .hero span{display:block;font-size:9px;letter-spacing:.34em;
+      color:var(--ink-mid);font-weight:300}
+    .hero b{font-family:var(--serif);font-style:italic;font-weight:400;
+      font-size:clamp(20px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
     .brand{display:flex;align-items:center;gap:.55em;min-width:0}
     .brand img{height:clamp(22px,3.4vh,34px);display:block}
     .brand span{font-family:var(--serif);font-style:italic;
@@ -43,7 +50,7 @@
     /* ————— stage: dial centred, readouts in the corners ————— */
     .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;
       padding:clamp(8px,1.6vh,18px) var(--pad)}
-    canvas{display:block}
+    canvas{display:block;touch-action:none}
     .readout{position:absolute;pointer-events:none;max-width:38%}
     .readout .k{font-size:9px;letter-spacing:.3em;color:var(--ink-mid);font-weight:300}
     .readout .v{font-size:clamp(15px,2.4vh,22px);letter-spacing:.02em;
@@ -87,7 +94,7 @@
 
     @media (max-width:720px){
       .readout{max-width:44%}
-      .clockline span.date{display:none}
+      .clockline{display:none}
       .stepper span{min-width:38px;letter-spacing:.1em}
       .stepper button{padding:6px 7px}
     }
@@ -99,6 +106,7 @@
     <div class="brand">
       <img src="day4-logo-dark.png" alt="Day4 Astronomy"><span>Observatory</span>
     </div>
+    <div class="hero"><span id="hero-k">—</span><b id="hero-v"></b></div>
     <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b></div>
   </header>
 

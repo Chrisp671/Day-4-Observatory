@@ -4,6 +4,8 @@
  */
 import { frame } from "./engine/frame";
 import { loadStation, parseCoordinate, saveStation, type Station } from "./app/location";
+import { formatCountdown, nextSunEvent } from "./app/hero";
+import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
 import { hourToAngle, localHoursOfDay } from "./ui/clockface";
 import { drawDial } from "./ui/dial";
@@ -93,9 +95,66 @@ function draw(): void {
     .toUpperCase());
   setText("timeline", new Date(t).toLocaleTimeString("en-GB", { hour12: false }));
 
+  const ev = nextSunEvent(s.sun.nextRiseUnixMillis, s.sun.nextSetUnixMillis);
+  if (ev !== null) {
+    setText("hero-k", ev.kind === "sunset" ? "SUNSET" : "SUNRISE");
+    setText("hero-v", `in ${formatCountdown(ev.atUnixMillis - t)}`);
+  } else {
+    setText("hero-k", "POLAR");
+    setText("hero-v", "sun does not rise or set");
+  }
+
   const shifted = offsetMillis !== 0;
   el("timeline")?.classList.toggle("shifted", shifted);
   el("now")?.classList.toggle("armed", shifted);
+}
+
+/* ————— drag the sun to scrub time (REQ-005) ————— */
+let dragging = false;
+let lastDragHours = 0;
+
+function canvasPoint(e: PointerEvent): { x: number; y: number } | null {
+  if (canvas === null) return null;
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: (e.clientX - rect.left) * DPR - W / 2,
+    y: (e.clientY - rect.top) * DPR - W / 2,
+  };
+}
+
+function wireScrub(): void {
+  if (canvas === null) return;
+  canvas.addEventListener("pointerdown", (e) => {
+    const p = canvasPoint(e);
+    if (p === null) return;
+    if (hitSun(p.x, p.y, localHoursOfDay(displayedNow()), R)) {
+      dragging = true;
+      lastDragHours = pointToDialHours(p.x, p.y);
+      canvas.setPointerCapture(e.pointerId);
+      canvas.style.cursor = "grabbing";
+      e.preventDefault();
+    }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    const p = canvasPoint(e);
+    if (p === null) return;
+    if (dragging) {
+      const cur = pointToDialHours(p.x, p.y);
+      offsetMillis += shortestHourDelta(lastDragHours, cur) * 3600000;
+      lastDragHours = cur;
+      draw();
+    } else {
+      canvas.style.cursor = hitSun(p.x, p.y, localHoursOfDay(displayedNow()), R)
+        ? "grab"
+        : "default";
+    }
+  });
+  for (const type of ["pointerup", "pointercancel"] as const) {
+    canvas.addEventListener(type, () => {
+      dragging = false;
+      canvas.style.cursor = "default";
+    });
+  }
 }
 
 /* ————— time-travel controls (REQ-005) ————— */
@@ -191,6 +250,7 @@ window.addEventListener("resize", () => {
 });
 buildSteppers();
 buildStationControls();
+wireScrub();
 fit();
 draw();
 setInterval(draw, 1000);

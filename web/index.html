@@ -108,6 +108,26 @@
     #now:hover{border-color:var(--ink-mid)}
     #now.armed{color:var(--sunlight);border-color:var(--sunlight)}
 
+    /* ————— tonight: the evening's program ————— */
+    .tonight{flex:none;padding:clamp(8px,1.4vh,14px) var(--pad) clamp(10px,1.6vh,18px);
+      border-top:1px solid var(--ink-low)}
+    .tonight-h{display:flex;align-items:baseline;gap:.6em;justify-content:center;
+      margin-bottom:clamp(6px,1vh,10px)}
+    .tonight-h span{font-family:var(--caps);font-weight:700;font-size:10px;
+      letter-spacing:.34em;color:var(--ink-mid)}
+    .tonight-h em{font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:13px;color:var(--ink-low)}
+    .tonight-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+      gap:4px clamp(10px,2vw,26px);max-width:1100px;margin:0 auto}
+    .sky-item{text-align:center;min-width:0}
+    .sky-name{font-family:var(--caps);font-weight:600;font-size:11px;
+      letter-spacing:.16em;color:var(--ink-mid);white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis}
+    .sky-when{font-family:var(--mono);font-size:12px;color:var(--ink-mid);
+      font-variant-numeric:tabular-nums;margin-top:2px}
+    .sky-item.is-up .sky-name{color:var(--scripture)}
+    .sky-item.is-up .sky-when{color:var(--ink-hi)}
+
     @media (max-width:720px){
       /* Portrait is a STACK: logo, hero, dial with air, data grid, controls.
          Nothing is absolutely positioned; nothing can overlap. */
@@ -127,6 +147,9 @@
       #now{margin-left:0}
       .stepper span{min-width:38px;letter-spacing:.1em}
       .stepper button{padding:6px 7px}
+      .tonight{padding-bottom:20px}
+      .tonight-list{grid-template-columns:repeat(2,1fr);gap:8px 14px}
+      .tonight-h em{font-size:12px}
     }
     :focus-visible{outline:2px solid var(--sunlight);outline-offset:2px}
   </style>
@@ -167,6 +190,10 @@
     <div id="steppers" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
     <button id="now" aria-label="Return to the present">NOW</button>
   </div>
+  <section class="tonight" aria-label="Constellations tonight">
+    <div class="tonight-h"><span>TONIGHT</span><em id="tonight-note"></em></div>
+    <div class="tonight-list" id="tonight-list"></div>
+  </section>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

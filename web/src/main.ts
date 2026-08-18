@@ -6,6 +6,7 @@ import { frame } from "./engine/frame";
 import { loadStation, parseCoordinate, saveStation, type Station } from "./app/location";
 import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
+import { isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
 import { hourToAngle, localHoursOfDay } from "./ui/clockface";
@@ -46,14 +47,19 @@ let DPR = 1;
 
 function fit(): void {
   if (canvas === null) return;
-  const box = canvas.parentElement?.getBoundingClientRect();
-  if (box === undefined) return;
-  // Portrait stack: the dial takes the stage width (with its padding);
-  // desktop: fit the square inside the stage.
+  const parent = canvas.parentElement;
+  if (parent === null) return;
+  const box = parent.getBoundingClientRect();
+  // Measure the stage's CONTENT box: the border box includes padding, and a
+  // dial sized to it overflows into whatever sits above and below.
+  const pad = window.getComputedStyle(parent);
+  const innerW = box.width - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight);
+  const innerH = box.height - parseFloat(pad.paddingTop) - parseFloat(pad.paddingBottom);
+  // Portrait stack: the dial takes the stage width; desktop: fit the square.
   const portrait = window.matchMedia("(max-width: 720px)").matches;
-  const size = portrait
-    ? Math.floor(Math.min(box.width - 32, window.innerHeight * 0.52))
-    : Math.floor(Math.min(box.width, box.height));
+  const size = Math.max(120, Math.floor(portrait
+    ? Math.min(innerW, window.innerHeight * 0.52)
+    : Math.min(innerW, innerH)));
   DPR = Math.min(window.devicePixelRatio || 1, 2);
   canvas.width = size * DPR;
   canvas.height = size * DPR;
@@ -78,6 +84,63 @@ const PHASE_NAMES = [
 
 const hhmm = (unixMillis: number): string =>
   new Date(unixMillis).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+/* ————— tonight: the evening's program (bottom band) ————— */
+/** How many of the board's entries the strip shows; the rest stay off-screen. */
+const TONIGHT_SLOTS = 6;
+
+interface SkySlot {
+  readonly root: HTMLElement;
+  readonly name: HTMLElement;
+  readonly when: HTMLElement;
+}
+
+const skySlots: SkySlot[] = [];
+
+function buildTonight(): void {
+  const host = el("tonight-list");
+  if (host === null) return;
+  for (let i = 0; i < TONIGHT_SLOTS; i++) {
+    const root = document.createElement("div");
+    root.className = "sky-item";
+    const name = document.createElement("div");
+    name.className = "sky-name";
+    const when = document.createElement("div");
+    when.className = "sky-when";
+    root.append(name, when);
+    host.appendChild(root);
+    skySlots.push({ root, name, when });
+  }
+}
+
+/** "up all night" / "sets in 3h 40m" / "rises in 2h 14m". */
+function skyPhrase(entry: SkyEntry): string {
+  if (entry.status === "circumpolar") return "up all night";
+  const countdown = formatCountdown(entry.untilMillis ?? 0);
+  return entry.status === "up" ? `sets in ${countdown}` : `rises in ${countdown}`;
+}
+
+function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
+  // A constellation that never rises from this station is not news; drop it.
+  const board = tonightBoard(siderealHours + station.lon / 15, station.lat)
+    .filter((e) => e.status !== "never")
+    .slice(0, TONIGHT_SLOTS);
+
+  skySlots.forEach((slot, i) => {
+    const entry = board[i];
+    if (entry === undefined) {
+      slot.root.style.display = "none";
+      return;
+    }
+    slot.root.style.display = "";
+    slot.root.classList.toggle("is-up", entry.status !== "down");
+    slot.name.textContent = entry.constellation.name;
+    slot.when.textContent = skyPhrase(entry);
+  });
+
+  // Up is not the same as visible: only promise stars once the sky is dark.
+  setText("tonight-note", isDarkEnough(sunAltitudeDeg) ? "" : "visible after dark");
+}
 
 /* ————— render ————— */
 function draw(): void {
@@ -144,6 +207,8 @@ function draw(): void {
   const verse = verseOfDay(Date.now());
   setText("verse-text", verse.text);
   setText("verse-ref", `${verse.reference} · ${VERSE_VERSION}`);
+
+  drawTonight(s.siderealHours, s.sun.altitudeDeg);
 }
 
 /* ————— drag the sun to scrub time (REQ-005) ————— */
@@ -286,6 +351,22 @@ window.addEventListener("resize", () => {
   fitFirmament();
   draw();
 });
+
+// The stage can change height without the window resizing — a late-loading
+// font, or the TONIGHT band growing as its text arrives. Re-fit when it does,
+// or the dial keeps a stale size and overlaps its neighbours.
+const stage = canvas?.parentElement;
+if (stage != null && typeof ResizeObserver !== "undefined") {
+  let lastH = 0;
+  new ResizeObserver(() => {
+    const h = Math.round(stage.getBoundingClientRect().height);
+    if (h === lastH) return; // ignore the resize we just caused ourselves
+    lastH = h;
+    fit();
+    draw();
+  }).observe(stage);
+}
+buildTonight();
 buildSteppers();
 buildStationControls();
 wireScrub();

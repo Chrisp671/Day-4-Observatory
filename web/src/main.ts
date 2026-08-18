@@ -4,7 +4,7 @@
  */
 import { frame } from "./engine/frame";
 import { loadStation, parseCoordinate, saveStation, type Station } from "./app/location";
-import { verseOfDay } from "./app/verse";
+import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
@@ -143,7 +143,7 @@ function draw(): void {
   // not the time-travelled instrument time.
   const verse = verseOfDay(Date.now());
   setText("verse-text", verse.text);
-  setText("verse-ref", verse.reference);
+  setText("verse-ref", `${verse.reference} · ${VERSE_VERSION}`);
 }
 
 /* ————— drag the sun to scrub time (REQ-005) ————— */

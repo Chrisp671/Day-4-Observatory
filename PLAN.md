@@ -59,6 +59,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-012 — Scripture as masthead, engraved type (owner: “would the verse look better up top… the font still sucks, we are representing the God of the universe”): the verse moves from footnote to masthead — the thesis the instrument hangs under — rotating daily through twelve KJV sky-verses (the six day4.org itself displays + six more). Type recut to the engraved-atlas tradition: Cormorant SemiBold Italic for scripture/hero, Cinzel Roman inscriptional capitals for all labels, mono confined to numerals. day4.org’s literal fonts (Poppins/Open Sans, stock Divi) deliberately not copied. 2026-08-17.
 
+- DEC-013 — ESV, not KJV (owner correction: “looking at the website, what Bible version do they use — they don’t use King James”): day4.org quotes ESV (Isaiah 40:26 and Psalm 33:6,9 verbatim; Psalm 147:4 in NASB wording), so the whole masthead canon is ESV with the required “· ESV” mark on every citation (ESV terms permit this scale in non-saleable media). Regression test bans KJV archaisms from the canon. Lesson: verify brand facts against the brand’s own site before choosing. 2026-08-17.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

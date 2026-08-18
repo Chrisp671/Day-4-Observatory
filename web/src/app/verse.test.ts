@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localDayNumber, VERSES, verseOfDay } from "./verse";
+import { localDayNumber, VERSE_VERSION, VERSES, verseOfDay } from "./verse";
 
 const DAY = 86400000;
 // Noon local time avoids midnight-edge ambiguity across test-runner timezones.
@@ -28,6 +28,12 @@ describe("verseOfDay", () => {
 
   it("holds the founding charter in the canon", () => {
     expect(VERSES.some((v) => v.reference === "Genesis 1:14")).toBe(true);
+  });
+
+  it("uses ESV, the version day4.org quotes — no KJV archaisms", () => {
+    expect(VERSE_VERSION).toBe("ESV");
+    const archaic = /\b(thee|thou|thy|thine|hath|hast|sheweth|telleth|maketh|giveth|saith|handywork)\b/i;
+    for (const v of VERSES) expect(v.text).not.toMatch(archaic);
   });
 
   it("never yields a malformed verse (even for pre-epoch dates)", () => {

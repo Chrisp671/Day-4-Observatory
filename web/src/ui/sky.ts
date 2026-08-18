@@ -24,6 +24,8 @@ export interface SkyPalette {
   readonly starAlpha: number;
   /** The sun disc's colour at this altitude. */
   readonly sunCore: string;
+  /** 0..1 strength of the warm glow rising from the horizon (dawn/dusk). */
+  readonly horizonGlow: number;
 }
 
 interface Stop {
@@ -44,6 +46,13 @@ const STOPS: readonly Stop[] = [
 ];
 
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+
+/** Warm horizon light: none in deep night, peaking as the sun crosses the
+ * horizon, gone again once the sun stands high. */
+const glowAt = (alt: number): number => {
+  if (alt <= -12 || alt >= 10) return 0;
+  return alt < 0 ? 1 - alt / -12 : 1 - alt / 10;
+};
 const hex = (rgb: readonly [number, number, number]): string =>
   `#${rgb.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("")}`;
 const mix = (
@@ -57,10 +66,10 @@ export function skyPalette(sunAltitudeDeg: number): SkyPalette {
   const first = STOPS[0] as Stop;
   const last = STOPS[STOPS.length - 1] as Stop;
   if (sunAltitudeDeg <= first.alt) {
-    return { deep: hex(first.deep), field: hex(first.field), starAlpha: first.starAlpha, sunCore: hex(first.sun) };
+    return { deep: hex(first.deep), field: hex(first.field), starAlpha: first.starAlpha, sunCore: hex(first.sun), horizonGlow: glowAt(sunAltitudeDeg) };
   }
   if (sunAltitudeDeg >= last.alt) {
-    return { deep: hex(last.deep), field: hex(last.field), starAlpha: last.starAlpha, sunCore: hex(last.sun) };
+    return { deep: hex(last.deep), field: hex(last.field), starAlpha: last.starAlpha, sunCore: hex(last.sun), horizonGlow: glowAt(sunAltitudeDeg) };
   }
   for (let i = 0; i < STOPS.length - 1; i++) {
     const lo = STOPS[i] as Stop;
@@ -72,8 +81,9 @@ export function skyPalette(sunAltitudeDeg: number): SkyPalette {
         field: hex(mix(lo.field, hi.field, t)),
         starAlpha: lerp(lo.starAlpha, hi.starAlpha, t),
         sunCore: hex(mix(lo.sun, hi.sun, t)),
+        horizonGlow: glowAt(sunAltitudeDeg),
       };
     }
   }
-  return { deep: hex(last.deep), field: hex(last.field), starAlpha: last.starAlpha, sunCore: hex(last.sun) };
+  return { deep: hex(last.deep), field: hex(last.field), starAlpha: last.starAlpha, sunCore: hex(last.sun), horizonGlow: glowAt(sunAltitudeDeg) };
 }

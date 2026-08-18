@@ -20,6 +20,8 @@
       --pad: clamp(16px, 3vw, 40px);
     }
     *{box-sizing:border-box;margin:0;padding:0}
+    #firmament{position:fixed;inset:0;width:100vw;height:100dvh;z-index:-1;
+      pointer-events:none}
     html,body{height:100%}
     body{
       background:radial-gradient(125% 125% at 50% 45%, var(--print-1) 0%, var(--print-0) 80%);
@@ -31,12 +33,14 @@
     header{display:flex;justify-content:space-between;align-items:center;
       gap:16px; padding:clamp(12px,2vh,22px) var(--pad) 0; flex:none;
       position:relative}
-    .hero{position:absolute;left:50%;top:50%;transform:translate(-50%,-38%);
-      text-align:center;pointer-events:none;white-space:nowrap}
-    .hero span{display:block;font-size:9px;letter-spacing:.34em;
-      color:var(--ink-mid);font-weight:300}
-    .hero b{font-family:var(--serif);font-style:italic;font-weight:400;
-      font-size:clamp(20px,3.4vh,32px);color:var(--sunlight);line-height:1.05}
+    .hero{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      display:flex;align-items:baseline;gap:.45em;justify-content:center;
+      pointer-events:none;white-space:nowrap}
+    .hero span{font-family:var(--serif);font-style:italic;font-weight:400;
+      font-size:clamp(21px,3.3vh,31px);color:var(--ink-hi);line-height:1.05}
+    .hero b{font-family:var(--mono);font-weight:500;font-style:normal;
+      font-size:clamp(20px,3.1vh,29px);color:var(--sunlight);
+      letter-spacing:.01em;line-height:1.05;font-variant-numeric:tabular-nums}
     .brand{display:flex;align-items:center;gap:.55em;min-width:0}
     .brand img{height:clamp(22px,3.4vh,34px);display:block}
     .brand span{font-family:var(--serif);font-style:italic;
@@ -115,6 +119,7 @@
   </style>
 </head>
 <body>
+  <canvas id="firmament" aria-hidden="true"></canvas>
   <header>
     <div class="brand">
       <img src="day4-logo-dark.png" alt="Day4 Astronomy Observatory">

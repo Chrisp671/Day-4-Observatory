@@ -45,6 +45,14 @@ describe("skyPalette", () => {
     }
   });
 
+  it("glows at the horizon and nowhere else", () => {
+    expect(skyPalette(-30).horizonGlow).toBe(0);
+    expect(skyPalette(45).horizonGlow).toBe(0);
+    expect(skyPalette(0).horizonGlow).toBeCloseTo(1, 5);
+    expect(skyPalette(-6).horizonGlow).toBeGreaterThan(0.3);
+    expect(skyPalette(5).horizonGlow).toBeGreaterThan(0.3);
+  });
+
   it("clamps sanely outside the range", () => {
     expect(skyPalette(-90)).toEqual(skyPalette(-18));
     expect(skyPalette(90)).toEqual(skyPalette(20));

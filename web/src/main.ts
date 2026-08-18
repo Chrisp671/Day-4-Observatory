@@ -12,9 +12,9 @@ import { drawDial } from "./ui/dial";
 import { drawEarth } from "./ui/earth";
 import { buildGrain, drawGrain } from "./ui/grain";
 import { drawMoon, moonDialHours } from "./ui/moon";
+import { drawFirmament } from "./ui/firmament";
 import { drawSidereal } from "./ui/sidereal";
 import { skyPalette } from "./ui/sky";
-import { drawStars } from "./ui/stars";
 import { drawSun } from "./ui/sun";
 
 /* ————— state ————— */
@@ -27,6 +27,18 @@ const displayedNow = (): number => Date.now() + offsetMillis;
 /* ————— canvas ————— */
 const canvas = document.getElementById("sky") as HTMLCanvasElement | null;
 const ctx = canvas?.getContext("2d") ?? null;
+const firmament = document.getElementById("firmament") as HTMLCanvasElement | null;
+const fctx = firmament?.getContext("2d") ?? null;
+let skyKey = ""; // last drawn firmament state (altitude bucket + size)
+
+function fitFirmament(): void {
+  if (firmament === null || fctx === null) return;
+  const d = Math.min(window.devicePixelRatio || 1, 1.5);
+  firmament.width = Math.floor(window.innerWidth * d);
+  firmament.height = Math.floor(window.innerHeight * d);
+  fctx.setTransform(d, 0, 0, d, 0, 0);
+  skyKey = "";
+}
 let W = 0;
 let R = 0;
 let DPR = 1;
@@ -79,12 +91,18 @@ function draw(): void {
   document.documentElement.style.setProperty("--print-0", pal.deep);
   document.documentElement.style.setProperty("--print-1", pal.field);
 
+  // The firmament redraws only when the light meaningfully changes.
+  const key = `${Math.round(s.sun.altitudeDeg * 2) / 2}|${window.innerWidth}x${window.innerHeight}`;
+  if (fctx !== null && key !== skyKey) {
+    drawFirmament(fctx, window.innerWidth, window.innerHeight, pal.starAlpha, pal.horizonGlow);
+    skyKey = key;
+  }
+
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, W);
   drawGrain(ctx, W, W);
   ctx.translate(W / 2, W / 2);
 
-  drawStars(ctx, R, DPR, pal.starAlpha);
   drawSidereal(ctx, R, DPR, s.siderealHours);
   drawDial(ctx, R, DPR, {
     riseHours: s.sun.nextRiseUnixMillis === null ? null : localHoursOfDay(s.sun.nextRiseUnixMillis),
@@ -109,11 +127,11 @@ function draw(): void {
 
   const ev = nextSunEvent(s.sun.nextRiseUnixMillis, s.sun.nextSetUnixMillis);
   if (ev !== null) {
-    setText("hero-k", ev.kind === "sunset" ? "SUNSET" : "SUNRISE");
-    setText("hero-v", `in ${formatCountdown(ev.atUnixMillis - t)}`);
+    setText("hero-k", ev.kind === "sunset" ? "Sunset in" : "Sunrise in");
+    setText("hero-v", formatCountdown(ev.atUnixMillis - t));
   } else {
-    setText("hero-k", "POLAR");
-    setText("hero-v", "sun does not rise or set");
+    setText("hero-k", "Polar day or night");
+    setText("hero-v", "");
   }
 
   const shifted = offsetMillis !== 0;
@@ -258,11 +276,13 @@ function buildStationControls(): void {
 /* ————— boot ————— */
 window.addEventListener("resize", () => {
   fit();
+  fitFirmament();
   draw();
 });
 buildSteppers();
 buildStationControls();
 wireScrub();
 fit();
+fitFirmament();
 draw();
 setInterval(draw, 1000);

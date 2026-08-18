@@ -4,6 +4,7 @@
  */
 import { frame } from "./engine/frame";
 import { loadStation, parseCoordinate, saveStation, type Station } from "./app/location";
+import { verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
@@ -137,6 +138,12 @@ function draw(): void {
   const shifted = offsetMillis !== 0;
   el("timeline")?.classList.toggle("shifted", shifted);
   el("now")?.classList.toggle("armed", shifted);
+
+  // The masthead verse follows the real calendar day (a daily devotion),
+  // not the time-travelled instrument time.
+  const verse = verseOfDay(Date.now());
+  setText("verse-text", verse.text);
+  setText("verse-ref", verse.reference);
 }
 
 /* ————— drag the sun to scrub time (REQ-005) ————— */

@@ -9,13 +9,14 @@
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     :root{
       --print-0:#081627; --print-1:#0E2440;
       --ink-hi:#D7E6F2; --ink-mid:#7E9CB8; --ink-low:#3A5876;
       --sunlight:#F0B310;
-      --serif:'Instrument Serif', Georgia, serif;
+      --serif:'Cormorant', Georgia, serif;
+      --caps:'Cinzel', 'Times New Roman', serif;
       --mono:'IBM Plex Mono', ui-monospace, monospace;
       --pad: clamp(16px, 3vw, 40px);
     }
@@ -29,15 +30,25 @@
       display:flex; flex-direction:column; height:100dvh; overflow:hidden;
     }
 
+    /* ————— masthead: the verse the instrument hangs under ————— */
+    .masthead{flex:none;text-align:center;
+      padding:clamp(10px,1.8vh,20px) var(--pad) 0}
+    .verse{font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:clamp(16px,2.5vh,23px);line-height:1.35;color:var(--ink-hi);
+      max-width:62ch;margin:0 auto;text-wrap:balance}
+    .verse-ref{font-family:var(--caps);font-weight:600;font-size:10px;
+      letter-spacing:.4em;text-transform:uppercase;color:var(--ink-mid);
+      margin-top:clamp(4px,0.9vh,9px)}
+
     /* ————— header ————— */
     header{display:flex;justify-content:space-between;align-items:center;
-      gap:16px; padding:clamp(12px,2vh,22px) var(--pad) 0; flex:none;
+      gap:16px; padding:clamp(8px,1.4vh,16px) var(--pad) 0; flex:none;
       position:relative}
     .hero{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
       display:flex;align-items:baseline;gap:.45em;justify-content:center;
       pointer-events:none;white-space:nowrap}
-    .hero span{font-family:var(--serif);font-style:italic;font-weight:400;
-      font-size:clamp(21px,3.3vh,31px);color:var(--ink-hi);line-height:1.05}
+    .hero span{font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:clamp(22px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
     .hero b{font-family:var(--mono);font-weight:500;font-style:normal;
       font-size:clamp(20px,3.1vh,29px);color:var(--sunlight);
       letter-spacing:.01em;line-height:1.05;font-variant-numeric:tabular-nums}
@@ -46,8 +57,10 @@
     .brand span{font-family:var(--serif);font-style:italic;
       font-size:clamp(19px,2.9vh,30px);color:var(--ink-hi);
       letter-spacing:.01em;white-space:nowrap}
-    .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.16em;
+    .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;
       color:var(--ink-mid);font-weight:300;white-space:nowrap}
+    .clockline .date{font-family:var(--caps);font-weight:500;font-size:.9em;
+      letter-spacing:.2em}
     .clockline b{color:var(--ink-hi);font-weight:500;font-size:1.15em}
     .clockline b.shifted{color:var(--sunlight)}
 
@@ -56,7 +69,8 @@
       padding:clamp(8px,1.6vh,18px) var(--pad)}
     canvas{display:block;touch-action:none}
     .readout{position:absolute;pointer-events:none;max-width:38%}
-    .readout .k{font-size:9px;letter-spacing:.3em;color:var(--ink-mid);font-weight:300}
+    .readout .k{font-family:var(--caps);font-weight:600;font-size:10px;
+      letter-spacing:.26em;color:var(--ink-mid)}
     .readout .v{font-size:clamp(15px,2.4vh,22px);letter-spacing:.02em;
       margin-top:3px;color:var(--ink-hi);line-height:1.15}
     .r-tl{top:clamp(8px,3vh,30px);left:var(--pad)}
@@ -70,7 +84,8 @@
       color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
       padding:3px 5px}
     .stationbar input:focus{border-color:var(--ink-mid);outline:none}
-    .stationbar button{font-family:var(--mono);font-size:9px;letter-spacing:.14em;
+    .stationbar button{font-family:var(--caps);font-weight:600;font-size:9px;
+      letter-spacing:.14em;
       color:var(--ink-mid);background:transparent;border:1px solid var(--ink-low);
       padding:3px 7px;cursor:pointer}
     .stationbar button:hover{color:var(--ink-hi);border-color:var(--ink-mid)}
@@ -81,26 +96,27 @@
     .controls{flex:none;display:flex;justify-content:center;align-items:center;
       gap:6px;flex-wrap:wrap;padding:0 var(--pad) clamp(6px,1.2vh,12px)}
     .stepper{display:flex;align-items:stretch;border:1px solid var(--ink-low)}
-    .stepper span{font-size:9px;letter-spacing:.16em;color:var(--ink-mid);
+    .stepper span{font-family:var(--caps);font-weight:600;font-size:9px;
+      letter-spacing:.14em;color:var(--ink-mid);
       padding:6px 7px;align-self:center;min-width:44px;text-align:center}
     .stepper button{font-family:var(--mono);font-size:13px;line-height:1;
       color:var(--ink-mid);background:transparent;border:none;
       padding:6px 9px;cursor:pointer}
     .stepper button:hover{color:var(--ink-hi);background:rgba(215,230,242,.07)}
-    #now{font-family:var(--mono);font-size:10px;letter-spacing:.18em;
+    #now{font-family:var(--caps);font-weight:600;font-size:10px;letter-spacing:.18em;
       color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
       padding:7px 16px;cursor:pointer;margin-left:6px}
     #now:hover{border-color:var(--ink-mid)}
     #now.armed{color:var(--sunlight);border-color:var(--sunlight)}
 
-    .note{flex:none;padding:0 var(--pad) clamp(8px,1.4vh,14px);
-      font-size:8.5px;letter-spacing:.22em;color:var(--ink-low);text-align:center}
-
     @media (max-width:720px){
       /* Portrait is a STACK: logo, hero, dial with air, data grid, controls.
          Nothing is absolutely positioned; nothing can overlap. */
       body{overflow-y:auto;height:auto;min-height:100dvh}
-      header{flex-direction:column;gap:2px;padding-top:14px}
+      .masthead{padding:16px 20px 0}
+      .verse{font-size:15px;line-height:1.4}
+      .verse-ref{font-size:9px;letter-spacing:.32em}
+      header{flex-direction:column;gap:2px;padding-top:10px}
       .hero{position:static;transform:none;width:100%;margin-top:4px}
       .clockline{display:none}
       .stage{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;
@@ -113,13 +129,16 @@
       #now{margin-left:0}
       .stepper span{min-width:38px;letter-spacing:.1em}
       .stepper button{padding:6px 7px}
-      .note{padding-bottom:16px}
     }
     :focus-visible{outline:2px solid var(--sunlight);outline-offset:2px}
   </style>
 </head>
 <body>
   <canvas id="firmament" aria-hidden="true"></canvas>
+  <div class="masthead">
+    <p class="verse">&ldquo;<span id="verse-text">And let them be for signs, and for seasons, and for days, and years.</span>&rdquo;</p>
+    <div class="verse-ref" id="verse-ref">Genesis 1:14</div>
+  </div>
   <header>
     <div class="brand">
       <img src="day4-logo-dark.png" alt="Day4 Astronomy Observatory">
@@ -150,7 +169,6 @@
     <div id="steppers" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
     <button id="now" aria-label="Return to the present">NOW</button>
   </div>
-  <div class="note">"AND LET THEM BE FOR SIGNS AND SEASONS, AND FOR DAYS AND YEARS" — GENESIS 1:14</div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

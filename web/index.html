@@ -13,8 +13,9 @@
   <style>
     :root{
       --print-0:#081627; --print-1:#0E2440;
-      --ink-hi:#D7E6F2; --ink-mid:#7E9CB8; --ink-low:#3A5876;
+      --ink-hi:#E7F0FA; --ink-mid:#9BB9D6; --ink-low:#46648A;
       --sunlight:#F0B310;
+      --scripture:#F3ECDA; --gold-soft:#E7BE5A;
       --serif:'Cormorant', Georgia, serif;
       --caps:'Cinzel', 'Times New Roman', serif;
       --mono:'IBM Plex Mono', ui-monospace, monospace;
@@ -30,36 +31,34 @@
       display:flex; flex-direction:column; height:100dvh; overflow:hidden;
     }
 
-    /* ————— masthead: the verse the instrument hangs under ————— */
-    .masthead{flex:none;text-align:center;
-      padding:clamp(10px,1.8vh,20px) var(--pad) 0}
-    .verse{font-family:var(--serif);font-style:italic;font-weight:600;
-      font-size:clamp(16px,2.5vh,23px);line-height:1.35;color:var(--ink-hi);
-      max-width:62ch;margin:0 auto;text-wrap:balance}
-    .verse-ref{font-family:var(--caps);font-weight:600;font-size:10px;
-      letter-spacing:.4em;text-transform:uppercase;color:var(--ink-mid);
-      margin-top:clamp(4px,0.9vh,9px)}
-
-    /* ————— header ————— */
-    header{display:flex;justify-content:space-between;align-items:center;
-      gap:16px; padding:clamp(8px,1.4vh,16px) var(--pad) 0; flex:none;
-      position:relative}
-    .hero{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      display:flex;align-items:baseline;gap:.45em;justify-content:center;
-      pointer-events:none;white-space:nowrap}
-    .hero span{font-family:var(--serif);font-style:italic;font-weight:600;
+    /* ————— header: logo, then the Word, then the light (one column) —————
+       Warm light for scripture, cool light for the instrument: the ivory
+       and gold masthead reads first against the cool field. */
+    header{display:flex;flex-direction:column;align-items:center;
+      gap:clamp(5px,1vh,11px);padding:clamp(12px,2vh,24px) var(--pad) 0;
+      flex:none;position:relative}
+    .brand img{height:clamp(30px,4.6vh,46px);display:block;
+      filter:drop-shadow(0 2px 10px rgba(4,10,22,.6))}
+    .masthead{text-align:center}
+    .verse{font-family:var(--serif);font-style:italic;font-weight:700;
+      font-size:clamp(17px,2.7vh,25px);line-height:1.35;color:var(--scripture);
+      max-width:58ch;margin:0 auto;text-wrap:balance;
+      text-shadow:0 1px 14px rgba(4,10,22,.85)}
+    .verse-ref{font-family:var(--caps);font-weight:700;font-size:10.5px;
+      letter-spacing:.34em;text-transform:uppercase;color:var(--gold-soft);
+      margin-top:clamp(4px,0.9vh,9px);text-shadow:0 1px 10px rgba(4,10,22,.8)}
+    .hero{display:flex;align-items:baseline;gap:.45em;justify-content:center;
+      pointer-events:none;white-space:nowrap;
+      text-shadow:0 1px 12px rgba(4,10,22,.75)}
+    .hero span{font-family:var(--serif);font-style:italic;font-weight:700;
       font-size:clamp(22px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
     .hero b{font-family:var(--mono);font-weight:500;font-style:normal;
       font-size:clamp(20px,3.1vh,29px);color:var(--sunlight);
       letter-spacing:.01em;line-height:1.05;font-variant-numeric:tabular-nums}
-    .brand{display:flex;align-items:center;gap:.55em;min-width:0}
-    .brand img{height:clamp(22px,3.4vh,34px);display:block}
-    .brand span{font-family:var(--serif);font-style:italic;
-      font-size:clamp(19px,2.9vh,30px);color:var(--ink-hi);
-      letter-spacing:.01em;white-space:nowrap}
-    .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;
+    .clockline{position:absolute;top:clamp(12px,2vh,24px);right:var(--pad);
+      font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;
       color:var(--ink-mid);font-weight:300;white-space:nowrap}
-    .clockline .date{font-family:var(--caps);font-weight:500;font-size:.9em;
+    .clockline .date{font-family:var(--caps);font-weight:600;font-size:.9em;
       letter-spacing:.2em}
     .clockline b{color:var(--ink-hi);font-weight:500;font-size:1.15em}
     .clockline b.shifted{color:var(--sunlight)}
@@ -69,7 +68,7 @@
       padding:clamp(8px,1.6vh,18px) var(--pad)}
     canvas{display:block;touch-action:none}
     .readout{position:absolute;pointer-events:none;max-width:38%}
-    .readout .k{font-family:var(--caps);font-weight:600;font-size:10px;
+    .readout .k{font-family:var(--caps);font-weight:700;font-size:10px;
       letter-spacing:.26em;color:var(--ink-mid)}
     .readout .v{font-size:clamp(15px,2.4vh,22px);letter-spacing:.02em;
       margin-top:3px;color:var(--ink-hi);line-height:1.15}
@@ -113,11 +112,10 @@
       /* Portrait is a STACK: logo, hero, dial with air, data grid, controls.
          Nothing is absolutely positioned; nothing can overlap. */
       body{overflow-y:auto;height:auto;min-height:100dvh}
-      .masthead{padding:16px 20px 0}
-      .verse{font-size:15px;line-height:1.4}
-      .verse-ref{font-size:9px;letter-spacing:.32em}
-      header{flex-direction:column;gap:2px;padding-top:10px}
-      .hero{position:static;transform:none;width:100%;margin-top:4px}
+      header{gap:7px;padding-top:16px}
+      .brand img{height:34px}
+      .verse{font-size:16px;line-height:1.4;padding:0 4px}
+      .verse-ref{font-size:9.5px;letter-spacing:.3em}
       .clockline{display:none}
       .stage{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;
         place-items:stretch;padding:10px 16px 4px}
@@ -135,13 +133,13 @@
 </head>
 <body>
   <canvas id="firmament" aria-hidden="true"></canvas>
-  <div class="masthead">
-    <p class="verse">&ldquo;<span id="verse-text">And let them be for signs and for seasons, and for days and years.</span>&rdquo;</p>
-    <div class="verse-ref" id="verse-ref">Genesis 1:14 &middot; ESV</div>
-  </div>
   <header>
     <div class="brand">
       <img src="day4-logo-dark.png" alt="Day4 Astronomy Observatory">
+    </div>
+    <div class="masthead">
+      <p class="verse">&ldquo;<span id="verse-text">And let them be for signs and for seasons, and for days and years.</span>&rdquo;</p>
+      <div class="verse-ref" id="verse-ref">Genesis 1:14 &middot; ESV</div>
     </div>
     <div class="hero"><span id="hero-k">—</span><b id="hero-v"></b></div>
     <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b></div>

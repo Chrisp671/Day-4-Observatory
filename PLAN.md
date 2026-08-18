@@ -61,6 +61,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-013 — ESV, not KJV (owner correction: “looking at the website, what Bible version do they use — they don’t use King James”): day4.org quotes ESV (Isaiah 40:26 and Psalm 33:6,9 verbatim; Psalm 147:4 in NASB wording), so the whole masthead canon is ESV with the required “· ESV” mark on every citation (ESV terms permit this scale in non-saleable media). Regression test bans KJV archaisms from the canon. Lesson: verify brand facts against the brand’s own site before choosing. 2026-08-17.
 
+- DEC-014 — Warm light for the Word, cool light for the instrument (owner: “logo, bible, then sunrise… fonts and color theory is off, hard to see”): header restructured into one centered ceremonial column — logo, scripture, countdown — with the clock in the corner. Color theory move: scripture set in warm ivory #F3ECDA w700 with a soft-gold #E7BE5A citation (warm-on-cool complementary contrast, tying masthead to the gold logo), all inks brightened (inkHi #E7F0FA, inkMid #9BB9D6, inkLow #46648A in CSS and canvas THEME alike), text-shadow scrims so starlight never eats the letterforms. 2026-08-18.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

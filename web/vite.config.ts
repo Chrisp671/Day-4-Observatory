@@ -22,6 +22,8 @@ export default defineConfig({
         cross: "cross.html",
         // What the cross represents (DEC-022).
         crux: "crux.html",
+        // The recommendation, four ways (DEC-023).
+        sixth: "sixth.html",
       },
     },
   },

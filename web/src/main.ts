@@ -9,8 +9,6 @@ import { formatCountdown, nextSunEvent } from "./app/hero";
 import { isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
 import { passionHours } from "./app/hours";
-import { daysUntil, nextAppointed } from "./app/computus";
-import { paschalFullMoonUnixMillis } from "./engine/paschal";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
@@ -148,30 +146,6 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
   setText("tonight-note", isDarkEnough(sunAltitudeDeg) ? "" : "visible after dark");
 }
 
-/* ————— mo'edim: the appointed times (Genesis 1:14) ————— */
-/** Recomputed only when the day changes — feasts do not move by the second. */
-let feastKey = "";
-
-const dmy = (unixMillis: number): string =>
-  new Date(unixMillis).toLocaleDateString("en-GB", {
-    day: "numeric", month: "short", year: "numeric",
-  });
-
-function drawAppointed(nowMillis: number): void {
-  const key = new Date(nowMillis).toDateString();
-  if (key === feastKey) return;
-  feastKey = key;
-
-  const feast = nextAppointed(nowMillis);
-  const days = daysUntil(nowMillis, feast);
-  const when = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
-  setText("feast", `${feast.name} · ${dmy(feast.unixMillis)} · ${when}`);
-
-  // The moon the date is reckoned from — the sky's own witness to the table.
-  const moon = paschalFullMoonUnixMillis(feast.date.year);
-  setText("feast-moon", moon === null ? "" : `paschal full moon ${dmy(moon)}`);
-}
-
 /* ————— render ————— */
 function draw(): void {
   if (canvas === null || ctx === null) return;
@@ -267,7 +241,6 @@ function draw(): void {
   setText("verse-ref", `${verse.reference} · ${VERSE_VERSION}`);
 
   drawTonight(s.siderealHours, s.sun.altitudeDeg);
-  drawAppointed(Date.now());
 
   // Name the hours plainly: the band shows them, this says what they are.
   if (passion === null) {

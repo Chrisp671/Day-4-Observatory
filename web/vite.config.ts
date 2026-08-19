@@ -12,6 +12,8 @@ export default defineConfig({
         compare: "compare.html",
         // Type directions for review (DEC-016).
         type: "type.html",
+        // The Vault: the sacred-architecture direction (DEC-016).
+        vault: "vault.html",
       },
     },
   },

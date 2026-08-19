@@ -65,6 +65,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-015 — TONIGHT board (owner: “can we see what constellations you'd be able to see, like a countdown clock… on the bottom”): a bottom band listing bright constellations with live countdowns. Pure math on the far side of SEAM-001 — `app/constellations.ts` needs only sidereal time + latitude from `frame()`, never an astronomy API, so the Rust-swap contract holds. Honest by construction: tracks each constellation's brightest star (a region has no single rise instant) and separates up from visible (daylight drowns stars → “visible after dark”). 2026-08-18.
 
+- DEC-016 — The Vault (owner: “think like we are creating art for God, like Michelangelo and the Sistine Chapel”): a sacred-architecture direction grounded in two real precedents — the Sistine ceiling's own Day 4 panel (*The Creation of the Sun, Moon and Plants*) and Giotto's Arena Chapel vault (lapis ultramarine ground, gold eight-pointed stars). Four moves: gold as a *material* (leaf gradient: shadow → body → specular, never flat yellow); a lapis dome that gathers light at the crown and falls to the rim; **scripture as architecture** — Genesis 1:14 carried around the dial as a two-arc frieze, top and foot, the way a cathedral carries its text on the building; and an oculus light-well holding the earth. Two families only: Cinzel (Trajan-derived inscriptional capitals) for carved text, Fraunces for the rest. Preview at `web/vault.html`. 2026-08-19.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

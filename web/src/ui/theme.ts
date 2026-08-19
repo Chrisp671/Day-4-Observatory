@@ -16,5 +16,24 @@ export const THEME = {
   dawn: "#E8955C", // twilight amber — the sky's own color at the boundaries
   moonlight: "#F2EDE0", // the moon, only — warm ivory against the cool inks
   fontMono: "'IBM Plex Mono', ui-monospace, monospace",
-  fontSerif: "'Cormorant', Georgia, serif",
+  fontSerif: "'Fraunces', Georgia, serif",
+  fontCaps: "'Cinzel', 'Times New Roman', serif",
 } as const;
+
+/**
+ * Gold leaf is a material, not a colour (DEC-016): it has a shadow side, a
+ * body, and a specular highlight. A flat yellow reads as paint; this reads as
+ * metal. `y0`/`y1` bracket the mark being filled, in the current transform.
+ */
+export function goldLeaf(
+  ctx: CanvasRenderingContext2D,
+  y0: number,
+  y1: number,
+): CanvasGradient {
+  const g = ctx.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, "#FFF7DD");
+  g.addColorStop(0.35, "#F7DE93");
+  g.addColorStop(0.7, "#D9A62B");
+  g.addColorStop(1, "#6E4E12");
+  return g;
+}

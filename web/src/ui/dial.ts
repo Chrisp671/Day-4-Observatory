@@ -4,7 +4,7 @@
  * values passed in (never calls the engine — SEAM-001).
  */
 import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
-import { THEME } from "./theme";
+import { goldLeaf, THEME } from "./theme";
 
 export interface DialTimes {
   /** Civil local hours-of-day of the next sunrise/sunset, or null (polar). */
@@ -22,9 +22,9 @@ export function drawDial(
   const rIn = R * FACE.dialInner;
   const rMid = (rOut + rIn) / 2;
 
-  ctx.lineWidth = 1.1 * dpr;
-  ctx.strokeStyle = THEME.inkMid;
-  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = 1.3 * dpr;
+  ctx.strokeStyle = goldLeaf(ctx, -rOut, rOut);
+  ctx.globalAlpha = 0.95;
   for (const r of [rOut, rIn]) {
     ctx.beginPath();
     ctx.arc(0, 0, r, 0, TAU);
@@ -79,9 +79,9 @@ export function drawDial(
       const a = hourToAngle(h);
       const inner = pointOnCircle(a, rIn - R * 0.012);
       const outer = pointOnCircle(a, rOut);
-      ctx.lineWidth = 1.6 * dpr;
-      ctx.strokeStyle = THEME.inkHi;
-      ctx.globalAlpha = 0.95;
+      ctx.lineWidth = 1.8 * dpr;
+      ctx.strokeStyle = goldLeaf(ctx, -rOut, rOut);
+      ctx.globalAlpha = 1;
       ctx.beginPath();
       ctx.moveTo(inner.x, inner.y);
       ctx.lineTo(outer.x, outer.y);
@@ -92,7 +92,7 @@ export function drawDial(
 
   // Three-level cadence (DESIGN-CONSOLIDATED #4): 6h major / hour / 30-min
   // minor at ≥2:1 length steps — rank by length and weight before opacity.
-  ctx.font = `300 ${Math.round(R * 0.052)}px ${THEME.fontMono}`;
+  ctx.font = `600 ${Math.round(R * 0.058)}px ${THEME.fontCaps}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const bandW = rOut - rIn;
@@ -105,16 +105,16 @@ export function drawDial(
     const inner = pointOnCircle(a, innerR);
     const outer = pointOnCircle(a, rOut);
     ctx.lineWidth = (major ? 1.4 : hourly ? 1.0 : 0.75) * dpr;
-    ctx.strokeStyle = major ? THEME.inkHi : hourly ? THEME.inkMid : THEME.inkLow;
+    ctx.strokeStyle = major ? goldLeaf(ctx, -rOut, rOut) : hourly ? THEME.inkMid : THEME.inkLow;
     ctx.globalAlpha = major ? 0.95 : hourly ? 0.9 : 1;
     ctx.beginPath();
     ctx.moveTo(inner.x, inner.y);
     ctx.lineTo(outer.x, outer.y);
     ctx.stroke();
     if (major) {
-      ctx.globalAlpha = 0.9;
-      ctx.fillStyle = THEME.inkHi;
-      const p = pointOnCircle(a, rIn - R * 0.055);
+      ctx.globalAlpha = 1;
+      const p = pointOnCircle(a, rIn - R * 0.062);
+      ctx.fillStyle = goldLeaf(ctx, p.y - R * 0.04, p.y + R * 0.04);
       ctx.fillText(String(h).padStart(2, "0"), p.x, p.y);
     }
   }

@@ -7,6 +7,8 @@ import { loadStation, parseCoordinate, saveStation, type Station } from "./app/l
 import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
 import { isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
+import { mismatchPhrase, zoneReport } from "./app/clockzone";
+import { drawFiducial } from "./ui/fiducial";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
 import { hourToAngle, localHoursOfDay } from "./ui/clockface";
@@ -175,6 +177,9 @@ function draw(): void {
   drawEarth(ctx, R, DPR, hourToAngle(tHours));
   drawMoon(ctx, R, DPR, moonDialHours(tHours, s.sun.hourAngleHours, s.moon.hourAngleHours), s.moon.phaseAngleDeg);
   drawSun(ctx, R, DPR, tHours, pal.sunCore);
+  // The fiducial marks the hour the observer is actually living in; when
+  // time has been scrubbed, the gap to the sun is the distance travelled.
+  drawFiducial(ctx, R, DPR, localHoursOfDay(Date.now()), tHours);
 
   setText("rise", s.sun.nextRiseUnixMillis === null ? "—" : hhmm(s.sun.nextRiseUnixMillis));
   setText("set", s.sun.nextSetUnixMillis === null ? "—" : hhmm(s.sun.nextSetUnixMillis));
@@ -188,6 +193,14 @@ function draw(): void {
     .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })
     .toUpperCase());
   setText("timeline", new Date(t).toLocaleTimeString("en-GB", { hour12: false }));
+
+  // Times are rendered in the device's zone; say so, and say when that is not
+  // the clock the station keeps (a New York sunrise on a Chicago clock).
+  const zone = zoneReport(t, station.lon);
+  setText("zone", zone.label);
+  setText("zone-note", zone.mismatched
+    ? `readouts in ${zone.label} — ${mismatchPhrase(zone.offsetDeltaHours)}`
+    : "");
 
   const ev = nextSunEvent(s.sun.nextRiseUnixMillis, s.sun.nextSetUnixMillis);
   if (ev !== null) {

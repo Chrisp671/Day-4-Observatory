@@ -75,6 +75,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-020 — The fiducial, and naming the clock (owner: “add a cross or some marker showing the time the person is in”, plus the timezone seam): an astrolabe carries a *fiducial* — a fixed reference mark you read positions against — and it is drawn as a cross. Ours marks the observer's present. It rides just outside the rim so it never covers the sun; live it stays quiet in ink, and the moment time is scrubbed it turns gold — the gap between cross and sun *is* the distance travelled, and it is the way home. Alongside it, every readout now names the clock it is in (`CDT`, `GMT+2`), and a gold note appears when the device's zone is ≥1.5h from the station's longitude-derived zone. Known limit: nominal zones are longitude/15 and ignore political borders and daylight saving, so a sub-1.5h civil difference is labelled but not flagged; closing that needs a timezone database. 2026-08-19.
 
+- DEC-021 — Fiducial variants, and the orientation finding (owner: “how can we improve the cross — show me some versions”): seven marks rendered on a real slice of the gilded band at true phone scale and magnified, live and travelled, at `web/cross.html`. The finding that outranks shape choice: the shipped mark is drawn **radial** (square to the band), so at 06:00 and 18:00 a Latin cross lies on its side and reads as a dagger. Held **upright** it stays a cross at every hour. That creates a tension — upright preserves the symbol, radial preserves the pointing — resolved by variant G: an upright cross plus a separate hairline drawn along the radius, so the symbol never turns and the hour is still cut exactly. 2026-08-19.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

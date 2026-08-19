@@ -18,6 +18,8 @@ export default defineConfig({
         directions: "directions.html",
         // The Weave, without the ring inscription (DEC-018).
         weave: "weave.html",
+        // Fiducial variants for review (DEC-021).
+        cross: "cross.html",
       },
     },
   },

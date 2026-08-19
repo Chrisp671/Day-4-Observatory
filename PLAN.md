@@ -71,6 +71,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-018 — The Weave, band over inscription (owner: “show me 1 — I really don't like the text in the circle”): the curved frieze is cut. The verse already leads the masthead, so the ring was spending itself on repetition. The band instead carries the day: night, amber twilight at the two horizon crossings, and daylight, bounded by gold hairlines with the rise/set moments marked in gold across it. Gold, carved hour capitals, living sky, and the instrument's 30-minute cadence all stay. Preview at `web/weave.html`. Lesson: on an instrument, a ring should report something. 2026-08-19.
 
+- DEC-019 — Scripture zone holds scripture only (owner: “is that part of the Bible verse? it seems off”): the “ON THE FOURTH DAY” caption was mine, not the text — Genesis 1:19 ends “…the fourth day,” but the line as placed was editorial. Set in the same gold capitals directly above a verse, it read as part of the quotation. Removed from every page. Rule: inside the scripture block, only quoted scripture and its citation appear; any editorial line must sit outside that block and look plainly different. 2026-08-19.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

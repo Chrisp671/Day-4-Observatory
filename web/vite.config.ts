@@ -10,6 +10,8 @@ export default defineConfig({
         main: "index.html",
         // The WI-008 design record: before/after at one fixed sky state.
         compare: "compare.html",
+        // Type directions for review (DEC-016).
+        type: "type.html",
       },
     },
   },

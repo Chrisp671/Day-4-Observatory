@@ -120,6 +120,17 @@
       color:var(--gold-soft)}
     .passion:empty{display:none}
 
+    /* the feasts the lights were given to fix (Genesis 1:14) */
+    .feasts{flex:none;display:flex;align-items:baseline;justify-content:center;
+      gap:.7em;flex-wrap:wrap;padding:0 var(--pad) clamp(5px,1vh,10px)}
+    .feast-k{font-family:var(--caps);font-weight:700;font-size:9.5px;
+      letter-spacing:.28em;text-transform:uppercase;color:var(--ink-mid)}
+    .feast-v{font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:15px;color:var(--scripture)}
+    .feast-m{font-family:var(--serif);font-style:italic;font-size:13px;
+      color:var(--gold-soft)}
+    .feast-m:empty{display:none}
+
     /* ————— tonight: the evening's program ————— */
     .tonight{flex:none;padding:clamp(8px,1.4vh,14px) var(--pad) clamp(10px,1.6vh,18px);
       border-top:1px solid var(--ink-low)}
@@ -205,6 +216,11 @@
     <button id="now" aria-label="Return to the present">NOW</button>
   </div>
   <div class="passion" id="passion"></div>
+  <div class="feasts">
+    <span class="feast-k">Mo&rsquo;edim &middot; appointed times</span>
+    <span class="feast-v" id="feast"></span>
+    <span class="feast-m" id="feast-moon"></span>
+  </div>
   <section class="tonight" aria-label="Constellations tonight">
     <div class="tonight-h"><span>TONIGHT</span><em id="tonight-note"></em></div>
     <div class="tonight-list" id="tonight-list"></div>

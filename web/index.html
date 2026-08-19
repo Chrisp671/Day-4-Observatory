@@ -114,6 +114,12 @@
     #now:hover{border-color:var(--ink-mid)}
     #now.armed{color:var(--sunlight);border-color:var(--sunlight)}
 
+    /* the hours of Mark 15:33, named beneath the dial */
+    .passion{flex:none;text-align:center;padding:0 var(--pad) clamp(4px,0.8vh,9px);
+      font-family:var(--caps);font-weight:600;font-size:10px;letter-spacing:.2em;
+      color:var(--gold-soft)}
+    .passion:empty{display:none}
+
     /* ————— tonight: the evening's program ————— */
     .tonight{flex:none;padding:clamp(8px,1.4vh,14px) var(--pad) clamp(10px,1.6vh,18px);
       border-top:1px solid var(--ink-low)}
@@ -198,6 +204,7 @@
     <div id="steppers" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
     <button id="now" aria-label="Return to the present">NOW</button>
   </div>
+  <div class="passion" id="passion"></div>
   <section class="tonight" aria-label="Constellations tonight">
     <div class="tonight-h"><span>TONIGHT</span><em id="tonight-note"></em></div>
     <div class="tonight-list" id="tonight-list"></div>

@@ -8,6 +8,8 @@ import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
 import { isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
+import { passionHours } from "./app/hours";
+import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
@@ -174,6 +176,23 @@ function draw(): void {
     riseHours: s.sun.nextRiseUnixMillis === null ? null : localHoursOfDay(s.sun.nextRiseUnixMillis),
     setHours: s.sun.nextSetUnixMillis === null ? null : localHoursOfDay(s.sun.nextSetUnixMillis),
   });
+  // The sixth hour to the ninth, counted from sunrise as Scripture counts them
+  // (Mark 15:33) — so the darkness falls where it actually fell for this
+  // station on this date, not at an assumed noon.
+  const passion = passionHours(s.sun.dayRiseUnixMillis, s.sun.daySetUnixMillis);
+  if (passion !== null) {
+    drawPassionHours(
+      ctx, R, DPR,
+      localHoursOfDay(passion.fromUnixMillis),
+      localHoursOfDay(passion.toUnixMillis),
+    );
+  }
+
+  // The cross the dial turns upon, beneath everything it holds (Col 1:17).
+  drawWell(ctx, R);
+  // Like everything else here, it follows the light: plain by day, luminous
+  // once the sky darkens.
+  drawAxis(ctx, R, DPR, 0.55 + 0.45 * pal.starAlpha);
   drawEarth(ctx, R, DPR, hourToAngle(tHours));
   drawMoon(ctx, R, DPR, moonDialHours(tHours, s.sun.hourAngleHours, s.moon.hourAngleHours), s.moon.phaseAngleDeg);
   drawSun(ctx, R, DPR, tHours, pal.sunCore);
@@ -222,6 +241,17 @@ function draw(): void {
   setText("verse-ref", `${verse.reference} · ${VERSE_VERSION}`);
 
   drawTonight(s.siderealHours, s.sun.altitudeDeg);
+
+  // Name the hours plainly: the band shows them, this says what they are.
+  if (passion === null) {
+    setText("passion", "");
+  } else {
+    const each = Math.round(passion.hourMinutes);
+    setText(
+      "passion",
+      `The sixth hour to the ninth · ${hhmm(passion.fromUnixMillis)}–${hhmm(passion.toUnixMillis)} · each hour ${each} min`,
+    );
+  }
 }
 
 /* ————— drag the sun to scrub time (REQ-005) ————— */

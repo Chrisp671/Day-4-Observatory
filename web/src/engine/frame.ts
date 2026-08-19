@@ -39,6 +39,14 @@ export interface SunState {
   readonly nextRiseUnixMillis: number | null;
   /** Next sunset after `unixMillis`, or null in polar day/night. */
   readonly nextSetUnixMillis: number | null;
+  /**
+   * The sunrise and sunset that bracket one whole daylight period: today's if
+   * the sun is up, otherwise the coming day's. Scripture counts hours from
+   * sunrise, so anything reckoned that way needs a matched pair, not two
+   * "next" events that may belong to different days.
+   */
+  readonly dayRiseUnixMillis: number | null;
+  readonly daySetUnixMillis: number | null;
 }
 
 export interface MoonState {
@@ -102,6 +110,18 @@ export function frame(
   const phaseAngleDeg = MoonPhase(date);
   const moonIllum = Illumination(Body.Moon, date);
 
+  const nextRise = toUnixOrNull(SearchRiseSet(Body.Sun, observer, +1, date, 2));
+  const nextSet = toUnixOrNull(SearchRiseSet(Body.Sun, observer, -1, date, 2));
+  // Sunset due before sunrise means the sun is up now, so the daylight period
+  // we are inside began at the most recent sunrise — search backwards for it.
+  const daylightNow = nextRise !== null && nextSet !== null && nextSet < nextRise;
+  const dayRise = daylightNow
+    ? toUnixOrNull(SearchRiseSet(Body.Sun, observer, +1, date, -2))
+    : nextRise;
+  const daySet = daylightNow ? nextSet : toUnixOrNull(
+    nextRise === null ? null : SearchRiseSet(Body.Sun, observer, -1, new Date(nextRise), 2),
+  );
+
   return {
     unixMillis,
     siderealHours: gastHours,
@@ -110,8 +130,10 @@ export function frame(
       azimuthDeg: sunHor.azimuth,
       declinationDeg: sunEq.dec,
       hourAngleHours: wrapHours12(lstHours - sunEq.ra),
-      nextRiseUnixMillis: toUnixOrNull(SearchRiseSet(Body.Sun, observer, +1, date, 2)),
-      nextSetUnixMillis: toUnixOrNull(SearchRiseSet(Body.Sun, observer, -1, date, 2)),
+      nextRiseUnixMillis: nextRise,
+      nextSetUnixMillis: nextSet,
+      dayRiseUnixMillis: dayRise,
+      daySetUnixMillis: daySet,
     },
     moon: {
       phaseAngleDeg,

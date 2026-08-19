@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day4 — four directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%}
+  body{font-family:"Fraunces",Georgia,serif;background:#000;overflow-x:hidden}
+
+  .dir{position:relative;min-height:100dvh;display:flex;flex-direction:column;
+    align-items:center;padding:22px 18px 30px;gap:11px;overflow:hidden}
+  .bg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .dir > *:not(.bg){position:relative;z-index:1}
+
+  .label{font-family:"Cinzel",serif;font-weight:600;font-size:10.5px;
+    letter-spacing:.3em;text-indent:.3em;text-transform:uppercase;text-align:center;
+    padding:5px 12px;border:1px solid currentColor;border-radius:2px;opacity:.85}
+  .brand{height:34px;display:block}
+  .ded{font-family:"Cinzel",serif;font-weight:600;font-size:10.5px;
+    letter-spacing:.4em;text-indent:.4em;text-transform:uppercase;text-align:center}
+  .verse{font-size:clamp(19px,4.5vw,25px);font-style:italic;font-weight:600;
+    line-height:1.32;max-width:19ch;text-align:center;text-wrap:balance}
+  .ref{font-family:"Cinzel",serif;font-weight:600;font-size:11.5px;
+    letter-spacing:.28em;text-indent:.28em;text-transform:uppercase}
+  canvas.dial{display:block}
+  .hero{font-size:clamp(28px,7.2vw,38px);font-weight:600;text-align:center;line-height:1.05}
+  .hero b{font-weight:700}
+  .plinth,.tonight{width:100%;max-width:500px;display:grid;
+    grid-template-columns:1fr 1fr;gap:13px 20px;padding-top:13px}
+  .cell,.sky{text-align:center;min-width:0}
+  .k{font-family:"Cinzel",serif;font-weight:600;font-size:10.5px;letter-spacing:.24em;
+    text-indent:.24em;text-transform:uppercase;margin-bottom:3px;opacity:.85}
+  .v{font-size:25px;font-weight:600;line-height:1.1}
+  .sky b{display:block;font-family:"Cinzel",serif;font-weight:600;font-size:12px;
+    letter-spacing:.12em}
+  .sky span{font-size:14.5px;opacity:.9}
+
+  /* 1 — THE WEAVE: the living sky, gilded */
+  .d1{color:#F6F0E2}
+  .d1 .label{color:#D9A62B}
+  .d1 .verse{color:#F6F0E2;text-shadow:0 2px 16px rgba(0,0,0,.9)}
+  .d1 .ded,.d1 .ref,.d1 .hero b,.d1 .v,.d1 .sky b{
+    background:linear-gradient(180deg,#FFF7DD,#F7DE93 38%,#D9A62B 76%,#6E4E12);
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .d1 .plinth,.d1 .tonight{border-top:1px solid rgba(217,166,43,.34)}
+  .d1 .k{color:#9BB9D6}
+  .d1 .sky span{color:#C7D6E8}
+
+  /* 2 — THE ICON: gold ground, lapis marks */
+  .d2{color:#1B2E5C}
+  .d2 .label{color:#5B3E12}
+  .d2 .verse{color:#16305F}
+  .d2 .ded,.d2 .ref{color:#7A2418}
+  .d2 .hero{color:#16305F}
+  .d2 .hero b{color:#7A2418}
+  .d2 .plinth,.d2 .tonight{border-top:1px solid rgba(90,62,20,.45)}
+  .d2 .k{color:#6B4E1C}
+  .d2 .v{color:#16305F}
+  .d2 .sky b{color:#7A2418}
+  .d2 .sky span{color:#3A3220}
+  .d2 .brand{filter:brightness(.28) sepia(.7) hue-rotate(185deg) saturate(2.4)}
+
+  /* 3 — THE FRESCO: pigment on plaster */
+  .d3{color:#4A3527}
+  .d3 .label{color:#8A6A4A}
+  .d3 .verse{color:#3E2C20}
+  .d3 .ded,.d3 .ref{color:#9A4A2E}
+  .d3 .hero{color:#3E2C20}
+  .d3 .hero b{color:#9A4A2E}
+  .d3 .plinth,.d3 .tonight{border-top:1px solid rgba(122,96,72,.42)}
+  .d3 .k{color:#7A6048}
+  .d3 .v{color:#2F5B57}
+  .d3 .sky b{color:#9A4A2E}
+  .d3 .sky span{color:#4A3527}
+  .d3 .brand{filter:brightness(.32) sepia(.6) saturate(1.4)}
+
+  /* 4 — THE ROSE: light through glass */
+  .d4{color:#EFE6D8}
+  .d4 .label{color:#C79A3E}
+  .d4 .verse{color:#F2E9DA;text-shadow:0 2px 20px rgba(0,0,0,.95)}
+  .d4 .ded,.d4 .ref{color:#E0B45A}
+  .d4 .hero{color:#F2E9DA}
+  .d4 .hero b{color:#E8B84B}
+  .d4 .plinth,.d4 .tonight{border-top:1px solid rgba(232,184,75,.3)}
+  .d4 .k{color:#A79781}
+  .d4 .v{color:#7FB6E8}
+  .d4 .sky b{color:#E8B84B}
+  .d4 .sky span{color:#CFC4B4}
+</style>
+</head>
+<body>
+<script id="tpl" type="text/template">
+  <canvas class="bg"></canvas>
+  <div class="label">__LABEL__</div>
+  <img class="brand" src="day4-logo-dark.png" alt="Day4 Astronomy">
+  <div class="ded">On the fourth day</div>
+  <p class="verse">&ldquo;And God made the two great lights.&rdquo;</p>
+  <div class="ref">Genesis 1:16 &middot; ESV</div>
+  <canvas class="dial"></canvas>
+  <div class="hero">Sunset in <b>10h 57m</b></div>
+  <div class="plinth">
+    <div class="cell"><div class="k">Sunrise</div><div class="v">05:11</div></div>
+    <div class="cell"><div class="k">Sunset</div><div class="v">18:48</div></div>
+  </div>
+  <div class="tonight">
+    <div class="sky"><b>Orion</b><span>sets in 5h 03m</span></div>
+    <div class="sky"><b>Ursa Major</b><span>up all night</span></div>
+  </div>
+</script>
+
+<script>
+const TAU = Math.PI * 2;
+const TOP = "AND LET THEM BE FOR SIGNS AND FOR SEASONS";
+const FOOT = "AND FOR DAYS AND YEARS";
+const SUN_H = 18.8, MOON_H = 2.4;
+
+const DIRECTIONS = [
+  { cls: "d1", label: "1 · The Weave — the living sky, gilded" },
+  { cls: "d2", label: "2 · The Icon — gold ground, lapis marks" },
+  { cls: "d3", label: "3 · The Fresco — pigment on plaster" },
+  { cls: "d4", label: "4 · The Rose — light through glass" },
+];
+
+/* ————— shared drawing helpers ————— */
+function ramp(ctx, y0, y1, stops) {
+  const g = ctx.createLinearGradient(0, y0, 0, y1);
+  for (const [at, c] of stops) g.addColorStop(at, c);
+  return g;
+}
+const GOLD = [[0, "#FFF7DD"], [0.35, "#F7DE93"], [0.7, "#D9A62B"], [1, "#6E4E12"]];
+const goldFill = (ctx, y0, y1) => ramp(ctx, y0, y1, GOLD);
+
+function seeded(seed) {
+  let s = seed;
+  return () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+}
+
+function eightStar(ctx, x, y, r, alpha, fill) {
+  ctx.save(); ctx.translate(x, y); ctx.globalAlpha = alpha;
+  ctx.fillStyle = fill(ctx, -r, r);
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * TAU, long = i % 2 === 0 ? r : r * 0.42;
+    ctx.beginPath(); ctx.moveTo(0, 0);
+    ctx.lineTo(Math.cos(a - 0.13) * long * 0.34, Math.sin(a - 0.13) * long * 0.34);
+    ctx.lineTo(Math.cos(a) * long, Math.sin(a) * long);
+    ctx.lineTo(Math.cos(a + 0.13) * long * 0.34, Math.sin(a + 0.13) * long * 0.34);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* A frieze reads both ways round the building: the foot arc is walked
+   backwards and each glyph turned, so it still reads left to right. */
+function arcText(ctx, text, radius, centerAngle, size, spacing, flip, fill) {
+  ctx.save();
+  ctx.font = `600 ${size}px Cinzel, serif`;
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const widths = [...text].map((ch) => ctx.measureText(ch).width + spacing);
+  const total = widths.reduce((a, b) => a + b, 0);
+  const dir = flip ? -1 : 1;
+  let angle = centerAngle - (dir * total) / (2 * radius);
+  for (let i = 0; i < text.length; i++) {
+    const step = (dir * widths[i]) / (2 * radius);
+    angle += step;
+    ctx.save();
+    ctx.rotate(angle); ctx.translate(0, -radius);
+    if (flip) ctx.rotate(Math.PI);
+    ctx.fillStyle = fill(ctx, -size * 0.62, size * 0.62);
+    ctx.fillText(text[i], 0, 0);
+    ctx.restore();
+    angle += step;
+  }
+  ctx.restore();
+}
+
+function fitCanvas(c, w, h, maxDpr) {
+  const ctx = c.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+  c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+/* ————— 1 · THE WEAVE — the app's real night sky, gilded ————— */
+function bgWeave(c, w, h) {
+  const ctx = fitCanvas(c, w, h, 1.5);
+  const g = ctx.createRadialGradient(w * 0.5, h * 0.42, 0, w * 0.5, h * 0.45, Math.max(w, h) * 0.9);
+  g.addColorStop(0, "#16345E"); g.addColorStop(0.5, "#0E2440");
+  g.addColorStop(1, "#050F1E");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+
+  // The Milky Way, as the current app draws it: haze, then dust.
+  const rnd = seeded(4004);
+  ctx.save();
+  ctx.translate(w * 0.5, h * 0.42); ctx.rotate(-0.55);
+  for (let i = 0; i < 18; i++) {
+    const x = (rnd() - 0.5) * w * 2.2, y = (rnd() - 0.5) * h * 0.16, r = 60 + rnd() * 130;
+    const haze = ctx.createRadialGradient(x, y, 0, x, y, r);
+    haze.addColorStop(0, "rgba(150,180,220,0.055)");
+    haze.addColorStop(1, "rgba(150,180,220,0)");
+    ctx.fillStyle = haze; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+
+  for (let i = 0; i < 260; i++) {
+    const x = rnd() * w, y = rnd() * h, faint = rnd() < 0.85;
+    ctx.globalAlpha = faint ? 0.22 + rnd() * 0.3 : 0.6 + rnd() * 0.4;
+    ctx.fillStyle = "#DCE8F5";
+    ctx.beginPath(); ctx.arc(x, y, faint ? 0.8 : 1.5, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // …and above them, a handful of gilded stars from the vault.
+  for (let i = 0; i < 14; i++) eightStar(ctx, rnd() * w, rnd() * h, 3.5 + rnd() * 4, 0.5, goldFill);
+}
+
+function dialWeave(c, size) {
+  const ctx = fitCanvas(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.5, rOuter = R * 0.985, rInner = R * 0.80;
+
+  ctx.lineWidth = 1.3;
+  for (const r of [rOuter, rInner]) {
+    ctx.strokeStyle = goldFill(ctx, -r, r);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+  }
+  const rF = (rOuter + rInner) / 2 + size * 0.022;
+  arcText(ctx, TOP, rF, 0, size * 0.043, size * 0.004, false, goldFill);
+  arcText(ctx, FOOT, rF, Math.PI, size * 0.043, size * 0.004, true, goldFill);
+
+  // The instrument's own fine cadence, kept: 30-minute marks and all.
+  for (let i = 0; i < 48; i++) {
+    const a = (i / 48) * TAU + Math.PI / 2;
+    const half = i % 2 === 1;
+    const r1 = rInner - size * 0.012;
+    const r2 = r1 - (i % 12 === 0 ? size * 0.042 : half ? size * 0.012 : size * 0.022);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+    ctx.lineWidth = i % 12 === 0 ? 2 : 0.9;
+    ctx.strokeStyle = i % 12 === 0 ? goldFill(ctx, -r1, r1) : "rgba(199,214,232,0.5)";
+    ctx.stroke();
+  }
+  for (let hh = 0; hh < 24; hh += 6) {
+    const a = (hh / 24) * TAU + Math.PI / 2, rt = rInner - size * 0.10;
+    ctx.save();
+    ctx.font = `600 ${size * 0.042}px Cinzel, serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = goldFill(ctx, -size * 0.03, size * 0.03);
+    ctx.fillText(String(hh).padStart(2, "0"), Math.cos(a) * rt, Math.sin(a) * rt);
+    ctx.restore();
+  }
+  // The sidereal ring the current app carries.
+  ctx.strokeStyle = "rgba(155,185,214,0.45)"; ctx.lineWidth = 0.9;
+  ctx.beginPath(); ctx.arc(0, 0, R * 0.575, 0, TAU); ctx.stroke();
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * TAU, r1 = R * 0.575, r2 = r1 + size * 0.016;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+    ctx.stroke();
+  }
+  earth(ctx, R * 0.30, "#24528F", "#08172B", goldFill, "rgba(199,214,232,0.32)");
+  lights(ctx, size, (rOuter + rInner) / 2 - size * 0.055, "#081124");
+}
+
+/* ————— 2 · THE ICON — gold ground, lapis marks ————— */
+function bgIcon(c, w, h) {
+  const ctx = fitCanvas(c, w, h, 1.5);
+  const g = ctx.createRadialGradient(w * 0.5, h * 0.36, 0, w * 0.5, h * 0.45, Math.max(w, h) * 0.85);
+  g.addColorStop(0, "#F2CE72"); g.addColorStop(0.45, "#D9A62B");
+  g.addColorStop(0.85, "#A97C1C"); g.addColorStop(1, "#7C5713");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+
+  // Gold leaf arrives in squares; the seams are part of the surface.
+  const leaf = 78;
+  ctx.strokeStyle = "rgba(255,247,221,0.16)"; ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += leaf) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += leaf) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  const rnd = seeded(88);
+  for (let i = 0; i < 200; i++) {
+    const x = rnd() * w, y = rnd() * h, r = 20 + rnd() * 70;
+    ctx.globalAlpha = 0.05 + rnd() * 0.06;
+    ctx.fillStyle = rnd() < 0.5 ? "#FFF3C4" : "#8A5F14";
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function dialIcon(c, size) {
+  const ctx = fitCanvas(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.5, rOuter = R * 0.985, rInner = R * 0.80;
+  const lapis = (cx) => { const g = cx.createLinearGradient(0, 0, 0, 1); g.addColorStop(0, "#1B2E5C"); return "#1B2E5C"; };
+  const lapisFill = () => "#172C57";
+
+  ctx.strokeStyle = "#172C57"; ctx.lineWidth = 2;
+  for (const r of [rOuter, rInner]) { ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke(); }
+  const rF = (rOuter + rInner) / 2 + size * 0.022;
+  arcText(ctx, TOP, rF, 0, size * 0.043, size * 0.004, false, lapisFill);
+  arcText(ctx, FOOT, rF, Math.PI, size * 0.043, size * 0.004, true, lapisFill);
+
+  for (let hh = 0; hh < 24; hh++) {
+    const a = (hh / 24) * TAU + Math.PI / 2, major = hh % 6 === 0;
+    const r1 = rInner - size * 0.012, r2 = r1 - (major ? size * 0.045 : size * 0.020);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+    ctx.lineWidth = major ? 2.4 : 1.1; ctx.strokeStyle = "#172C57"; ctx.stroke();
+    if (major) {
+      ctx.save();
+      ctx.font = `600 ${size * 0.042}px Cinzel, serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#172C57";
+      ctx.fillText(String(hh).padStart(2, "0"), Math.cos(a) * (r2 - size * 0.045), Math.sin(a) * (r2 - size * 0.045));
+      ctx.restore();
+    }
+  }
+  // A nimbus: the earth is haloed the way a saint is.
+  const rE = R * 0.30;
+  ctx.strokeStyle = "rgba(23,44,87,0.55)"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.arc(0, 0, rE * 1.42, 0, TAU); ctx.stroke();
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * TAU;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * rE * 1.10, Math.sin(a) * rE * 1.10);
+    ctx.lineTo(Math.cos(a) * rE * 1.40, Math.sin(a) * rE * 1.40);
+    ctx.lineWidth = 0.9; ctx.stroke();
+  }
+  earth(ctx, rE, "#2B4C8C", "#0E1F45", () => "#172C57", "rgba(242,230,200,0.4)");
+  lights(ctx, size, (rOuter + rInner) / 2 - size * 0.055, "#F2CE72", "#8C2A18", "#F6EFDC", "#172C57");
+}
+
+/* ————— 3 · THE FRESCO — pigment on plaster ————— */
+function bgFresco(c, w, h) {
+  const ctx = fitCanvas(c, w, h, 1.5);
+  const g = ctx.createRadialGradient(w * 0.5, h * 0.35, 0, w * 0.5, h * 0.45, Math.max(w, h) * 0.9);
+  g.addColorStop(0, "#F2E6D2"); g.addColorStop(0.55, "#E7D8C0");
+  g.addColorStop(1, "#CBB79C");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+
+  // Lime plaster: uneven, mottled, alive under raking light.
+  const rnd = seeded(1508); // the year Michelangelo began the ceiling
+  for (let i = 0; i < 2600; i++) {
+    const x = rnd() * w, y = rnd() * h;
+    ctx.globalAlpha = 0.02 + rnd() * 0.05;
+    ctx.fillStyle = rnd() < 0.5 ? "#A88E6C" : "#FFF8EC";
+    ctx.beginPath(); ctx.arc(x, y, 0.6 + rnd() * 2.4, 0, TAU); ctx.fill();
+  }
+  for (let i = 0; i < 90; i++) {
+    const x = rnd() * w, y = rnd() * h, r = 40 + rnd() * 120;
+    ctx.globalAlpha = 0.025 + rnd() * 0.035;
+    ctx.fillStyle = rnd() < 0.5 ? "#B99C74" : "#FFFDF6";
+    ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function dialFresco(c, size) {
+  const ctx = fitCanvas(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.5, rOuter = R * 0.985, rInner = R * 0.80;
+  const umber = () => "#6B4A31", sanguine = () => "#9A4A2E";
+
+  // A painted architectural moulding, not a hairline.
+  ctx.strokeStyle = "#8A6A4A"; ctx.lineWidth = 3.2;
+  ctx.beginPath(); ctx.arc(0, 0, rOuter, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = "#C9A87E"; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.arc(0, 0, rOuter - size * 0.012, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = "#8A6A4A"; ctx.lineWidth = 2.2;
+  ctx.beginPath(); ctx.arc(0, 0, rInner, 0, TAU); ctx.stroke();
+
+  const rF = (rOuter + rInner) / 2 + size * 0.020;
+  arcText(ctx, TOP, rF, 0, size * 0.042, size * 0.004, false, umber);
+  arcText(ctx, FOOT, rF, Math.PI, size * 0.042, size * 0.004, true, umber);
+
+  for (let hh = 0; hh < 24; hh++) {
+    const a = (hh / 24) * TAU + Math.PI / 2, major = hh % 6 === 0;
+    const r1 = rInner - size * 0.014, r2 = r1 - (major ? size * 0.045 : size * 0.020);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+    ctx.lineWidth = major ? 2.4 : 1; ctx.strokeStyle = major ? "#9A4A2E" : "#8A7358";
+    ctx.stroke();
+    if (major) {
+      ctx.save();
+      ctx.font = `600 ${size * 0.042}px Cinzel, serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#6B4A31";
+      ctx.fillText(String(hh).padStart(2, "0"), Math.cos(a) * (r2 - size * 0.045), Math.sin(a) * (r2 - size * 0.045));
+      ctx.restore();
+    }
+  }
+  earth(ctx, R * 0.30, "#3F726B", "#25453F", () => "#6B4A31", "rgba(255,250,238,0.45)");
+  lights(ctx, size, (rOuter + rInner) / 2 - size * 0.055, "#EFE2CB", "#C8791F", "#FFFBF0", "#6B4A31");
+}
+
+/* ————— 4 · THE ROSE — light through glass ————— */
+function bgRose(c, w, h) {
+  const ctx = fitCanvas(c, w, h, 1.5);
+  ctx.fillStyle = "#0A0906"; ctx.fillRect(0, 0, w, h);
+  const rnd = seeded(1220); // Chartres' glass
+  for (let i = 0; i < 900; i++) {
+    const x = rnd() * w, y = rnd() * h;
+    ctx.globalAlpha = 0.03 + rnd() * 0.05;
+    ctx.fillStyle = rnd() < 0.5 ? "#3A322A" : "#000";
+    ctx.beginPath(); ctx.arc(x, y, 1 + rnd() * 3, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  const glow = ctx.createRadialGradient(w * 0.5, h * 0.42, 0, w * 0.5, h * 0.42, Math.max(w, h) * 0.55);
+  glow.addColorStop(0, "rgba(232,184,75,0.13)");
+  glow.addColorStop(1, "rgba(232,184,75,0)");
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, w, h);
+}
+
+function dialRose(c, size) {
+  const ctx = fitCanvas(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.5, rOuter = R * 0.985, rInner = R * 0.80;
+  const JEWEL = ["#1D4E9B", "#8E1B2A", "#1C6B52", "#B8862A", "#3A2A78"];
+  const rnd = seeded(13);
+
+  // Petals of glass, held in lead.
+  const petals = 24;
+  for (let i = 0; i < petals; i++) {
+    const a0 = (i / petals) * TAU, a1 = ((i + 1) / petals) * TAU;
+    const col = JEWEL[Math.floor(rnd() * JEWEL.length)];
+    const g = ctx.createRadialGradient(0, 0, rInner * 0.62, 0, 0, rOuter);
+    g.addColorStop(0, col);
+    g.addColorStop(1, "#07060A");
+    ctx.fillStyle = g; ctx.globalAlpha = 0.92;
+    ctx.beginPath(); ctx.arc(0, 0, rOuter, a0, a1); ctx.arc(0, 0, rInner * 0.62, a1, a0, true);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  // Lead came: heavy, black, structural.
+  ctx.strokeStyle = "#08070A"; ctx.lineWidth = size * 0.011;
+  for (let i = 0; i < petals; i++) {
+    const a = (i / petals) * TAU;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * rInner * 0.62, Math.sin(a) * rInner * 0.62);
+    ctx.lineTo(Math.cos(a) * rOuter, Math.sin(a) * rOuter);
+    ctx.stroke();
+  }
+  for (const r of [rOuter, rInner, rInner * 0.62]) {
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+  }
+  const amber = () => "#F0CE7A";
+  const rF = (rOuter + rInner) / 2 + size * 0.021;
+  arcText(ctx, TOP, rF, 0, size * 0.042, size * 0.004, false, amber);
+  arcText(ctx, FOOT, rF, Math.PI, size * 0.042, size * 0.004, true, amber);
+
+  // Glass or not, it stays an instrument: the hours are still legible.
+  for (let hh = 0; hh < 24; hh += 6) {
+    const a = (hh / 24) * TAU + Math.PI / 2, rt = rInner * 0.62 - size * 0.052;
+    ctx.save();
+    ctx.font = `600 ${size * 0.044}px Cinzel, serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#F0CE7A";
+    ctx.fillText(String(hh).padStart(2, "0"), Math.cos(a) * rt, Math.sin(a) * rt);
+    ctx.restore();
+  }
+  earth(ctx, R * 0.20, "#2E6FB5", "#0B1B31", () => "#08070A", "rgba(240,232,214,0.5)");
+  lights(ctx, size, (rOuter + rInner) / 2 - size * 0.052, "#08070A", "#F5D372", "#EFE6D8", "#08070A");
+}
+
+/* ————— shared bodies ————— */
+function earth(ctx, rE, lit, dark, ringFill, grat) {
+  const eg = ctx.createRadialGradient(-rE * 0.3, -rE * 0.3, 0, 0, 0, rE);
+  eg.addColorStop(0, lit); eg.addColorStop(1, dark);
+  ctx.fillStyle = eg;
+  ctx.beginPath(); ctx.arc(0, 0, rE, 0, TAU); ctx.fill();
+  ctx.strokeStyle = ringFill(ctx, -rE, rE); ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.arc(0, 0, rE, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = grat; ctx.lineWidth = 0.8;
+  for (const f of [-0.62, -0.32, 0, 0.32, 0.62]) {
+    ctx.beginPath();
+    ctx.ellipse(0, rE * f, rE * Math.sqrt(1 - f * f), rE * 0.10, 0, 0, TAU);
+    ctx.stroke();
+  }
+  ctx.beginPath(); ctx.ellipse(0, 0, rE * 0.34, rE, 0, 0, TAU); ctx.stroke();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(0, 0, rE, -Math.PI / 2, Math.PI / 2); ctx.closePath();
+  ctx.fillStyle = "rgba(6,10,18,0.55)"; ctx.fill();
+  ctx.restore();
+}
+
+function lights(ctx, size, rBand, clearCol, sunCol, moonCol, moonShade) {
+  const clear = (x, y, r) => {
+    if (!clearCol) return;
+    const halo = ctx.createRadialGradient(x, y, r * 0.7, x, y, r * 2.1);
+    halo.addColorStop(0, clearCol); halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.save(); ctx.globalAlpha = 0.85; ctx.fillStyle = halo;
+    ctx.beginPath(); ctx.arc(x, y, r * 2.1, 0, TAU); ctx.fill(); ctx.restore();
+  };
+  const aS = (SUN_H / 24) * TAU + Math.PI / 2, rS = size * 0.036;
+  const sx = Math.cos(aS) * rBand, sy = Math.sin(aS) * rBand;
+  clear(sx, sy, rS);
+  if (sunCol) { ctx.fillStyle = sunCol; }
+  else {
+    const sg = ctx.createRadialGradient(sx - rS * 0.35, sy - rS * 0.45, 0, sx, sy, rS);
+    sg.addColorStop(0, "#FFF7DD"); sg.addColorStop(0.45, "#F7DE93");
+    sg.addColorStop(0.85, "#D9A62B"); sg.addColorStop(1, "#8A6416");
+    ctx.fillStyle = sg;
+  }
+  ctx.beginPath(); ctx.arc(sx, sy, rS, 0, TAU); ctx.fill();
+
+  const aM = (MOON_H / 24) * TAU + Math.PI / 2, rM = size * 0.030;
+  const mx = Math.cos(aM) * rBand, my = Math.sin(aM) * rBand;
+  clear(mx, my, rM);
+  ctx.fillStyle = moonCol || "#F6F0E2";
+  ctx.beginPath(); ctx.arc(mx, my, rM, 0, TAU); ctx.fill();
+  ctx.fillStyle = moonShade || "rgba(8,17,36,0.92)";
+  ctx.beginPath(); ctx.arc(mx - rM * 0.42, my, rM * 0.96, 0, TAU); ctx.fill();
+}
+
+/* ————— build & render ————— */
+const BG = { d1: bgWeave, d2: bgIcon, d3: bgFresco, d4: bgRose };
+const DIAL = { d1: dialWeave, d2: dialIcon, d3: dialFresco, d4: dialRose };
+const tpl = document.getElementById("tpl").textContent;
+
+for (const d of DIRECTIONS) {
+  const s = document.createElement("section");
+  s.className = "dir " + d.cls;
+  s.innerHTML = tpl.replace("__LABEL__", d.label);
+  document.body.appendChild(s);
+}
+
+function render() {
+  for (const d of DIRECTIONS) {
+    const s = document.querySelector("." + d.cls);
+    const r = s.getBoundingClientRect();
+    BG[d.cls](s.querySelector(".bg"), Math.round(r.width), Math.round(r.height));
+    const size = Math.min(window.innerWidth - 48, Math.round(window.innerHeight * 0.42), 480);
+    const dial = s.querySelector(".dial");
+    dial.style.width = size + "px"; dial.style.height = size + "px";
+    DIAL[d.cls](dial, size);
+  }
+}
+render();
+window.addEventListener("resize", render);
+document.fonts?.ready.then(render);
+</script>
+</body>
+</html>

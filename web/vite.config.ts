@@ -14,6 +14,8 @@ export default defineConfig({
         type: "type.html",
         // The Vault: the sacred-architecture direction (DEC-016).
         vault: "vault.html",
+        // Four sacred-art directions for review (DEC-017).
+        directions: "directions.html",
       },
     },
   },

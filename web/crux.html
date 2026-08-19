@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day4 — what the cross represents</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500;1,9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#F6F0E2;--stone:#C7D6E8;--dim:#9BB9D6;
+    --gold:#D9A62B;--gold-lit:#F7DE93;--gold-white:#FFF7DD;--gold-shadow:#6E4E12}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:100%}
+  body{font-family:"Fraunces",Georgia,serif;background:#050F1E;color:var(--ink);
+    overflow-x:hidden}
+  .sec{position:relative;min-height:100dvh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;padding:30px 20px 36px;gap:13px;
+    overflow:hidden}
+  .bg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+  .sec > *:not(.bg){position:relative;z-index:1}
+  .gilt{background:linear-gradient(180deg,var(--gold-white),var(--gold-lit) 38%,
+      var(--gold) 76%,var(--gold-shadow));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .kicker{font-family:"Cinzel",serif;font-weight:600;font-size:10.5px;
+    letter-spacing:.42em;text-indent:.42em;text-transform:uppercase;text-align:center}
+  .title{font-family:"Cinzel",serif;font-weight:700;font-size:clamp(20px,5.4vw,29px);
+    letter-spacing:.06em;text-align:center}
+  .verse{font-size:clamp(18px,4.3vw,24px);font-style:italic;font-weight:600;
+    line-height:1.36;max-width:22ch;text-align:center;text-wrap:balance;
+    color:var(--ink);text-shadow:0 2px 16px rgba(0,0,0,.9)}
+  .ref{font-family:"Cinzel",serif;font-weight:600;font-size:11px;letter-spacing:.28em;
+    text-indent:.28em;text-transform:uppercase}
+  canvas.dial{display:block}
+  .why{font-size:14.5px;line-height:1.5;color:var(--stone);max-width:34ch;
+    text-align:center;font-style:italic}
+</style>
+</head>
+<body>
+<script id="tpl" type="text/template">
+  <canvas class="bg"></canvas>
+  <div class="kicker gilt">__KICKER__</div>
+  <div class="title gilt">__TITLE__</div>
+  <canvas class="dial"></canvas>
+  <p class="verse">__VERSE__</p>
+  <div class="ref gilt">__REF__</div>
+  <p class="why">__WHY__</p>
+</script>
+
+<script>
+const TAU = Math.PI * 2;
+const RISE = 5.18, SET = 18.80, SUN_H = 15.4, MOON_H = 2.4, NOW_H = 15.4;
+const hourAngle = (h) => (h / 24) * TAU + Math.PI / 2;
+
+const GOLD = [[0,"#FFF7DD"],[0.35,"#F7DE93"],[0.7,"#D9A62B"],[1,"#6E4E12"]];
+function gold(ctx, y0, y1) {
+  const g = ctx.createLinearGradient(0, y0, 0, y1);
+  for (const [at, c] of GOLD) g.addColorStop(at, c);
+  return g;
+}
+const seeded = (s) => () => (s = (s * 1103515245 + 12345) % 2147483648) / 2147483648;
+
+function fit(c, w, h, maxDpr) {
+  const ctx = c.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, maxDpr);
+  c.width = Math.floor(w * dpr); c.height = Math.floor(h * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+function drawSky(c, w, h) {
+  const ctx = fit(c, w, h, 1.5);
+  const g = ctx.createRadialGradient(w * 0.5, h * 0.42, 0, w * 0.5, h * 0.46, Math.max(w, h) * 0.9);
+  g.addColorStop(0, "#16345E"); g.addColorStop(0.5, "#0E2440"); g.addColorStop(1, "#050F1E");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  const rnd = seeded(4004);
+  for (let i = 0; i < 260; i++) {
+    const x = rnd() * w, y = rnd() * h, faint = rnd() < 0.85;
+    ctx.globalAlpha = faint ? 0.2 + rnd() * 0.3 : 0.6 + rnd() * 0.4;
+    ctx.fillStyle = "#DCE8F5";
+    ctx.beginPath(); ctx.arc(x, y, faint ? 0.8 : 1.5, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** The band: night, amber twilight at each crossing, daylight. */
+function band(ctx, rOut, rIn, umbra) {
+  const SEG = 288;
+  for (let i = 0; i < SEG; i++) {
+    const h0 = (i / SEG) * 24, h1 = ((i + 1) / SEG) * 24, mid = (h0 + h1) / 2;
+    const day = mid > RISE && mid < SET;
+    const dT = Math.min(Math.abs(mid - RISE), Math.abs(mid - SET));
+    const t = Math.max(0, 1 - dT / 1.15) ** 1.4;
+    const base = day ? [30, 66, 112] : [10, 27, 51];
+    const amber = [206, 122, 58];
+    let rgb = [
+      base[0] + (amber[0] - base[0]) * t,
+      base[1] + (amber[1] - base[1]) * t,
+      base[2] + (amber[2] - base[2]) * t,
+    ];
+    // The three hours: noon to the ninth hour, the light withdrawn.
+    if (umbra === true && mid >= 12 && mid <= 15) {
+      const edge = Math.min(mid - 12, 15 - mid);
+      const k = 1 - Math.min(1, edge / 0.55) * 0.0; // full depth, soft ends below
+      const soften = Math.min(1, edge / 0.5);
+      const depth = 0.86 * (0.35 + 0.65 * soften) * k;
+      rgb = rgb.map((v) => v * (1 - depth) + 6 * depth);
+    }
+    ctx.fillStyle = `rgb(${rgb.map(Math.round).join(",")})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, rOut, hourAngle(h0), hourAngle(h1));
+    ctx.arc(0, 0, rIn, hourAngle(h1), hourAngle(h0), true);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.lineWidth = 1.4;
+  for (const r of [rOut, rIn]) {
+    ctx.strokeStyle = gold(ctx, -r, r);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, TAU); ctx.stroke();
+  }
+}
+
+function ticks(ctx, R, rOut, rIn, size) {
+  for (let i = 0; i < 48; i++) {
+    const a = hourAngle(i / 2), major = i % 12 === 0, half = i % 2 === 1;
+    const r1 = rIn - size * 0.010;
+    const r2 = r1 - (major ? size * 0.038 : half ? size * 0.010 : size * 0.020);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+    ctx.lineWidth = major ? 2 : 0.9;
+    ctx.strokeStyle = major ? gold(ctx, -r1, r1) : "rgba(199,214,232,0.5)";
+    ctx.stroke();
+  }
+  for (let hh = 0; hh < 24; hh += 6) {
+    const a = hourAngle(hh), rt = rIn - size * 0.093;
+    ctx.save();
+    ctx.font = `600 ${size * 0.048}px Cinzel, serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillStyle = gold(ctx, -size * 0.032, size * 0.032);
+    ctx.fillText(String(hh).padStart(2, "0"), Math.cos(a) * rt, Math.sin(a) * rt);
+    ctx.restore();
+  }
+}
+
+function earth(ctx, rE) {
+  const eg = ctx.createRadialGradient(-rE * 0.3, -rE * 0.3, 0, 0, 0, rE);
+  eg.addColorStop(0, "#24528F"); eg.addColorStop(1, "#08172B");
+  ctx.fillStyle = eg;
+  ctx.beginPath(); ctx.arc(0, 0, rE, 0, TAU); ctx.fill();
+  ctx.strokeStyle = gold(ctx, -rE, rE); ctx.lineWidth = 1.3;
+  ctx.beginPath(); ctx.arc(0, 0, rE, 0, TAU); ctx.stroke();
+  ctx.strokeStyle = "rgba(199,214,232,0.30)"; ctx.lineWidth = 0.8;
+  for (const f of [-0.62, -0.32, 0, 0.32, 0.62]) {
+    ctx.beginPath();
+    ctx.ellipse(0, rE * f, rE * Math.sqrt(1 - f * f), rE * 0.10, 0, 0, TAU);
+    ctx.stroke();
+  }
+  ctx.beginPath(); ctx.ellipse(0, 0, rE * 0.34, rE, 0, 0, TAU); ctx.stroke();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(0, 0, rE, -Math.PI / 2, Math.PI / 2); ctx.closePath();
+  ctx.fillStyle = "rgba(5,15,30,0.58)"; ctx.fill();
+  ctx.restore();
+}
+
+function lights(ctx, size, rBand) {
+  const aS = hourAngle(SUN_H), rS = size * 0.036;
+  const sx = Math.cos(aS) * rBand, sy = Math.sin(aS) * rBand;
+  const sg = ctx.createRadialGradient(sx - rS * 0.35, sy - rS * 0.45, 0, sx, sy, rS);
+  sg.addColorStop(0, "#FFF7DD"); sg.addColorStop(0.45, "#F7DE93");
+  sg.addColorStop(0.85, "#D9A62B"); sg.addColorStop(1, "#8A6416");
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.arc(sx, sy, rS, 0, TAU); ctx.fill();
+  const aM = hourAngle(MOON_H), rM = size * 0.030;
+  const mx = Math.cos(aM) * rBand, my = Math.sin(aM) * rBand;
+  ctx.fillStyle = "#F6F0E2";
+  ctx.beginPath(); ctx.arc(mx, my, rM, 0, TAU); ctx.fill();
+  ctx.fillStyle = "rgba(8,20,40,0.92)";
+  ctx.beginPath(); ctx.arc(mx - rM * 0.42, my, rM * 0.96, 0, TAU); ctx.fill();
+}
+
+/** The humble index: a plain gnomon for "now". Not a cross — a pointer. */
+function gnomon(ctx, size, rOut, rIn, h) {
+  const a = hourAngle(h), band = rOut - rIn;
+  ctx.save();
+  ctx.translate(Math.cos(a) * (rOut + band * 0.30), Math.sin(a) * (rOut + band * 0.30));
+  ctx.rotate(a + Math.PI / 2);
+  ctx.fillStyle = "#E7F0FA"; ctx.globalAlpha = 0.75;
+  ctx.beginPath();
+  ctx.moveTo(0, band * 0.34);
+  ctx.lineTo(-band * 0.30, -band * 0.30);
+  ctx.lineTo(band * 0.30, -band * 0.30);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/* ————— 1 · THE AXIS ————— */
+function dialAxis(c, size) {
+  const ctx = fit(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.435, rOut = R * 0.985, rIn = R * 0.795;
+
+  band(ctx, rOut, rIn, false);
+  ticks(ctx, R, rOut, rIn, size);
+
+  // The cross the whole day turns upon, drawn beneath everything it holds.
+  ctx.save();
+  ctx.lineCap = "butt";
+  ctx.strokeStyle = gold(ctx, -R * 0.75, R * 0.9);
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = size * 0.022;
+  ctx.beginPath();
+  ctx.moveTo(0, -R * 0.60); ctx.lineTo(0, R * 0.74);
+  ctx.moveTo(-R * 0.47, -R * 0.20); ctx.lineTo(R * 0.47, -R * 0.20);
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+
+  earth(ctx, R * 0.245);
+  lights(ctx, size, (rOut + rIn) / 2);
+  gnomon(ctx, size, rOut, rIn, NOW_H);
+}
+
+/* ————— 2 · THE SIXTH HOUR ————— */
+function dialSixth(c, size) {
+  const ctx = fit(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.435, rOut = R * 0.985, rIn = R * 0.795;
+
+  band(ctx, rOut, rIn, true);
+  ticks(ctx, R, rOut, rIn, size);
+
+  // Gold bounds at the sixth and the ninth hour.
+  for (const h of [12, 15]) {
+    const a = hourAngle(h);
+    ctx.strokeStyle = gold(ctx, -rOut, rOut); ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * rIn, Math.sin(a) * rIn);
+    ctx.lineTo(Math.cos(a) * rOut, Math.sin(a) * rOut);
+    ctx.stroke();
+  }
+  // One cross, standing over the darkened hours — upright, never turning.
+  const a = hourAngle(13.5);
+  const arm = size * 0.052;
+  const cx = Math.cos(a) * (rOut + arm * 1.35), cy = Math.sin(a) * (rOut + arm * 1.35);
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.lineCap = "round";
+  ctx.lineWidth = size * 0.014;
+  ctx.strokeStyle = gold(ctx, -arm * 1.2, arm * 1.2);
+  ctx.beginPath();
+  ctx.moveTo(0, -arm * 1.15); ctx.lineTo(0, arm * 1.0);
+  ctx.moveTo(-arm * 0.66, -arm * 0.42); ctx.lineTo(arm * 0.66, -arm * 0.42);
+  ctx.stroke();
+  ctx.restore();
+
+  earth(ctx, R * 0.245);
+  lights(ctx, size, (rOut + rIn) / 2);
+  gnomon(ctx, size, rOut, rIn, NOW_H);
+}
+
+/* ————— 3 · THE DAYSPRING ————— */
+function dialDayspring(c, size) {
+  const ctx = fit(c, size, size, 2);
+  ctx.translate(size / 2, size / 2);
+  const R = size * 0.435, rOut = R * 0.985, rIn = R * 0.795;
+
+  band(ctx, rOut, rIn, false);
+  ticks(ctx, R, rOut, rIn, size);
+
+  // Light breaking at the hour of sunrise.
+  const a = hourAngle(RISE), bandW = rOut - rIn;
+  const arm = size * 0.052;
+  const gx = Math.cos(a) * (rOut + arm * 1.35), gy = Math.sin(a) * (rOut + arm * 1.35);
+  const glow = ctx.createRadialGradient(gx, gy, 0, gx, gy, size * 0.16);
+  glow.addColorStop(0, "rgba(247,222,147,0.42)");
+  glow.addColorStop(1, "rgba(247,222,147,0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(gx, gy, size * 0.16, 0, TAU); ctx.fill();
+
+  ctx.save();
+  ctx.translate(gx, gy);
+  ctx.lineCap = "round";
+  ctx.lineWidth = size * 0.014;
+  ctx.strokeStyle = gold(ctx, -arm * 1.2, arm * 1.2);
+  ctx.beginPath();
+  ctx.moveTo(0, -arm * 1.15); ctx.lineTo(0, arm * 1.0);
+  ctx.moveTo(-arm * 0.66, -arm * 0.42); ctx.lineTo(arm * 0.66, -arm * 0.42);
+  ctx.stroke();
+  ctx.restore();
+
+  earth(ctx, R * 0.245);
+  lights(ctx, size, (rOut + rIn) / 2);
+  gnomon(ctx, size, rOut, rIn, NOW_H);
+}
+
+const SECTIONS = [
+  {
+    kicker: "One",
+    title: "The Axis",
+    verse: "&ldquo;And he is before all things, and in him all things hold together.&rdquo;",
+    ref: "Colossians 1:17 &middot; ESV",
+    why: "The cross is not a mark on the dial — it is what the dial turns upon. Sun, moon and hours all move around it, and the earth rests at its crossing. Your present is marked instead by a plain gnomon, because a pointer is a pointer.",
+    dial: dialAxis,
+  },
+  {
+    kicker: "Two",
+    title: "The Sixth Hour",
+    verse: "&ldquo;And when the sixth hour had come, there was darkness over the whole land until the ninth hour.&rdquo;",
+    ref: "Mark 15:33 &middot; ESV",
+    why: "Noon to three, the hours God darkened the sky. On a 24-hour dial those hours are a real place — so the band carries them, every day, and one cross stands over them. An astronomy instrument remembering the one time the sun was put out.",
+    dial: dialSixth,
+  },
+  {
+    kicker: "Three",
+    title: "The Dayspring",
+    verse: "&ldquo;Because of the tender mercy of our God, whereby the sunrise shall visit us from on high.&rdquo;",
+    ref: "Luke 1:78 &middot; ESV",
+    why: "Christ is the rising sun — the sun of righteousness with healing in its wings. The cross stands at the hour of sunrise and moves with it through the year, so every dawn the instrument shows where the light breaks in.",
+    dial: dialDayspring,
+  },
+];
+
+const tpl = document.getElementById("tpl").textContent;
+for (const s of SECTIONS) {
+  const el = document.createElement("section");
+  el.className = "sec";
+  el.innerHTML = tpl
+    .replace("__KICKER__", s.kicker).replace("__TITLE__", s.title)
+    .replace("__VERSE__", s.verse).replace("__REF__", s.ref).replace("__WHY__", s.why);
+  document.body.appendChild(el);
+  s.el = el;
+}
+
+function render() {
+  for (const s of SECTIONS) {
+    const r = s.el.getBoundingClientRect();
+    drawSky(s.el.querySelector(".bg"), Math.round(r.width), Math.round(r.height));
+    const size = Math.min(window.innerWidth - 74, Math.round(window.innerHeight * 0.42), 430);
+    const d = s.el.querySelector(".dial");
+    d.style.width = size + "px"; d.style.height = size + "px";
+    s.dial(d, size);
+  }
+}
+render();
+window.addEventListener("resize", render);
+document.fonts?.ready.then(render);
+</script>
+</body>
+</html>

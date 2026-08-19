@@ -20,6 +20,8 @@ export default defineConfig({
         weave: "weave.html",
         // Fiducial variants for review (DEC-021).
         cross: "cross.html",
+        // What the cross represents (DEC-022).
+        crux: "crux.html",
       },
     },
   },

@@ -16,6 +16,8 @@ export default defineConfig({
         vault: "vault.html",
         // Four sacred-art directions for review (DEC-017).
         directions: "directions.html",
+        // The Weave, without the ring inscription (DEC-018).
+        weave: "weave.html",
       },
     },
   },

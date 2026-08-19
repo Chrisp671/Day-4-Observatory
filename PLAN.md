@@ -69,6 +69,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-017 — Four sacred-art directions (owner: “give me 4 versions, one weaving the vault with the current design”): rather than four variations of one idea, four distinct traditions of art made for God, each rendered as a real screen at `web/directions.html`. (1) **The Weave** — the current app's living sky, Milky Way and fine 30-minute tick cadence and sidereal ring intact, gilded with the vault's gold-leaf material and two-arc frieze. (2) **The Icon** — Byzantine gold ground with lapis marks and a nimbus round the earth; the palette inverted, leaf-square seams visible. (3) **The Fresco** — Michelangelo's actual surface: pigment on lime plaster, sanguine/umber/terra-verde, a painted architectural moulding for the ring (light mode). (4) **The Rose** — Gothic glass: jewel panes held in lead came, hours kept legible in amber. All four share one geometry so the comparison is about material and light, not layout. 2026-08-19.
 
+- DEC-018 — The Weave, band over inscription (owner: “show me 1 — I really don't like the text in the circle”): the curved frieze is cut. The verse already leads the masthead, so the ring was spending itself on repetition. The band instead carries the day: night, amber twilight at the two horizon crossings, and daylight, bounded by gold hairlines with the rise/set moments marked in gold across it. Gold, carved hour capitals, living sky, and the instrument's 30-minute cadence all stay. Preview at `web/weave.html`. Lesson: on an instrument, a ring should report something. 2026-08-19.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

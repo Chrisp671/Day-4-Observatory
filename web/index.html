@@ -83,8 +83,14 @@
     .r-bl{bottom:clamp(8px,2vh,20px);left:var(--pad)}
     .r-br{bottom:clamp(8px,2vh,20px);right:var(--pad);text-align:right;pointer-events:auto}
 
-    /* station entry lives with the station readout */
-    .stationbar{display:flex;gap:4px;justify-content:flex-end;margin-top:7px;flex-wrap:wrap}
+    /* Station entry hides behind the coordinates: the readout is the
+       control. Tap the coordinates to open it; it closes on success. */
+    .station-toggle{font-family:var(--mono);background:transparent;border:none;
+      cursor:pointer;padding:0;text-align:right;width:100%;
+      border-bottom:1px dotted transparent}
+    .station-toggle:hover{border-bottom-color:var(--ink-mid)}
+    .stationbar{display:none;gap:4px;justify-content:flex-end;margin-top:7px;flex-wrap:wrap}
+    .r-br.open .stationbar{display:flex}
     .stationbar input{font-family:var(--mono);font-size:11px;width:66px;text-align:right;
       color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
       padding:3px 5px}
@@ -189,8 +195,10 @@
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
     <div class="readout r-bl"><div class="k">MOON</div><div class="v" id="moon">—</div></div>
     <div class="readout r-br">
-      <div class="k">STATION</div><div class="v" id="station">—</div>
-      <div class="stationbar">
+      <div class="k">STATION</div>
+      <button class="v station-toggle" id="station" aria-expanded="false"
+        aria-controls="stationbar" title="Change station">—</button>
+      <div class="stationbar" id="stationbar">
         <input id="lat-in" inputmode="decimal" autocomplete="off" aria-label="Latitude">
         <input id="lon-in" inputmode="decimal" autocomplete="off" aria-label="Longitude">
         <button id="set-station">SET</button>

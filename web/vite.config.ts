@@ -4,27 +4,6 @@ export default defineConfig({
   // Relative base so the built site works at any mount path
   // (GitHub Pages project sites live under /<repo>/).
   base: "./",
-  build: {
-    rollupOptions: {
-      input: {
-        main: "index.html",
-        // The WI-008 design record: before/after at one fixed sky state.
-        compare: "compare.html",
-        // Type directions for review (DEC-016).
-        type: "type.html",
-        // The Vault: the sacred-architecture direction (DEC-016).
-        vault: "vault.html",
-        // Four sacred-art directions for review (DEC-017).
-        directions: "directions.html",
-        // The Weave, without the ring inscription (DEC-018).
-        weave: "weave.html",
-        // Fiducial variants for review (DEC-021).
-        cross: "cross.html",
-        // What the cross represents (DEC-022).
-        crux: "crux.html",
-        // The recommendation, four ways (DEC-023).
-        sixth: "sixth.html",
-      },
-    },
-  },
+  // One page: the instrument. Design-review pages were scaffolding for
+  // decisions now recorded in PLAN.md (DEC-016..027) and have been removed.
 });

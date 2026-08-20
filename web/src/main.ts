@@ -350,6 +350,20 @@ function buildStationControls(): void {
   latInput.value = String(station.lat);
   lonInput.value = String(station.lon);
 
+  // The coordinates are the control: tap to open the entry, which closes
+  // itself once a new station takes (DEC-028 — the readout stays an
+  // instrument, not a form).
+  const toggle = el("station");
+  const cell = toggle?.closest(".r-br");
+  const setOpen = (open: boolean): void => {
+    cell?.classList.toggle("open", open);
+    toggle?.setAttribute("aria-expanded", String(open));
+    if (open) latInput.focus();
+  };
+  toggle?.addEventListener("click", () => {
+    setOpen(!(cell?.classList.contains("open") ?? false));
+  });
+
   const apply = (): void => {
     const lat = parseCoordinate(latInput.value, "lat");
     const lon = parseCoordinate(lonInput.value, "lon");
@@ -360,6 +374,7 @@ function buildStationControls(): void {
     station = { lat, lon };
     saveStation(station);
     if (status !== null) status.textContent = "";
+    setOpen(false);
     draw();
   };
   el("set-station")?.addEventListener("click", apply);
@@ -381,6 +396,7 @@ function buildStationControls(): void {
         latInput.value = station.lat.toFixed(4);
         lonInput.value = station.lon.toFixed(4);
         if (status !== null) status.textContent = "";
+        setOpen(false);
         draw();
       },
       () => {

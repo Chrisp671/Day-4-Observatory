@@ -85,6 +85,8 @@ No web code exists. iOS app (~8.7 KSLOC Obj-C++) builds only with four frozen si
 
 - DEC-026 — Reverted DEC-025; subtraction is the next level (owner: “I rate that idea 0 — more is not always better”): the mo'edim strip was reverted, modules included, rather than left as dead code. The lesson, recorded so it binds future work: **“another level” is not another feature.** The screen below the dial had already accumulated four bands — readouts, time-travel controls, the passion caption, the TONIGHT board — and a fifth made the instrument a dashboard. From here, raising the level means removing, merging, or earning: nothing new is added below the dial unless something else leaves. 2026-08-19.
 
+- DEC-027 — The four-second answer (owner, asked what one thing a visitor should walk away with: “The heavens declare the glory of God”): Psalm 19:1 is the product thesis, and it is a knife, not a caption. The sky and the dial are the declaration; chrome competes with the preacher. First cuts under DEC-026: steppers 7 units → 3 on screen (hour/day/phase — the engine keeps all seven, drag covers minutes); the passion caption speaks only while the sixth-to-ninth hours are actually passing, silent otherwise; TONIGHT 6 → 3, a program not a list. Standing test for every future element: does it help the heavens declare, or does it talk over them? 2026-08-20.
+
 ## 8. Target architecture, contracts, and test seams
 
 ```

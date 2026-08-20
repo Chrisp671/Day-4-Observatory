@@ -91,7 +91,7 @@ const hhmm = (unixMillis: number): string =>
 
 /* ————— tonight: the evening's program (bottom band) ————— */
 /** How many of the board's entries the strip shows; the rest stay off-screen. */
-const TONIGHT_SLOTS = 6;
+const TONIGHT_SLOTS = 3;
 
 interface SkySlot {
   readonly root: HTMLElement;
@@ -242,16 +242,13 @@ function draw(): void {
 
   drawTonight(s.siderealHours, s.sun.altitudeDeg);
 
-  // Name the hours plainly: the band shows them, this says what they are.
-  if (passion === null) {
-    setText("passion", "");
-  } else {
-    const each = Math.round(passion.hourMinutes);
-    setText(
-      "passion",
-      `The sixth hour to the ninth · ${hhmm(passion.fromUnixMillis)}–${hhmm(passion.toUnixMillis)} · each hour ${each} min`,
-    );
-  }
+  // The band carries the darkened hours every day; the caption speaks only
+  // while they are actually passing. The rest of the time, silence.
+  const inPassion = passion !== null &&
+    t >= passion.fromUnixMillis && t <= passion.toUnixMillis;
+  setText("passion", inPassion && passion !== null
+    ? `The sixth hour to the ninth · ${hhmm(passion.fromUnixMillis)}–${hhmm(passion.toUnixMillis)}`
+    : "");
 }
 
 /* ————— drag the sun to scrub time (REQ-005) ————— */
@@ -308,12 +305,17 @@ function stepDisplayed(unit: StepUnit, dir: 1 | -1): void {
   draw();
 }
 
+/** The units the screen carries. The engine supports all seven (see
+ * timecontrol.ts); the page shows three, because the heavens declaring the
+ * glory of God (Psalm 19:1) should not share the room with fourteen buttons.
+ * Drag the sun for minutes; hour, day and phase cover the rest. */
+const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "phase"]);
+
 function buildSteppers(): void {
   const host = el("steppers");
   if (host === null) return;
-  // One control per unit — a labelled cell flanked by its two chevrons —
-  // instead of fourteen identical boxes.
-  for (const { unit, label } of STEP_UNITS) {
+  // One control per unit — a labelled cell flanked by its two chevrons.
+  for (const { unit, label } of STEP_UNITS.filter((u) => SHOWN_UNITS.has(u.unit))) {
     const group = document.createElement("div");
     group.className = "stepper";
 

@@ -8,6 +8,7 @@ import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
 import { isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
+import { transcript } from "./app/transcript";
 import { passionHours } from "./app/hours";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
@@ -234,6 +235,17 @@ function draw(): void {
   el("timeline")?.classList.toggle("shifted", shifted);
   el("now")?.classList.toggle("armed", shifted);
 
+  // The dial, spoken: reached on demand via aria-describedby, so it informs
+  // without interrupting.
+  setText("sky-transcript", transcript({
+    sunAltitudeDeg: s.sun.altitudeDeg,
+    sunAzimuthDeg: s.sun.azimuthDeg,
+    moonPhaseName: PHASE_NAMES[phaseIdx] ?? "moon",
+    moonAgeDays: s.moon.ageDays,
+    riseHHMM: s.sun.nextRiseUnixMillis === null ? null : hhmm(s.sun.nextRiseUnixMillis),
+    setHHMM: s.sun.nextSetUnixMillis === null ? null : hhmm(s.sun.nextSetUnixMillis),
+  }));
+
   // The masthead verse follows the real calendar day (a daily devotion),
   // not the time-travelled instrument time.
   const verse = verseOfDay(Date.now());
@@ -434,4 +446,9 @@ wireScrub();
 fit();
 fitFirmament();
 draw();
-setInterval(draw, 1000);
+// The heavens move slowly; for those who ask for reduced motion, the
+// instrument follows them once a minute instead of every second.
+const cadence = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  ? 60000
+  : 1000;
+setInterval(draw, cadence);

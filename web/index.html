@@ -7,6 +7,7 @@
   <meta name="theme-color" content="#0E2440">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -170,6 +171,8 @@
       .tonight-list{grid-template-columns:repeat(2,1fr);gap:8px 14px}
       .tonight-h em{font-size:12px}
     }
+    .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
+      overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
     :focus-visible{outline:2px solid var(--sunlight);outline-offset:2px}
   </style>
 </head>
@@ -191,8 +194,9 @@
   <div class="stage">
     <div class="readout r-tl"><div class="k">SUNRISE</div><div class="v" id="rise">—</div></div>
     <div class="readout r-tr"><div class="k">SUNSET</div><div class="v" id="set">—</div></div>
-    <canvas id="sky" role="img"
+    <canvas id="sky" role="img" aria-describedby="sky-transcript"
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
+    <p id="sky-transcript" class="sr-only"></p>
     <div class="readout r-bl"><div class="k">MOON</div><div class="v" id="moon">—</div></div>
     <div class="readout r-br">
       <div class="k">STATION</div>

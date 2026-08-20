@@ -6,7 +6,7 @@ import { frame } from "./engine/frame";
 import { loadStation, parseCoordinate, saveStation, type Station } from "./app/location";
 import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
-import { isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
+import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
 import { transcript } from "./app/transcript";
 import { passionHours } from "./app/hours";
@@ -127,7 +127,10 @@ function skyPhrase(entry: SkyEntry): string {
 
 function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
   // A constellation that never rises from this station is not news; drop it.
-  const board = tonightBoard(siderealHours + station.lon / 15, station.lat)
+  const lst = siderealHours + station.lon / 15;
+  // The glance board holds three headliners; the full sky lives behind the
+  // TONIGHT fold (DEC-028's pattern: the label is the control).
+  const board = tonightBoard(lst, station.lat, CONSTELLATIONS.filter((c) => c.notable === true))
     .filter((e) => e.status !== "never")
     .slice(0, TONIGHT_SLOTS);
 
@@ -145,6 +148,44 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
 
   // Up is not the same as visible: only promise stars once the sky is dark.
   setText("tonight-note", isDarkEnough(sunAltitudeDeg) ? "" : "visible after dark");
+  drawAllSky(lst);
+}
+
+/** Refresh key for the expanded board: minute + station, not every second. */
+let allSkyKey = "";
+
+function drawAllSky(lstHours: number): void {
+  const host = el("tonight-all");
+  if (host === null || host.closest(".tonight")?.classList.contains("open") !== true) return;
+  const key = `${Math.floor(lstHours * 60)}|${station.lat}|${station.lon}`;
+  if (key === allSkyKey) return;
+  allSkyKey = key;
+
+  const rows = tonightBoard(lstHours, station.lat)
+    .filter((e) => e.status !== "never")
+    .map((e) => {
+      const mz = e.constellation.mazzaroth === true ? ` <i class="mz">★</i>` : "";
+      return `<div class="sky-row${e.status === "down" ? "" : " is-up"}">` +
+        `<b>${e.constellation.name}${mz}</b><span>${skyPhrase(e)}</span></div>`;
+    })
+    .join("");
+  host.innerHTML = rows;
+}
+
+function wireTonightFold(): void {
+  const btn = el("tonight-toggle");
+  const section = btn?.closest(".tonight");
+  btn?.addEventListener("click", () => {
+    const open = !(section?.classList.contains("open") ?? false);
+    section?.classList.toggle("open", open);
+    btn?.setAttribute("aria-expanded", String(open));
+    const all = el("tonight-all");
+    const foot = document.querySelector(".tonight-foot");
+    if (all !== null) all.hidden = !open;
+    if (foot instanceof HTMLElement) foot.hidden = !open;
+    allSkyKey = ""; // render immediately on open
+    draw();
+  });
 }
 
 /* ————— render ————— */
@@ -439,6 +480,7 @@ if (stage != null && typeof ResizeObserver !== "undefined") {
     draw();
   }).observe(stage);
 }
+wireTonightFold();
 buildTonight();
 buildSteppers();
 buildStationControls();

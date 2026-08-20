@@ -11,6 +11,58 @@ import {
 const find = (name: string): Constellation =>
   CONSTELLATIONS.find((c) => c.name === name) as Constellation;
 
+describe("the catalog", () => {
+  it("carries all 88 IAU constellations, plus the Pleiades", () => {
+    expect(CONSTELLATIONS.length).toBe(88 + 1);
+    expect(find("Pleiades").star).toBe("Alcyone");
+  });
+
+  it("never repeats a name", () => {
+    expect(new Set(CONSTELLATIONS.map((c) => c.name)).size).toBe(CONSTELLATIONS.length);
+  });
+
+  it("keeps every address on the sky", () => {
+    for (const c of CONSTELLATIONS) {
+      expect(c.raHours).toBeGreaterThanOrEqual(0);
+      expect(c.raHours).toBeLessThan(24);
+      expect(Math.abs(c.decDeg)).toBeLessThanOrEqual(90);
+    }
+  });
+
+  it("flags exactly the twelve Mazzaroth — the constellations of the sun's path", () => {
+    const mazzaroth = CONSTELLATIONS.filter((c) => c.mazzaroth === true).map((c) => c.name);
+    expect(mazzaroth.sort()).toEqual([
+      "Aquarius", "Aries", "Cancer", "Capricornus", "Gemini", "Leo",
+      "Libra", "Pisces", "Sagittarius", "Scorpius", "Taurus", "Virgo",
+    ]);
+  });
+
+  it("spot-checks the famous stars against known coordinates", () => {
+    // [name, star, ra, dec] — a wrong sign or swapped field fails loudly.
+    const known: ReadonlyArray<readonly [string, string, number, number]> = [
+      ["Canis Major", "Sirius", 6.752, -16.716],
+      ["Lyra", "Vega", 18.615, 38.784],
+      ["Scorpius", "Antares", 16.49, -26.432],
+      ["Carina", "Canopus", 6.4, -52.7],
+      ["Eridanus", "Achernar", 1.63, -57.24],
+      ["Piscis Austrinus", "Fomalhaut", 22.96, -29.62],
+      ["Boötes", "Arcturus", 14.26, 19.18],
+    ];
+    for (const [name, star, ra, dec] of known) {
+      const c = find(name);
+      expect(c.star).toBe(star);
+      expect(c.raHours).toBeCloseTo(ra, 1);
+      expect(c.decDeg).toBeCloseTo(dec, 1);
+    }
+  });
+
+  it("keeps Polaris circumpolar from the north and unrisen from the south", () => {
+    const polaris = find("Ursa Minor");
+    expect(horizonHourAngle(polaris.decDeg, 40)).toBe("circumpolar");
+    expect(horizonHourAngle(polaris.decDeg, -40)).toBe("never");
+  });
+});
+
 const SIDEREAL_HOUR_MILLIS = (23.9344696 / 24) * 3600000;
 const DEEP_SOUTH: Constellation = { name: "Crux", star: "Acrux", raHours: 12.443, decDeg: -63.099 };
 

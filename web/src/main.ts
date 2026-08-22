@@ -9,6 +9,7 @@ import { formatCountdown, nextSunEvent } from "./app/hero";
 import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
 import { transcript } from "./app/transcript";
+import { moonDay, planetBoard, type PlanetTimes } from "./engine/planets";
 import { passionHours } from "./app/hours";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
@@ -131,24 +132,86 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
   // The glance board holds three headliners; the full sky lives behind the
   // TONIGHT fold (DEC-028's pattern: the label is the control).
   const board = tonightBoard(lst, station.lat, CONSTELLATIONS.filter((c) => c.notable === true))
-    .filter((e) => e.status !== "never")
-    .slice(0, TONIGHT_SLOTS);
+    .filter((e) => e.status !== "never");
+
+  // Saturn and Jupiter first — "when will I be able to see Saturn?" is the
+  // question this board exists to answer (DEC-031).
+  const t = displayedNow();
+  const favourites = planetsNow(t).filter((p) => p.name === "Saturn" || p.name === "Jupiter");
+  const rows: { name: string; phrase: string; up: boolean }[] = [
+    ...favourites.map((p) => ({ name: p.name, phrase: planetPhrase(p, t), up: p.upNow })),
+    ...board.map((e) => ({
+      name: e.constellation.name, phrase: skyPhrase(e), up: e.status !== "down",
+    })),
+  ].slice(0, TONIGHT_SLOTS);
 
   skySlots.forEach((slot, i) => {
-    const entry = board[i];
-    if (entry === undefined) {
+    const row = rows[i];
+    if (row === undefined) {
       slot.root.style.display = "none";
       return;
     }
     slot.root.style.display = "";
-    slot.root.classList.toggle("is-up", entry.status !== "down");
-    slot.name.textContent = entry.constellation.name;
-    slot.when.textContent = skyPhrase(entry);
+    slot.root.classList.toggle("is-up", row.up);
+    slot.name.textContent = row.name;
+    slot.when.textContent = row.phrase;
   });
 
   // Up is not the same as visible: only promise stars once the sky is dark.
   setText("tonight-note", isDarkEnough(sunAltitudeDeg) ? "" : "visible after dark");
   drawAllSky(lst);
+}
+
+/* ————— the wandering stars (REQ-007/008, from the Parker walkthrough) ————— */
+let planetKey = "";
+let planets: readonly PlanetTimes[] = [];
+
+/** The five planets for the displayed minute; searches cached accordingly. */
+function planetsNow(t: number): readonly PlanetTimes[] {
+  const key = `${Math.floor(t / 60000)}|${station.lat}|${station.lon}`;
+  if (key !== planetKey) {
+    planetKey = key;
+    planets = planetBoard(t, station.lat, station.lon);
+  }
+  return planets;
+}
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+let moonDayKey = "";
+
+/** Moon rise/set held steady for the displayed calendar day (REQ-008). */
+function drawMoonDay(t: number): void {
+  const d = new Date(t);
+  const key = `${d.toDateString()}|${station.lat}|${station.lon}`;
+  if (key === moonDayKey) return;
+  moonDayKey = key;
+  const md = moonDay(t, station.lat, station.lon);
+  if (md.riseUnixMillis === null) {
+    setText("moon-times", "no moonrise today");
+    return;
+  }
+  let out = `↑${hhmm(md.riseUnixMillis)}`;
+  if (md.setUnixMillis !== null) {
+    const setD = new Date(md.setUnixMillis);
+    // The moon often sets on the next date; say so instead of confusing.
+    const dayTag = setD.getDate() === d.getDate() ? "" : ` ${WEEKDAY[setD.getDay()] ?? ""}`;
+    out += ` · ↓${hhmm(md.setUnixMillis)}${dayTag}`;
+  }
+  setText("moon-times", out);
+}
+
+/** "rises in 2h 14m · peaks 21:20" — the planning line for one planet. */
+function planetPhrase(p: PlanetTimes, t: number): string {
+  const next = p.upNow ? p.setUnixMillis : p.riseUnixMillis;
+  const verb = p.upNow ? "sets in" : "rises in";
+  let out = next === null ? "" : `${verb} ${formatCountdown(next - t)}`;
+  if (p.upNow && p.transitUnixMillis !== null && p.setUnixMillis !== null &&
+      p.transitUnixMillis < p.setUnixMillis) {
+    // ⋆ marks the peak — the culmination Parker plans viewing around.
+    out += ` ⋆${hhmm(p.transitUnixMillis)}`;
+  }
+  return out;
 }
 
 /** Refresh key for the expanded board: minute + station, not every second. */
@@ -161,7 +224,12 @@ function drawAllSky(lstHours: number): void {
   if (key === allSkyKey) return;
   allSkyKey = key;
 
-  const rows = tonightBoard(lstHours, station.lat)
+  const t = displayedNow();
+  const planetRows = planetsNow(t)
+    .map((p) => `<div class="sky-row${p.upNow ? " is-up" : ""}">` +
+      `<b class="planet">${p.name}</b><span>${planetPhrase(p, t)}</span></div>`)
+    .join("");
+  const rows = planetRows + tonightBoard(lstHours, station.lat)
     .filter((e) => e.status !== "never")
     .map((e) => {
       const mz = e.constellation.mazzaroth === true ? ` <i class="mz">★</i>` : "";
@@ -294,6 +362,7 @@ function draw(): void {
   setText("verse-ref", `${verse.reference} · ${VERSE_VERSION}`);
 
   drawTonight(s.siderealHours, s.sun.altitudeDeg);
+  drawMoonDay(t);
 
   // The band carries the darkened hours every day; the caption speaks only
   // while they are actually passing. The rest of the time, silence.
@@ -362,7 +431,7 @@ function stepDisplayed(unit: StepUnit, dir: 1 | -1): void {
  * timecontrol.ts); the page shows three, because the heavens declaring the
  * glory of God (Psalm 19:1) should not share the room with fourteen buttons.
  * Drag the sun for minutes; hour, day and phase cover the rest. */
-const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "phase"]);
+const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "month", "phase"]);
 
 function buildSteppers(): void {
   const host = el("steppers");

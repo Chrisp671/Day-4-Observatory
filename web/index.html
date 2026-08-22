@@ -84,6 +84,11 @@
     .r-bl{bottom:clamp(8px,2vh,20px);left:var(--pad)}
     .r-br{bottom:clamp(8px,2vh,20px);right:var(--pad);text-align:right;pointer-events:auto}
 
+    .moon-times{font-family:var(--mono);font-size:12px;color:var(--ink-mid);
+      margin-top:3px;font-variant-numeric:tabular-nums}
+    .moon-times:empty{display:none}
+    .sky-row b.planet{color:var(--gold-soft)}
+
     /* Station entry hides behind the coordinates: the readout is the
        control. Tap the coordinates to open it; it closes on success. */
     .station-toggle{font-family:var(--mono);background:transparent;border:none;
@@ -145,10 +150,11 @@
       break-inside:avoid;padding:2.5px 0;font-size:12.5px}
     .sky-row b{font-family:var(--caps);font-weight:600;font-size:11px;
       letter-spacing:.1em;color:var(--ink-mid);white-space:nowrap;
-      overflow:hidden;text-overflow:ellipsis}
+      flex-shrink:0;max-width:58%;overflow:hidden;text-overflow:ellipsis}
     .sky-row.is-up b{color:var(--scripture)}
     .sky-row span{font-family:var(--mono);font-size:11.5px;color:var(--ink-mid);
-      font-variant-numeric:tabular-nums;white-space:nowrap}
+      font-variant-numeric:tabular-nums;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis}
     .sky-row.is-up span{color:var(--ink-hi)}
     .sky-row .mz{color:var(--gold-soft)}
     .tonight-foot{display:none;text-align:center;margin-top:9px;
@@ -217,7 +223,8 @@
     <canvas id="sky" role="img" aria-describedby="sky-transcript"
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
     <p id="sky-transcript" class="sr-only"></p>
-    <div class="readout r-bl"><div class="k">MOON</div><div class="v" id="moon">—</div></div>
+    <div class="readout r-bl"><div class="k">MOON</div><div class="v" id="moon">—</div>
+      <div class="moon-times" id="moon-times"></div></div>
     <div class="readout r-br">
       <div class="k">STATION</div>
       <button class="v station-toggle" id="station" aria-expanded="false"

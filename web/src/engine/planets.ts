@@ -114,6 +114,35 @@ export function sunDay(
   return bodyDay(Body.Sun, unixMillis, latitudeDeg, longitudeDeg);
 }
 
+export interface PlanetDay extends MoonDay {
+  readonly name: string;
+  /** Transit inside the up-window, for the peak dot; null when not found. */
+  readonly transitUnixMillis: number | null;
+}
+
+/**
+ * Each planet's appearance for the calendar day — rise, following set, and
+ * the peak between them — with the same day-anchored semantics as the moon,
+ * so the arcs on the dial hold steady until the date changes.
+ */
+export function planetDays(
+  unixMillis: number,
+  latitudeDeg: number,
+  longitudeDeg: number,
+): readonly PlanetDay[] {
+  const observer = new Observer(latitudeDeg, longitudeDeg, 0);
+  return PLANETS.map(([name, body]) => {
+    const day = bodyDay(body, unixMillis, latitudeDeg, longitudeDeg);
+    let transit: number | null = null;
+    if (day.riseUnixMillis !== null && day.setUnixMillis !== null) {
+      const t = SearchHourAngle(body, observer, 0, new Date(day.riseUnixMillis), +1);
+      const tu = t === null ? null : t.time.date.getTime();
+      transit = tu !== null && tu <= day.setUnixMillis ? tu : null;
+    }
+    return { name, ...day, transitUnixMillis: transit };
+  });
+}
+
 export function moonDay(
   unixMillis: number,
   latitudeDeg: number,

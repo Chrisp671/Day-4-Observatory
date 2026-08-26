@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moonDay, planetBoard, PLANETS, sunDay } from "./planets";
+import { moonDay, planetBoard, planetDays, PLANETS, sunDay } from "./planets";
 
 const NYC = { lat: 40.0, lon: -74.0 };
 const T = new Date(2026, 7, 21, 21, 0, 0).getTime(); // evening, 21 Aug 2026
@@ -80,5 +80,26 @@ describe("sunDay", () => {
     const dayStart = new Date(2026, 7, 21).getTime();
     expect(d.riseUnixMillis as number).toBeGreaterThan(dayStart);
     expect(d.setUnixMillis as number).toBeLessThan(dayStart + DAY);
+  });
+});
+
+describe("planetDays", () => {
+  const days = planetDays(T, NYC.lat, NYC.lon);
+
+  it("holds steady across the calendar day, like the moon", () => {
+    const other = planetDays(new Date(2026, 7, 21, 7, 0).getTime(), NYC.lat, NYC.lon);
+    expect(days).toEqual(other);
+  });
+
+  it("keeps every found peak inside its up-window", () => {
+    for (const d of days) {
+      if (d.transitUnixMillis === null) continue;
+      expect(d.transitUnixMillis).toBeGreaterThan(d.riseUnixMillis as number);
+      expect(d.transitUnixMillis).toBeLessThan(d.setUnixMillis as number);
+    }
+  });
+
+  it("names all five, in order", () => {
+    expect(days.map((d) => d.name)).toEqual(PLANETS.map(([n]) => n));
   });
 });

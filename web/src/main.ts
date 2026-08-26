@@ -9,11 +9,12 @@ import { formatCountdown, nextSunEvent } from "./app/hero";
 import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
 import { compassAbbrev, transcript } from "./app/transcript";
-import { moonDay, planetBoard, sunDay, type PlanetTimes } from "./engine/planets";
+import { moonDay, planetBoard, planetDays, sunDay, type PlanetDay, type PlanetTimes } from "./engine/planets";
 import { fmt12, fmt12c, fmt12s } from "./app/clock12";
 import { passionHours } from "./app/hours";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
+import { drawPlanetArcs, PLANET_COLORS, type PlanetArc } from "./ui/planetarcs";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
 import { hourToAngle, localHoursOfDay } from "./ui/clockface";
@@ -191,6 +192,27 @@ function drawSunDay(t: number): void {
   setText("set", sd.setUnixMillis === null ? "—" : fmt12(sd.setUnixMillis));
 }
 
+let planetDayKey = "";
+let planetArcs: readonly PlanetArc[] = [];
+
+/** The five up-arcs for the displayed calendar day (cached daily). */
+function planetArcsNow(t: number): readonly PlanetArc[] {
+  const d = new Date(t);
+  const key = `${d.toDateString()}|${station.lat}|${station.lon}`;
+  if (key !== planetDayKey) {
+    planetDayKey = key;
+    planetArcs = planetDays(t, station.lat, station.lon)
+      .filter((p: PlanetDay) => p.riseUnixMillis !== null && p.setUnixMillis !== null)
+      .map((p: PlanetDay) => ({
+        name: p.name,
+        riseHours: localHoursOfDay(p.riseUnixMillis as number),
+        setHours: localHoursOfDay(p.setUnixMillis as number),
+        transitHours: p.transitUnixMillis === null ? null : localHoursOfDay(p.transitUnixMillis),
+      }));
+  }
+  return planetArcs;
+}
+
 let moonDayKey = "";
 let moonToday: { riseUnixMillis: number | null; setUnixMillis: number | null } = { riseUnixMillis: null, setUnixMillis: null };
 
@@ -243,7 +265,8 @@ function drawAllSky(lstHours: number): void {
   const t = displayedNow();
   const planetRows = planetsNow(t)
     .map((p) => `<div class="sky-row${p.upNow ? " is-up" : ""}">` +
-      `<b class="planet">${p.name}</b><span>${planetPhrase(p, t)}</span></div>`)
+      `<b class="planet" style="color:${PLANET_COLORS[p.name] ?? ""}">${p.name}</b>` +
+      `<span>${planetPhrase(p, t)}</span></div>`)
     .join("");
   const rows = planetRows + tonightBoard(lstHours, station.lat)
     .filter((e) => e.status !== "never")
@@ -320,6 +343,7 @@ function draw(): void {
   // once the sky darkens.
   drawAxis(ctx, R, DPR, 0.55 + 0.45 * pal.starAlpha);
   drawEarth(ctx, R, DPR, hourToAngle(tHours));
+  drawPlanetArcs(ctx, R, DPR, planetArcsNow(t));
   drawMoonUpArc(
     ctx, R, DPR,
     moonToday.riseUnixMillis === null ? null : localHoursOfDay(moonToday.riseUnixMillis),

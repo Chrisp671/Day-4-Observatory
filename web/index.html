@@ -173,6 +173,11 @@
     .sky-item.is-up .sky-name{color:var(--scripture)}
     .sky-item.is-up .sky-when{color:var(--ink-hi)}
 
+    /* Mid widths (iPad portrait): the centred logo and the corner clock
+       share a row — the date yields, the time stays. */
+    @media (max-width:1020px){
+      .clockline .date{display:none}
+    }
     @media (max-width:720px){
       /* Portrait is a STACK: logo, hero, dial with air, data grid, controls.
          Nothing is absolutely positioned; nothing can overlap. */

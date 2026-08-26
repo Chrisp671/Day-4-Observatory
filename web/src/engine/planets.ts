@@ -84,7 +84,8 @@ export interface MoonDay {
  * following set often lands on the next date — which is why the caller shows
  * day-of-week labels rather than pretending otherwise.
  */
-export function moonDay(
+function bodyDay(
+  body: Body,
   unixMillis: number,
   latitudeDeg: number,
   longitudeDeg: number,
@@ -93,12 +94,30 @@ export function moonDay(
   const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
   const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
   const observer = new Observer(latitudeDeg, longitudeDeg, 0);
-
-  const rise = toUnixOrNull(SearchRiseSet(Body.Moon, observer, +1, midnight, 2));
+  const rise = toUnixOrNull(SearchRiseSet(body, observer, +1, midnight, 2));
   if (rise === null || rise >= nextMidnight.getTime()) {
-    // No moonrise this calendar day.
     return { riseUnixMillis: null, setUnixMillis: null };
   }
-  const set = toUnixOrNull(SearchRiseSet(Body.Moon, observer, -1, new Date(rise), 2));
+  const set = toUnixOrNull(SearchRiseSet(body, observer, -1, new Date(rise), 2));
   return { riseUnixMillis: rise, setUnixMillis: set };
+}
+
+/**
+ * The sun's rise and set anchored to the calendar day — Parker asked for
+ * BOTH bodies' timestamps held steady until the date changes.
+ */
+export function sunDay(
+  unixMillis: number,
+  latitudeDeg: number,
+  longitudeDeg: number,
+): MoonDay {
+  return bodyDay(Body.Sun, unixMillis, latitudeDeg, longitudeDeg);
+}
+
+export function moonDay(
+  unixMillis: number,
+  latitudeDeg: number,
+  longitudeDeg: number,
+): MoonDay {
+  return bodyDay(Body.Moon, unixMillis, latitudeDeg, longitudeDeg);
 }

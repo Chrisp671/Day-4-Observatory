@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moonDay, planetBoard, PLANETS } from "./planets";
+import { moonDay, planetBoard, PLANETS, sunDay } from "./planets";
 
 const NYC = { lat: 40.0, lon: -74.0 };
 const T = new Date(2026, 7, 21, 21, 0, 0).getTime(); // evening, 21 Aug 2026
@@ -64,5 +64,21 @@ describe("moonDay", () => {
     }
     expect(missing).toBeGreaterThanOrEqual(1);
     expect(missing).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("sunDay", () => {
+  it("holds steady across one calendar day, rise before set", () => {
+    const morning = sunDay(new Date(2026, 7, 22, 6, 0).getTime(), NYC.lat, NYC.lon);
+    const night = sunDay(new Date(2026, 7, 22, 23, 0).getTime(), NYC.lat, NYC.lon);
+    expect(morning).toEqual(night);
+    expect(morning.riseUnixMillis as number).toBeLessThan(morning.setUnixMillis as number);
+  });
+
+  it("keeps both times inside the same summer day at 40°N", () => {
+    const d = sunDay(T, NYC.lat, NYC.lon);
+    const dayStart = new Date(2026, 7, 21).getTime();
+    expect(d.riseUnixMillis as number).toBeGreaterThan(dayStart);
+    expect(d.setUnixMillis as number).toBeLessThan(dayStart + DAY);
   });
 });

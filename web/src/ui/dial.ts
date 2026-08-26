@@ -115,7 +115,10 @@ export function drawDial(
       ctx.globalAlpha = 1;
       const p = pointOnCircle(a, rIn - R * 0.062);
       ctx.fillStyle = goldLeaf(ctx, p.y - R * 0.04, p.y + R * 0.04);
-      ctx.fillText(String(h).padStart(2, "0"), p.x, p.y);
+      // A human clock, not a military one (REQ-012): noon and midnight are
+      // both twelve; the sixes carry their half of the day.
+      const label = h === 0 ? "12" : h === 12 ? "12" : h === 6 ? "6 AM" : "6 PM";
+      ctx.fillText(label, p.x, p.y);
     }
   }
   ctx.globalAlpha = 1;

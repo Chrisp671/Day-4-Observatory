@@ -91,6 +91,22 @@ export function drawPassionHours(
     ctx.restore();
   }
 
+  // Solar noon (REQ-010): a small gold sun-diamond on the rim at the sixth
+  // hour — which IS solar midday; the solar-telescope users plan around it.
+  const noon = pointOnCircle(hourToAngle(fromHours), rOut + R * 0.028);
+  ctx.save();
+  ctx.translate(noon.x, noon.y);
+  ctx.rotate(hourToAngle(fromHours) + Math.PI / 2);
+  ctx.fillStyle = goldLeaf(ctx, -R * 0.018, R * 0.018);
+  ctx.beginPath();
+  ctx.moveTo(0, -R * 0.018);
+  ctx.lineTo(R * 0.012, 0);
+  ctx.lineTo(0, R * 0.018);
+  ctx.lineTo(-R * 0.012, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
   // The cross, standing over the hours it remembers.
   const arm = R * 0.052;
   const centre = pointOnCircle(hourToAngle(midHours(fromHours, toHours)), rOut + arm * 1.45);

@@ -8,8 +8,9 @@ import { VERSE_VERSION, verseOfDay } from "./app/verse";
 import { formatCountdown, nextSunEvent } from "./app/hero";
 import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./app/constellations";
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
-import { transcript } from "./app/transcript";
-import { moonDay, planetBoard, type PlanetTimes } from "./engine/planets";
+import { compassAbbrev, transcript } from "./app/transcript";
+import { moonDay, planetBoard, sunDay, type PlanetTimes } from "./engine/planets";
+import { fmt12, fmt12c, fmt12s } from "./app/clock12";
 import { passionHours } from "./app/hours";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
@@ -19,7 +20,7 @@ import { hourToAngle, localHoursOfDay } from "./ui/clockface";
 import { drawDial } from "./ui/dial";
 import { drawEarth } from "./ui/earth";
 import { buildGrain, drawGrain } from "./ui/grain";
-import { drawMoon, moonDialHours } from "./ui/moon";
+import { drawMoon, drawMoonUpArc, moonDialHours } from "./ui/moon";
 import { drawFirmament } from "./ui/firmament";
 import { drawSidereal } from "./ui/sidereal";
 import { skyPalette } from "./ui/sky";
@@ -88,8 +89,7 @@ const PHASE_NAMES = [
   "full moon", "waning gibbous", "last quarter", "waning crescent",
 ] as const;
 
-const hhmm = (unixMillis: number): string =>
-  new Date(unixMillis).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const hhmm = fmt12;
 
 /* ————— tonight: the evening's program (bottom band) ————— */
 /** How many of the board's entries the strip shows; the rest stay off-screen. */
@@ -178,7 +178,21 @@ function planetsNow(t: number): readonly PlanetTimes[] {
 
 const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
+let sunDayKey = "";
+
+/** Today's sunrise/sunset, steady until the date changes (DEC-031, turn 98). */
+function drawSunDay(t: number): void {
+  const d = new Date(t);
+  const key = `${d.toDateString()}|${station.lat}|${station.lon}`;
+  if (key === sunDayKey) return;
+  sunDayKey = key;
+  const sd = sunDay(t, station.lat, station.lon);
+  setText("rise", sd.riseUnixMillis === null ? "—" : fmt12(sd.riseUnixMillis));
+  setText("set", sd.setUnixMillis === null ? "—" : fmt12(sd.setUnixMillis));
+}
+
 let moonDayKey = "";
+let moonToday: { riseUnixMillis: number | null; setUnixMillis: number | null } = { riseUnixMillis: null, setUnixMillis: null };
 
 /** Moon rise/set held steady for the displayed calendar day (REQ-008). */
 function drawMoonDay(t: number): void {
@@ -187,16 +201,17 @@ function drawMoonDay(t: number): void {
   if (key === moonDayKey) return;
   moonDayKey = key;
   const md = moonDay(t, station.lat, station.lon);
+  moonToday = md;
   if (md.riseUnixMillis === null) {
     setText("moon-times", "no moonrise today");
     return;
   }
-  let out = `↑${hhmm(md.riseUnixMillis)}`;
+  let out = `↑${fmt12c(md.riseUnixMillis)}`;
   if (md.setUnixMillis !== null) {
     const setD = new Date(md.setUnixMillis);
     // The moon often sets on the next date; say so instead of confusing.
     const dayTag = setD.getDate() === d.getDate() ? "" : ` ${WEEKDAY[setD.getDay()] ?? ""}`;
-    out += ` · ↓${hhmm(md.setUnixMillis)}${dayTag}`;
+    out += ` · ↓${fmt12c(md.setUnixMillis)}${dayTag}`;
   }
   setText("moon-times", out);
 }
@@ -206,10 +221,11 @@ function planetPhrase(p: PlanetTimes, t: number): string {
   const next = p.upNow ? p.setUnixMillis : p.riseUnixMillis;
   const verb = p.upNow ? "sets in" : "rises in";
   let out = next === null ? "" : `${verb} ${formatCountdown(next - t)}`;
+  if (p.upNow) out += ` · ${Math.round(p.altitudeDeg)}° ${compassAbbrev(p.azimuthDeg)}`;
   if (p.upNow && p.transitUnixMillis !== null && p.setUnixMillis !== null &&
       p.transitUnixMillis < p.setUnixMillis) {
     // ⋆ marks the peak — the culmination Parker plans viewing around.
-    out += ` ⋆${hhmm(p.transitUnixMillis)}`;
+    out += ` ⋆${fmt12c(p.transitUnixMillis)}`;
   }
   return out;
 }
@@ -304,14 +320,18 @@ function draw(): void {
   // once the sky darkens.
   drawAxis(ctx, R, DPR, 0.55 + 0.45 * pal.starAlpha);
   drawEarth(ctx, R, DPR, hourToAngle(tHours));
+  drawMoonUpArc(
+    ctx, R, DPR,
+    moonToday.riseUnixMillis === null ? null : localHoursOfDay(moonToday.riseUnixMillis),
+    moonToday.setUnixMillis === null ? null : localHoursOfDay(moonToday.setUnixMillis),
+  );
   drawMoon(ctx, R, DPR, moonDialHours(tHours, s.sun.hourAngleHours, s.moon.hourAngleHours), s.moon.phaseAngleDeg);
   drawSun(ctx, R, DPR, tHours, pal.sunCore);
   // The fiducial marks the hour the observer is actually living in; when
   // time has been scrubbed, the gap to the sun is the distance travelled.
   drawFiducial(ctx, R, DPR, localHoursOfDay(Date.now()), tHours);
 
-  setText("rise", s.sun.nextRiseUnixMillis === null ? "—" : hhmm(s.sun.nextRiseUnixMillis));
-  setText("set", s.sun.nextSetUnixMillis === null ? "—" : hhmm(s.sun.nextSetUnixMillis));
+  drawSunDay(t);
   const phaseIdx = Math.floor((s.moon.phaseAngleDeg / 360) * 8 + 0.5) % 8;
   setText("moon", `${s.moon.ageDays.toFixed(1)}d ${PHASE_NAMES[phaseIdx] ?? ""}`);
   setText(
@@ -321,7 +341,7 @@ function draw(): void {
   setText("dateline", new Date(t)
     .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })
     .toUpperCase());
-  setText("timeline", new Date(t).toLocaleTimeString("en-GB", { hour12: false }));
+  setText("timeline", fmt12s(t));
 
   // Times are rendered in the device's zone; say so, and say when that is not
   // the clock the station keeps (a New York sunrise on a Chicago clock).

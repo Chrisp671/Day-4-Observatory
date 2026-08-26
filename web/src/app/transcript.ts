@@ -18,6 +18,13 @@ export function compassPoint(azimuthDeg: number): string {
   return POINTS[idx] as string;
 }
 
+/** "E", "SW" — the eight winds, short, for tight rows. */
+export function compassAbbrev(azimuthDeg: number): string {
+  const POINTS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"] as const;
+  const idx = Math.round((((azimuthDeg % 360) + 360) % 360) / 45) % 8;
+  return POINTS[idx] as string;
+}
+
 export interface TranscriptState {
   readonly sunAltitudeDeg: number;
   readonly sunAzimuthDeg: number;

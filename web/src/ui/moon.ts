@@ -93,3 +93,28 @@ export function drawMoon(
   const pos = pointOnCircle(a, orbitR);
   drawMoonDisc(ctx, pos.x, pos.y, discR, phaseAngleDeg, dpr);
 }
+
+/**
+ * The moon's up-arc: an ivory band along the moon orbit from moonrise to
+ * moonset — "the rings are a nice visual cue to show me how long something
+ * is gonna be up" (DEC-031). Skipped on the monthly day with no moonrise.
+ */
+export function drawMoonUpArc(
+  ctx: CanvasRenderingContext2D,
+  R: number,
+  dpr: number,
+  riseHours: number | null,
+  setHours: number | null,
+): void {
+  if (riseHours === null || setHours === null) return;
+  ctx.save();
+  ctx.strokeStyle = THEME.moonlight;
+  ctx.globalAlpha = 0.4;
+  ctx.lineWidth = 2.4 * dpr;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(0, 0, R * FACE.moonOrbit, hourToAngle(riseHours), hourToAngle(setHours));
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}

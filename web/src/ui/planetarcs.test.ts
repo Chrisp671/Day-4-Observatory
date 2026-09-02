@@ -3,7 +3,7 @@
  * rise-end label lands. Canvas drawing is left to the eye.
  */
 import { describe, expect, it } from "vitest";
-import { ARC_OUTER, ARC_STEP, arcRadius, labelHours, labelPlan } from "./planetarcs";
+import { ARC_OUTER, ARC_STEP, arcRadius, labelHours, labelPlan, ringRadius } from "./planetarcs";
 
 describe("arcRadius", () => {
   it("stacks five arcs strictly inward, all between 0.66R and 0.76R", () => {
@@ -70,5 +70,18 @@ describe("labelPlan", () => {
     ]);
     expect(plan[0]).toBe(labelHours(2, 14));
     expect(plan[1]).toBe(labelHours(20, 6));
+  });
+});
+
+describe("ringRadius", () => {
+  it("stacks the spheres outward from the Earth: Mercury in, Saturn out", () => {
+    const R = 500;
+    const order = ["Mercury", "Venus", "Mars", "Jupiter", "Saturn"].map((n) => ringRadius(n, R));
+    for (let i = 1; i < order.length; i++) expect(order[i]).toBeGreaterThan(order[i - 1] as number);
+    expect(ringRadius("Saturn", R)).toBeCloseTo(ARC_OUTER * R, 9);
+    expect(ringRadius("Mercury", R)).toBeCloseTo((ARC_OUTER - 4 * ARC_STEP) * R, 9);
+  });
+  it("keeps a planet's ring when its neighbours are absent", () => {
+    expect(ringRadius("Jupiter", 500)).toBe(arcRadius(1, 500));
   });
 });

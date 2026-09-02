@@ -51,6 +51,21 @@ export function arcRadius(i: number, R: number): number {
   return R * (ARC_OUTER - i * ARC_STEP);
 }
 
+/**
+ * The order of the spheres, outward from the Earth at the centre: Moon
+ * (innermost, on its own orbit), then Mercury, Venus, Mars, Jupiter, Saturn,
+ * with the Sun on the band outside them all — the classical sequence an
+ * astrolabe carries, and the order Parker recited on the call. Each planet
+ * keeps its own ring whether or not its neighbours rise that day.
+ */
+export const RING_ORDER: readonly string[] = ["Mercury", "Venus", "Mars", "Jupiter", "Saturn"];
+
+/** Radius of a planet's ring by name: Saturn outermost, Mercury innermost. */
+export function ringRadius(name: string, R: number): number {
+  const k = RING_ORDER.indexOf(name);
+  return arcRadius(k < 0 ? RING_ORDER.length - 1 : RING_ORDER.length - 1 - k, R);
+}
+
 /** Hours the planet is up, allowing for a set that falls after midnight. */
 function spanHours(rise: number, set: number): number {
   return (((set - rise) % 24) + 24) % 24;
@@ -164,7 +179,7 @@ export function drawPlanetArcs(
 
   const labels = labelPlan(arcs);
   arcs.forEach((arc, i) => {
-    const r = arcRadius(i, R);
+    const r = ringRadius(arc.name, R);
     const color = PLANET_COLORS[arc.name] ?? FALLBACK_COLOR;
     const a0 = hourToAngle(arc.riseHours);
     const a1 = hourToAngle(arc.setHours);

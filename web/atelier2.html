@@ -192,6 +192,9 @@
       .map((a) => ({ ...a, night: nightHours(a.riseHours, a.setHours) }));
     const nightArcs = allArcs.filter((a) => a.night >= 1);
     const CHOSEN = q.get("pick") ?? "Saturn";
+    const ORDER = q.get("order") ?? "spheres";   // spheres (Mercury in) | helio (Mercury by the Sun's band)
+    const LIT = q.get("lit");                     // rete: one ring lit, the rest dimmed
+    const idx = (name) => ORDER === "helio" ? 4 - RING_ORDER.indexOf(name) : RING_ORDER.indexOf(name);
 
     function diamond(angle, r, hl, hw) {
       const p = pointOnCircle(angle, r);
@@ -232,12 +235,14 @@
       const mSet = md.setUnixMillis === null ? null : localHoursOfDay(md.setUnixMillis);
       const moonR = D === "rete" ? R * 0.68 : R * 0.565;
 
-      if (D === "tonight") {
+      if (D === "all") {
+        allArcs.forEach((a) => arc(a, R * (0.64 + idx(a.name) * 0.03), 2.6, 0.92));
+      } else if (D === "tonight") {
         // Only the planets that matter after dark, stacked from 0.76 inward.
-        nightArcs.forEach((a) => arc(a, R * (0.64 + RING_ORDER.indexOf(a.name) * 0.03), 2.6, 0.92));
+        nightArcs.forEach((a) => arc(a, R * (0.64 + idx(a.name) * 0.03), 2.6, 0.92));
       } else if (D === "rete") {
         // All five outside the band, thin, like the original's rings.
-        allArcs.forEach((a) => arc(a, R * (1.06 + RING_ORDER.indexOf(a.name) * 0.038), 2.2, a.night >= 1 ? 0.92 : 0.35));
+        allArcs.forEach((a) => arc(a, R * (1.06 + idx(a.name) * 0.038), LIT === a.name ? 3.2 : 2.2, LIT ? (LIT === a.name ? 1 : 0.28) : (a.night >= 1 ? 0.92 : 0.35)));
       } else {
         // One chosen object, full weight, alone.
         const a = allArcs.find((x) => x.name === CHOSEN);
@@ -300,6 +305,8 @@
       };
       // The ledger is the legend: whichever planets have arcs on the dial lead.
       const shown = D === "tonight" ? nightArcs.map((a) => a.name)
+        : D === "all" ? ["Saturn", "Jupiter", "Mars"]
+        : LIT ? [LIT, ...["Saturn", "Jupiter"].filter((n) => n !== LIT)]
         : D === "one" ? [CHOSEN, ...["Saturn", "Jupiter"].filter((n) => n !== CHOSEN)]
         : ["Saturn", "Jupiter"];
       for (const name of shown.slice(0, 3)) {

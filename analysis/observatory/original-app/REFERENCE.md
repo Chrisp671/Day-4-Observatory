@@ -48,3 +48,10 @@ day-anchored sun/moon times, 12-hour speech, solar-noon mark, moon up-arc,
 where-to-look alt/az. Confirmed deferred (DEC-033): per-planet arcs on the
 dial band, tap-to-switch alt/az instrument, the finer twilight ladder
 (6 grades vs our amber band), noon/midnight-top flip, eclipse indication.
+
+## Transcript
+
+- `parker-walkthrough-2026-08-21.vtt` — the full Zoom transcript (1,126
+  timed turns; speakers "Parker Eng" and "Your MSG" = Chris).
+- `parker-walkthrough-digest.txt` — the same call collapsed to 162 turns,
+  one per speaker change; the source DEC-031/033 were digested from.

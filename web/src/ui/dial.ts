@@ -92,7 +92,9 @@ export function drawDial(
 
   // Three-level cadence (DESIGN-CONSOLIDATED #4): 6h major / hour / 30-min
   // minor at ≥2:1 length steps — rank by length and weight before opacity.
-  ctx.font = `600 ${Math.round(R * 0.058)}px ${THEME.fontCaps}`;
+  // The band yields the rim to the rete, so its numerals keep their size by
+  // taking a larger share of the (smaller) face radius.
+  ctx.font = `600 ${Math.round(R * 0.072)}px ${THEME.fontCaps}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   const bandW = rOut - rIn;

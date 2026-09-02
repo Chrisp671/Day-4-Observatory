@@ -33,6 +33,7 @@
       color:var(--ink-hi); font-family:var(--mono);
       display:flex; flex-direction:column; height:100dvh; overflow:hidden;
     }
+    html{overflow-x:hidden}
 
     /* ————— frontispiece: seal, the Word, the light — on one rhythm —————
        Warm light for scripture, cool light for the instrument (DEC-014).
@@ -84,7 +85,12 @@
        One gilded rule, three bays, one rail, one ledger. Nothing here may
        talk over the heavens (DEC-026/027); it is the stone the dial stands on. */
     .plinth{flex:none;width:100%;max-width:820px;margin:0 auto;
-      padding:0 var(--pad) clamp(8px,1.2vh,14px)}
+      padding:0 var(--pad) clamp(8px,1.2vh,14px);position:relative}
+    /* The plinth stands on clean ground: the firmament fades out beneath
+       it so type never competes with stars. */
+    .plinth::before{content:"";position:absolute;left:50%;width:100vw;transform:translateX(-50%);top:-36px;bottom:0;
+      z-index:-1;pointer-events:none;
+      background:linear-gradient(180deg,rgba(8,22,39,0) 0%,rgba(8,22,39,.82) 36px,rgba(8,22,39,.9) 100%)}
     .plinth-in{border-top:1px solid;border-image:var(--gild) 1}
     .passion{font-family:var(--serif);font-style:italic;font-weight:600;font-size:13px;
       color:var(--gold-soft);text-align:center;padding-top:7px}
@@ -157,6 +163,9 @@
       font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;
       text-overflow:ellipsis}
     .lrow.is-up .n{color:var(--scripture)}
+    .lrow[data-planet]:not([data-planet=""]){cursor:pointer}
+    .lrow.chosen .n{color:var(--sunlight)!important}
+    .lrow.chosen .d{color:var(--scripture)}
     .lrow .sw{display:inline-block;width:14px;height:2px;vertical-align:middle;
       margin-right:7px;border-radius:1px}
     .lrow .season{color:var(--gold-soft)}

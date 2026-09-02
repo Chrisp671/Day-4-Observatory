@@ -34,10 +34,11 @@ export function drawGround(
   R: number,
   dpr: number,
   strength: number,
+  outerFrac: number = FACE.dialOuter + 0.012,
 ): void {
   if (strength < 0.01) return;
 
-  const r = R * (FACE.dialOuter + 0.012);
+  const r = R * outerFrac;
 
   ctx.save();
 

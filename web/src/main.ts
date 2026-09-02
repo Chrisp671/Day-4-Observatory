@@ -15,7 +15,7 @@ import { planetSeason } from "./engine/season";
 import { passionHours } from "./app/hours";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
-import { drawPlanetArcs, PLANET_COLORS, type PlanetArc } from "./ui/planetarcs";
+import { drawPlanetArcs, nightOverlapHours, PLANET_COLORS, RETE_OUTER, RING_ORDER, type PlanetArc } from "./ui/planetarcs";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./app/scrub";
 import { STEP_UNITS, stepTime, type StepUnit } from "./app/timecontrol";
 import { hourToAngle, localHoursOfDay } from "./ui/clockface";
@@ -25,7 +25,6 @@ import { buildGrain, drawGrain } from "./ui/grain";
 import { drawMoon, drawMoonUpArc, moonDialHours } from "./ui/moon";
 import { drawFirmament } from "./ui/firmament";
 import { drawGround, groundStrength } from "./ui/ground";
-import { drawSidereal } from "./ui/sidereal";
 import { skyPalette } from "./ui/sky";
 import { drawSun } from "./ui/sun";
 
@@ -76,7 +75,8 @@ function fit(): void {
   canvas.style.width = `${size}px`;
   canvas.style.height = `${size}px`;
   W = size * DPR;
-  R = W * 0.5 * 0.92;
+  // The rete rides outside the band, so the band yields the rim to it.
+  R = (W * 0.5 * 0.985) / RETE_OUTER;
   if (ctx !== null) buildGrain(ctx);
 }
 
@@ -123,6 +123,12 @@ function buildTonight(): void {
     const when = document.createElement("span");
     when.className = "d";
     root.append(name, when);
+    // A planet row is the control for its ring: tap to light it, tap to release.
+    root.addEventListener("click", () => {
+      const planet = root.dataset["planet"];
+      if (planet === undefined || planet === "") return;
+      setLit(lit === planet ? null : planet);
+    });
     host.appendChild(root);
     skySlots.push({ root, swatch, name: label, when });
   }
@@ -146,7 +152,11 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
   // Saturn and Jupiter first — "when will I be able to see Saturn?" is the
   // question this board exists to answer (DEC-031).
   const t = displayedNow();
-  const favourites = planetsNow(t).filter((p) => p.name === "Saturn" || p.name === "Jupiter");
+  // The lit planet leads; then the club's favourites; all in ring order.
+  const wanted = new Set([lit ?? "", "Saturn", "Jupiter"]);
+  const favourites = planetsNow(t)
+    .filter((p) => wanted.has(p.name))
+    .sort((a, b) => (a.name === lit ? -1 : b.name === lit ? 1 : RING_ORDER.indexOf(a.name) - RING_ORDER.indexOf(b.name)));
   const rows: { name: string; phrase: string; up: boolean; color: string | null }[] = [
     ...favourites.map((p) => ({
       name: p.name, phrase: planetPhrase(p, t), up: p.upNow, color: PLANET_COLORS[p.name] ?? null,
@@ -164,6 +174,10 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
     }
     slot.root.style.display = "";
     slot.root.classList.toggle("is-up", row.up);
+    slot.root.classList.toggle("chosen", row.color !== null && row.name === lit);
+    slot.root.dataset["planet"] = row.color === null ? "" : row.name;
+    if (row.color === null) slot.root.removeAttribute("role");
+    else slot.root.setAttribute("role", "button");
     slot.name.textContent = row.name;
     slot.when.textContent = row.phrase;
     // The swatch is the legend for the arcs on the dial (DEC-034).
@@ -175,6 +189,29 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
   // Up is not the same as visible: only promise stars once the sky is dark.
   setText("tonight-note", isDarkEnough(sunAltitudeDeg) ? "" : "visible after dark");
   drawAllSky(lst);
+}
+
+/* ————— the lit ring: tap a name, that ring leads ————— */
+const LIT_KEY = "day4.lit";
+/** The one ring lit on the rete, remembered across visits; Saturn to begin. */
+let lit: string | null = (() => {
+  try {
+    const v = localStorage.getItem(LIT_KEY);
+    if (v === null) return "Saturn";
+    return v === "" ? null : v;
+  } catch {
+    return "Saturn";
+  }
+})();
+
+function setLit(name: string | null): void {
+  lit = name;
+  try {
+    localStorage.setItem(LIT_KEY, name ?? "");
+  } catch {
+    /* private mode: the choice simply does not persist */
+  }
+  draw();
 }
 
 /* ————— the wandering stars (REQ-007/008, from the Parker walkthrough) ————— */
@@ -215,14 +252,22 @@ function planetArcsNow(t: number): readonly PlanetArc[] {
   const key = `${d.toDateString()}|${station.lat}|${station.lon}`;
   if (key !== planetDayKey) {
     planetDayKey = key;
+    const sd = sunDay(t, station.lat, station.lon);
+    const dayRise = sd.riseUnixMillis === null ? null : localHoursOfDay(sd.riseUnixMillis);
+    const daySet = sd.setUnixMillis === null ? null : localHoursOfDay(sd.setUnixMillis);
     planetArcs = planetDays(t, station.lat, station.lon)
       .filter((p: PlanetDay) => p.riseUnixMillis !== null && p.setUnixMillis !== null)
-      .map((p: PlanetDay) => ({
-        name: p.name,
-        riseHours: localHoursOfDay(p.riseUnixMillis as number),
-        setHours: localHoursOfDay(p.setUnixMillis as number),
-        transitHours: p.transitUnixMillis === null ? null : localHoursOfDay(p.transitUnixMillis),
-      }));
+      .map((p: PlanetDay) => {
+        const riseHours = localHoursOfDay(p.riseUnixMillis as number);
+        const setHours = localHoursOfDay(p.setUnixMillis as number);
+        return {
+          name: p.name,
+          riseHours,
+          setHours,
+          transitHours: p.transitUnixMillis === null ? null : localHoursOfDay(p.transitUnixMillis),
+          nightHours: nightOverlapHours(riseHours, setHours, dayRise, daySet),
+        };
+      });
   }
   return planetArcs;
 }
@@ -373,8 +418,7 @@ function draw(): void {
 
   // The lapis ground: invisible at night, a dark medallion by day, so the
   // gold keeps its drama at noon. No switch — it follows the sun (DEC-010).
-  drawGround(ctx, R, DPR, groundStrength(s.sun.altitudeDeg));
-  drawSidereal(ctx, R, DPR, s.siderealHours);
+  drawGround(ctx, R, DPR, groundStrength(s.sun.altitudeDeg), RETE_OUTER + 0.02);
   drawDial(ctx, R, DPR, {
     riseHours: s.sun.nextRiseUnixMillis === null ? null : localHoursOfDay(s.sun.nextRiseUnixMillis),
     setHours: s.sun.nextSetUnixMillis === null ? null : localHoursOfDay(s.sun.nextSetUnixMillis),
@@ -397,7 +441,7 @@ function draw(): void {
   // once the sky darkens.
   drawAxis(ctx, R, DPR, 0.55 + 0.45 * pal.starAlpha);
   drawEarth(ctx, R, DPR, hourToAngle(tHours));
-  drawPlanetArcs(ctx, R, DPR, planetArcsNow(t));
+  drawPlanetArcs(ctx, R, DPR, planetArcsNow(t), { lit });
   drawMoonUpArc(
     ctx, R, DPR,
     moonToday.riseUnixMillis === null ? null : localHoursOfDay(moonToday.riseUnixMillis),

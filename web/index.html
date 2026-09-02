@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500;1,600&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Cormorant:ital,wght@0,500;0,600;1,500;1,600;1,700&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
   <style>
     :root{
       --print-0:#081627; --print-1:#0E2440;
@@ -21,6 +21,8 @@
       --caps:'Cinzel', 'Times New Roman', serif;
       --mono:'IBM Plex Mono', ui-monospace, monospace;
       --pad: clamp(16px, 3vw, 40px);
+      --hair:rgba(155,185,214,.28); --hair-soft:rgba(155,185,214,.16);
+      --gild:linear-gradient(90deg,transparent,#D9A62B 22%,#F7DE93 50%,#D9A62B 78%,transparent);
     }
     *{box-sizing:border-box;margin:0;padding:0}
     #firmament{position:fixed;inset:0;width:100vw;height:100dvh;z-index:-1;
@@ -32,175 +34,179 @@
       display:flex; flex-direction:column; height:100dvh; overflow:hidden;
     }
 
-    /* ————— header: logo, then the Word, then the light (one column) —————
-       Warm light for scripture, cool light for the instrument: the ivory
-       and gold masthead reads first against the cool field. */
+    /* ————— frontispiece: seal, the Word, the light — on one rhythm —————
+       Warm light for scripture, cool light for the instrument (DEC-014).
+       The brand mark is framed as a maker's seal between gilded hairlines
+       so the raster sits inside the engraving instead of on top of it. */
     header{display:flex;flex-direction:column;align-items:center;
-      gap:clamp(5px,1vh,11px);padding:clamp(12px,2vh,24px) var(--pad) 0;
-      flex:none;position:relative}
-    .brand img{height:clamp(30px,4.6vh,46px);display:block;
+      padding:clamp(12px,1.8vh,22px) var(--pad) 0;flex:none;position:relative}
+    .brand{display:flex;align-items:center;justify-content:center;gap:14px;
+      width:100%;max-width:520px;height:clamp(34px,5vh,46px)}
+    .brand::before,.brand::after{content:"";height:1px;flex:1 1 0}
+    .brand::before{background:linear-gradient(90deg,transparent,#D9A62B 60%,#F7DE93)}
+    .brand::after{background:linear-gradient(90deg,#F7DE93,#D9A62B 40%,transparent)}
+    .brand img{height:clamp(26px,3.8vh,38px);display:block;
       filter:drop-shadow(0 2px 10px rgba(4,10,22,.6))}
-    .masthead{text-align:center}
+    .masthead{text-align:center;margin-top:clamp(8px,1.4vh,14px)}
     .verse{font-family:var(--serif);font-style:italic;font-weight:700;
-      font-size:clamp(17px,2.7vh,25px);line-height:1.35;color:var(--scripture);
-      max-width:58ch;margin:0 auto;text-wrap:balance;
+      font-size:clamp(18px,2.7vh,25px);line-height:1.3;color:var(--scripture);
+      max-width:52ch;margin:0 auto;text-wrap:balance;padding:0 6px;
       text-shadow:0 1px 14px rgba(4,10,22,.85)}
-    .verse-ref{font-family:var(--caps);font-weight:700;font-size:10.5px;
+    .verse-ref{font-family:var(--caps);font-weight:700;font-size:10px;
       letter-spacing:.34em;text-transform:uppercase;color:var(--gold-soft);
-      margin-top:clamp(4px,0.9vh,9px);text-shadow:0 1px 10px rgba(4,10,22,.8)}
+      margin-top:clamp(6px,1vh,10px);text-shadow:0 1px 10px rgba(4,10,22,.8);
+      display:flex;align-items:center;justify-content:center;gap:10px}
+    .verse-ref::before,.verse-ref::after{content:"";width:18px;height:1px;
+      background:var(--gold-soft);opacity:.55}
     .hero{display:flex;align-items:baseline;gap:.45em;justify-content:center;
-      pointer-events:none;white-space:nowrap;
+      pointer-events:none;white-space:nowrap;margin-top:clamp(8px,1.6vh,16px);
       text-shadow:0 1px 12px rgba(4,10,22,.75)}
     .hero span{font-family:var(--serif);font-style:italic;font-weight:700;
-      font-size:clamp(22px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
+      font-size:clamp(23px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
     .hero b{font-family:var(--mono);font-weight:500;font-style:normal;
-      font-size:clamp(20px,3.1vh,29px);color:var(--sunlight);
+      font-size:clamp(21px,3.1vh,29px);color:var(--sunlight);
       letter-spacing:.01em;line-height:1.05;font-variant-numeric:tabular-nums}
-    .clockline{position:absolute;top:clamp(12px,2vh,24px);right:var(--pad);
-      font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;
-      color:var(--ink-mid);font-weight:300;white-space:nowrap}
-    .clockline .date{font-family:var(--caps);font-weight:600;font-size:.9em;
-      letter-spacing:.2em}
-    .clockline b{color:var(--ink-hi);font-weight:500;font-size:1.15em}
-    .clockline b.shifted{color:var(--sunlight)}
-    .clockline .zone{font-family:var(--caps);font-weight:600;font-size:.82em;
-      letter-spacing:.16em;color:var(--ink-mid)}
-    .zone-note{position:absolute;top:calc(clamp(12px,2vh,24px) + 1.5em);right:var(--pad);
-      font-family:var(--serif);font-style:italic;font-size:12.5px;color:var(--gold-soft);
-      white-space:nowrap}
+    /* When time has been travelled, the header says where you have landed. */
+    .travelled{font-family:var(--serif);font-style:italic;font-weight:600;font-size:14px;
+      color:var(--sunlight);margin-top:5px;
+      text-shadow:0 1px 8px rgba(4,10,22,.8)}
+    .travelled:empty{display:none}
+    .zone-note{font-family:var(--serif);font-style:italic;font-size:12.5px;
+      color:var(--gold-soft);margin-top:4px;text-align:center}
     .zone-note:empty{display:none}
 
-    /* ————— stage: dial centred, readouts in the corners ————— */
+    /* ————— stage: the dial, alone ————— */
     .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;
-      padding:clamp(8px,1.6vh,18px) var(--pad)}
+      padding:clamp(8px,1.4vh,16px) var(--pad) clamp(4px,0.8vh,8px)}
     canvas{display:block;touch-action:none}
-    .readout{position:absolute;pointer-events:none;max-width:38%}
-    .readout .k{font-family:var(--caps);font-weight:700;font-size:10px;
-      letter-spacing:.26em;color:var(--ink-mid)}
-    .readout .v{font-size:clamp(15px,2.4vh,22px);letter-spacing:.02em;
-      margin-top:3px;color:var(--ink-hi);line-height:1.15}
-    .r-tl{top:clamp(8px,3vh,30px);left:var(--pad)}
-    .r-tr{top:clamp(8px,3vh,30px);right:var(--pad);text-align:right}
-    .r-bl{bottom:clamp(8px,2vh,20px);left:var(--pad)}
-    .r-br{bottom:clamp(8px,2vh,20px);right:var(--pad);text-align:right;pointer-events:auto}
 
-    .moon-times{font-family:var(--mono);font-size:12px;color:var(--ink-mid);
-      margin-top:3px;font-variant-numeric:tabular-nums}
-    .moon-times:empty{display:none}
-    .sky-row b.planet{color:var(--gold-soft)}
+    /* ————— the plinth: everything below the dial is one carved base —————
+       One gilded rule, three bays, one rail, one ledger. Nothing here may
+       talk over the heavens (DEC-026/027); it is the stone the dial stands on. */
+    .plinth{flex:none;width:100%;max-width:820px;margin:0 auto;
+      padding:0 var(--pad) clamp(8px,1.2vh,14px)}
+    .plinth-in{border-top:1px solid;border-image:var(--gild) 1}
+    .passion{font-family:var(--serif);font-style:italic;font-weight:600;font-size:13px;
+      color:var(--gold-soft);text-align:center;padding-top:7px}
+    .passion:empty{display:none}
+    .bays{display:grid;grid-template-columns:1fr 1.3fr 1fr;padding:clamp(8px,1.2vh,12px) 0}
+    .bay{padding:0 12px;border-left:1px solid var(--hair);min-width:0}
+    .bay:first-child{border-left:none;padding-left:2px}
+    .bay .k{font-family:var(--caps);font-weight:700;font-size:9px;
+      letter-spacing:.24em;color:var(--ink-mid)}
+    .bay .v{font-size:clamp(13.5px,1.9vh,17px);line-height:1.4;color:var(--ink-hi);margin-top:4px;
+      font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bay .s{font-size:clamp(10px,1.4vh,12px);line-height:1.5;color:var(--ink-mid);margin-top:1px;
+      font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .bay .s b{font-weight:500;color:var(--ink-hi)}
+    .bay .s b.shifted{color:var(--sunlight)}
+    .bay .s .zone{font-family:var(--caps);font-weight:600;font-size:.85em;letter-spacing:.14em}
 
     /* Station entry hides behind the coordinates: the readout is the
-       control. Tap the coordinates to open it; it closes on success. */
+       control (DEC-028). Tap the coordinates to open it; it closes on success. */
     .station-toggle{font-family:var(--mono);background:transparent;border:none;
-      cursor:pointer;padding:0;text-align:right;width:100%;
+      cursor:pointer;padding:0;text-align:left;width:100%;color:inherit;
       border-bottom:1px dotted transparent}
     .station-toggle:hover{border-bottom-color:var(--ink-mid)}
-    .stationbar{display:none;gap:4px;justify-content:flex-end;margin-top:7px;flex-wrap:wrap}
-    .r-br.open .stationbar{display:flex}
+    .stationbar{display:none;gap:4px;margin-top:7px;flex-wrap:wrap}
+    .bay.open .stationbar{display:flex}
     .stationbar input{font-family:var(--mono);font-size:11px;width:66px;text-align:right;
       color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
       padding:3px 5px}
     .stationbar input:focus{border-color:var(--ink-mid);outline:none}
     .stationbar button{font-family:var(--caps);font-weight:600;font-size:9px;
-      letter-spacing:.14em;
-      color:var(--ink-mid);background:transparent;border:1px solid var(--ink-low);
-      padding:3px 7px;cursor:pointer}
+      letter-spacing:.14em;color:var(--ink-mid);background:transparent;
+      border:1px solid var(--ink-low);padding:3px 7px;cursor:pointer}
     .stationbar button:hover{color:var(--ink-hi);border-color:var(--ink-mid)}
     #station-status{display:block;margin-top:5px;font-size:9px;letter-spacing:.1em;
       color:var(--sunlight)}
+    #station-status:empty{display:none}
 
-    /* ————— time travel ————— */
-    .controls{flex:none;display:flex;justify-content:center;align-items:center;
-      gap:6px;flex-wrap:wrap;padding:0 var(--pad) clamp(6px,1.2vh,12px)}
-    .stepper{display:flex;align-items:stretch;border:1px solid var(--ink-low)}
-    .stepper span{font-family:var(--caps);font-weight:600;font-size:9px;
-      letter-spacing:.14em;color:var(--ink-mid);
-      padding:6px 7px;align-self:center;min-width:44px;text-align:center}
-    .stepper button{font-family:var(--mono);font-size:13px;line-height:1;
+    /* the rail: time travel as one row of cells */
+    .rail{display:flex;align-items:stretch;border-top:1px solid var(--hair)}
+    .cell{flex:1;display:flex;align-items:center;justify-content:center;min-width:0}
+    .cell button{font-family:var(--mono);font-size:14px;line-height:1;
       color:var(--ink-mid);background:transparent;border:none;
-      padding:6px 9px;cursor:pointer}
-    .stepper button:hover{color:var(--ink-hi);background:rgba(215,230,242,.07)}
-    #now{font-family:var(--caps);font-weight:600;font-size:10px;letter-spacing:.18em;
-      color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
-      padding:7px 16px;cursor:pointer;margin-left:6px}
-    #now:hover{border-color:var(--ink-mid)}
-    #now.armed{color:var(--sunlight);border-color:var(--sunlight)}
+      padding:9px 8px;cursor:pointer;font-weight:300}
+    .cell button:hover{color:var(--ink-hi)}
+    .cell span{font-family:var(--caps);font-weight:600;font-size:9px;
+      letter-spacing:.16em;color:var(--ink-mid);text-align:center;
+      min-width:40px}
+    #now{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:9.5px;
+      letter-spacing:.22em;color:var(--gold-soft);background:transparent;
+      border:0;padding:9px 14px;cursor:pointer}
+    #now:hover{color:var(--scripture)}
+    #now.armed{color:var(--sunlight)}
 
-    /* the hours of Mark 15:33, named beneath the dial */
-    .passion{flex:none;text-align:center;padding:0 var(--pad) clamp(4px,0.8vh,9px);
-      font-family:var(--caps);font-weight:600;font-size:10px;letter-spacing:.2em;
-      color:var(--gold-soft)}
-    .passion:empty{display:none}
-
-    /* ————— tonight: the evening's program ————— */
-    .tonight{flex:none;padding:clamp(8px,1.4vh,14px) var(--pad) clamp(10px,1.6vh,18px);
-      border-top:1px solid var(--ink-low)}
-    .tonight-h{display:flex;align-items:baseline;gap:.6em;justify-content:center;
-      margin-bottom:clamp(6px,1vh,10px)}
-    .tonight-h button{font-family:var(--caps);font-weight:700;font-size:10px;
-      letter-spacing:.34em;color:var(--ink-mid);background:transparent;border:none;
+    /* the ledger: tonight's program */
+    .ledger{border-top:1px solid var(--hair);padding:8px 2px 0}
+    .ledger-h{display:flex;align-items:baseline;gap:10px}
+    .ledger-h button{font-family:var(--caps);font-weight:700;font-size:9.5px;
+      letter-spacing:.3em;color:var(--ink-mid);background:transparent;border:none;
       cursor:pointer;padding:0;border-bottom:1px dotted transparent}
-    .tonight-h button:hover{border-bottom-color:var(--ink-mid)}
-    .tonight.open .tonight-list{display:none}
-    .tonight.open .tonight-all,.tonight.open .tonight-foot{display:block}
-    .tonight-all{display:none;max-width:1100px;margin:0 auto;
-      columns:2;column-gap:clamp(14px,3vw,34px)}
-    @media (min-width:900px){.tonight-all{columns:4}}
-    .sky-row{display:flex;justify-content:space-between;gap:8px;
-      break-inside:avoid;padding:2.5px 0;font-size:12.5px}
-    .sky-row b{font-family:var(--caps);font-weight:600;font-size:11px;
-      letter-spacing:.1em;color:var(--ink-mid);white-space:nowrap;
-      flex-shrink:0;max-width:58%;overflow:hidden;text-overflow:ellipsis}
-    .sky-row.is-up b{color:var(--scripture)}
-    .sky-row span{font-family:var(--mono);font-size:11.5px;color:var(--ink-mid);
-      font-variant-numeric:tabular-nums;white-space:nowrap;
-      overflow:hidden;text-overflow:ellipsis}
-    .sky-row.is-up span{color:var(--ink-hi)}
-    .sky-row .mz{color:var(--gold-soft)}
-    .tonight-foot{display:none;text-align:center;margin-top:9px;
-      font-family:var(--serif);font-style:italic;font-size:12.5px;
-      color:var(--gold-soft)}
-    .tonight-h em{font-family:var(--serif);font-style:italic;font-weight:600;
-      font-size:13.5px;color:var(--ink-mid)}
-    .tonight-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
-      gap:4px clamp(10px,2vw,26px);max-width:1100px;margin:0 auto}
-    .sky-item{text-align:center;min-width:0}
-    .sky-name{font-family:var(--caps);font-weight:600;font-size:11px;
-      letter-spacing:.16em;color:var(--ink-mid);white-space:nowrap;
-      overflow:hidden;text-overflow:ellipsis}
-    .sky-when{font-family:var(--mono);font-size:12px;color:var(--ink-mid);
-      font-variant-numeric:tabular-nums;margin-top:2px}
-    .sky-item.is-up .sky-name{color:var(--scripture)}
-    .sky-item.is-up .sky-when{color:var(--ink-hi)}
+    .ledger-h button:hover{border-bottom-color:var(--ink-mid)}
+    .ledger-h em{font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:12px;color:var(--ink-mid)}
+    .ledger-h .rule{flex:1;height:1px;background:var(--hair-soft);align-self:center}
+    .lrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+      padding:5px 2px;border-bottom:1px solid var(--hair-soft)}
+    .lrow:last-child{border-bottom:none}
+    .lrow .n{font-family:var(--caps);font-weight:600;font-size:10.5px;
+      letter-spacing:.14em;color:var(--ink-mid);white-space:nowrap;flex-shrink:0}
+    .lrow .d{font-size:clamp(11px,1.5vh,12.5px);color:var(--ink-hi);
+      font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;
+      text-overflow:ellipsis}
+    .lrow.is-up .n{color:var(--scripture)}
+    .lrow .sw{display:inline-block;width:14px;height:2px;vertical-align:middle;
+      margin-right:7px;border-radius:1px}
+    .lrow .season{color:var(--gold-soft)}
 
-    /* Mid widths (iPad portrait): the centred logo and the corner clock
-       share a row — the date yields, the time stays. */
-    @media (max-width:1020px){
-      .clockline .date{display:none}
-    }
+    /* the fold: the whole sky as a program with movements, not a wall */
+    .tonight.open .tonight-list{display:none}
+    .tonight.open .tonight-all{display:block}
+    .tonight-all{display:none}
+    .section{display:flex;align-items:center;gap:10px;margin:12px 0 2px}
+    .section .t{font-family:var(--caps);font-weight:700;font-size:8.5px;
+      letter-spacing:.28em;color:var(--gold-soft)}
+    .section .rule{flex:1;height:1px;background:var(--hair-soft)}
+    .section .c{font-family:var(--mono);font-size:9px;color:var(--ink-mid)}
+    .cols{columns:2;column-gap:18px}
+    @media (min-width:900px){.cols{columns:4}}
+    .crow{display:flex;justify-content:space-between;gap:8px;padding:3px 0;
+      break-inside:avoid;border-bottom:1px solid var(--hair-soft)}
+    .crow .n{font-family:var(--caps);font-weight:600;font-size:9px;
+      letter-spacing:.03em;color:var(--ink-mid);white-space:nowrap;flex-shrink:0}
+    .crow.is-up .n{color:var(--scripture)}
+    .crow .d{font-family:var(--mono);font-size:9.5px;color:var(--ink-mid);
+      white-space:nowrap;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+    .crow.is-up .d{color:var(--ink-hi)}
+    .crow .mz{color:var(--gold-soft);font-size:8px;margin-left:4px}
+    .tonight-foot{font-family:var(--serif);font-style:italic;font-size:12px;
+      color:var(--gold-soft);text-align:center;margin-top:10px}
+
     @media (max-width:720px){
-      /* Portrait is a STACK: logo, hero, dial with air, data grid, controls.
-         Nothing is absolutely positioned; nothing can overlap. */
+      /* Portrait is a STACK: seal, verse, hero, dial, plinth. Nothing is
+         absolutely positioned; nothing can overlap; the body scrolls. */
       body{overflow-y:auto;height:auto;min-height:100dvh}
-      header{gap:7px;padding-top:16px}
-      .brand img{height:34px}
-      .verse{font-size:16px;line-height:1.4;padding:0 4px}
+      header{padding-top:14px}
+      .brand{height:40px}
+      .brand img{height:26px}
+      .verse{font-size:19px;line-height:1.3;max-width:34ch}
       .verse-ref{font-size:9.5px;letter-spacing:.3em}
-      .clockline{display:none}
-      .zone-note{position:static;text-align:center;white-space:normal;font-size:12px}
-      .stage{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;
-        place-items:stretch;padding:10px 16px 4px}
-      .stage canvas{grid-column:1/-1;justify-self:center;margin-bottom:12px}
-      .readout{position:static;max-width:none;pointer-events:auto;
-        padding:7px 0;border-top:1px solid var(--ink-low)}
-      .r-tl{order:1}.r-tr{order:2}.r-bl{order:3}.r-br{order:4}
-      .controls{padding:10px var(--pad) 8px}
-      #now{margin-left:0}
-      .stepper span{min-width:38px;letter-spacing:.1em}
-      .stepper button{padding:6px 7px}
-      .tonight{padding-bottom:20px}
-      .tonight-list{grid-template-columns:repeat(2,1fr);gap:8px 14px}
-      .tonight-h em{font-size:12px}
+      .hero{margin-top:14px}
+      .hero span{font-size:24px}
+      .hero b{font-size:22px}
+      .stage{flex:none;padding:4px 16px 2px}
+      .plinth{padding:0 16px 14px}
+      .bays{grid-template-columns:.95fr 1.3fr 1.1fr;padding:10px 0 9px}
+      .bay{padding:0 8px}
+      .bay .k{font-size:8.5px}
+      .bay .v{font-size:13.5px}
+      #station-bay .v{font-size:12.5px}
+      .bay .s{font-size:10px}
+      .cell button{padding:9px 4px}
+      .cell span{min-width:0;font-size:8.5px;letter-spacing:.12em}
+      #now{padding:9px 10px}
     }
     .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
       overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -218,45 +224,58 @@
       <div class="verse-ref" id="verse-ref">Genesis 1:14 &middot; ESV</div>
     </div>
     <div class="hero"><span id="hero-k">—</span><b id="hero-v"></b></div>
-    <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b> <span class="zone" id="zone"></span></div>
+    <div class="travelled" id="travelled"></div>
     <div class="zone-note" id="zone-note"></div>
   </header>
 
   <div class="stage">
-    <div class="readout r-tl"><div class="k">SUNRISE</div><div class="v" id="rise">—</div></div>
-    <div class="readout r-tr"><div class="k">SUNSET</div><div class="v" id="set">—</div></div>
     <canvas id="sky" role="img" aria-describedby="sky-transcript"
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
     <p id="sky-transcript" class="sr-only"></p>
-    <div class="readout r-bl"><div class="k">MOON</div><div class="v" id="moon">—</div>
-      <div class="moon-times" id="moon-times"></div></div>
-    <div class="readout r-br">
-      <div class="k">STATION</div>
-      <button class="v station-toggle" id="station" aria-expanded="false"
-        aria-controls="stationbar" title="Change station">—</button>
-      <div class="stationbar" id="stationbar">
-        <input id="lat-in" inputmode="decimal" autocomplete="off" aria-label="Latitude">
-        <input id="lon-in" inputmode="decimal" autocomplete="off" aria-label="Longitude">
-        <button id="set-station">SET</button>
-        <button id="locate">LOCATE</button>
-      </div>
-      <span id="station-status"></span>
-    </div>
   </div>
 
-  <div class="controls" role="group" aria-label="Time travel">
-    <div id="steppers" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center"></div>
-    <button id="now" aria-label="Return to the present">NOW</button>
-  </div>
-  <div class="passion" id="passion"></div>
-  <section class="tonight" aria-label="Constellations tonight">
-    <div class="tonight-h">
-      <button id="tonight-toggle" aria-expanded="false" aria-controls="tonight-all">TONIGHT</button>
-      <em id="tonight-note"></em>
+  <section class="plinth" aria-label="Readouts and controls">
+    <div class="plinth-in">
+      <p class="passion" id="passion"></p>
+      <div class="bays">
+        <div class="bay">
+          <div class="k">SUN</div>
+          <div class="v" id="rise">—</div>
+          <div class="s" id="set"></div>
+        </div>
+        <div class="bay">
+          <div class="k">MOON</div>
+          <div class="v" id="moon">—</div>
+          <div class="s" id="moon-times"></div>
+        </div>
+        <div class="bay" id="station-bay">
+          <div class="k">STATION</div>
+          <button class="v station-toggle" id="station" aria-expanded="false"
+            aria-controls="stationbar" title="Change station">—</button>
+          <div class="s"><b id="timeline">—</b> <span class="zone" id="zone"></span></div>
+          <div class="stationbar" id="stationbar">
+            <input id="lat-in" inputmode="decimal" autocomplete="off" aria-label="Latitude">
+            <input id="lon-in" inputmode="decimal" autocomplete="off" aria-label="Longitude">
+            <button id="set-station">SET</button>
+            <button id="locate">LOCATE</button>
+          </div>
+          <span id="station-status"></span>
+        </div>
+      </div>
+      <div class="rail" role="group" aria-label="Time travel">
+        <div id="steppers" style="display:contents"></div>
+        <button id="now" aria-label="Return to the present">NOW</button>
+      </div>
+      <section class="ledger tonight" aria-label="Constellations tonight">
+        <div class="ledger-h">
+          <button id="tonight-toggle" aria-expanded="false" aria-controls="tonight-all">TONIGHT</button>
+          <em id="tonight-note"></em>
+          <span class="rule"></span>
+        </div>
+        <div class="tonight-list" id="tonight-list"></div>
+        <div class="tonight-all" id="tonight-all" hidden></div>
+      </section>
     </div>
-    <div class="tonight-list" id="tonight-list"></div>
-    <div class="tonight-all" id="tonight-all" hidden></div>
-    <div class="tonight-foot" hidden>&#9733; Mazzaroth &mdash; the constellations of the sun&rsquo;s path, led out in their season (Job 38:32)</div>
   </section>
   <script type="module" src="/src/main.ts"></script>
 </body>

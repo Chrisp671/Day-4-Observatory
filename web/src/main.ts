@@ -10,7 +10,8 @@ import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./app
 import { mismatchPhrase, zoneReport } from "./app/clockzone";
 import { compassAbbrev, transcript } from "./app/transcript";
 import { moonDay, planetBoard, planetDays, sunDay, type PlanetDay, type PlanetTimes } from "./engine/planets";
-import { fmt12, fmt12c, fmt12s } from "./app/clock12";
+import { fmt12, fmt12c } from "./app/clock12";
+import { planetSeason } from "./engine/season";
 import { passionHours } from "./app/hours";
 import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
 import { drawFiducial } from "./ui/fiducial";
@@ -23,6 +24,7 @@ import { drawEarth } from "./ui/earth";
 import { buildGrain, drawGrain } from "./ui/grain";
 import { drawMoon, drawMoonUpArc, moonDialHours } from "./ui/moon";
 import { drawFirmament } from "./ui/firmament";
+import { drawGround, groundStrength } from "./ui/ground";
 import { drawSidereal } from "./ui/sidereal";
 import { skyPalette } from "./ui/sky";
 import { drawSun } from "./ui/sun";
@@ -98,25 +100,31 @@ const TONIGHT_SLOTS = 3;
 
 interface SkySlot {
   readonly root: HTMLElement;
+  readonly swatch: HTMLElement;
   readonly name: HTMLElement;
   readonly when: HTMLElement;
 }
 
 const skySlots: SkySlot[] = [];
 
+/** One ledger row: a colour swatch (planets only), the name, the line. */
 function buildTonight(): void {
   const host = el("tonight-list");
   if (host === null) return;
   for (let i = 0; i < TONIGHT_SLOTS; i++) {
     const root = document.createElement("div");
-    root.className = "sky-item";
-    const name = document.createElement("div");
-    name.className = "sky-name";
-    const when = document.createElement("div");
-    when.className = "sky-when";
+    root.className = "lrow";
+    const name = document.createElement("span");
+    name.className = "n";
+    const swatch = document.createElement("i");
+    swatch.className = "sw";
+    const label = document.createElement("span");
+    name.append(swatch, label);
+    const when = document.createElement("span");
+    when.className = "d";
     root.append(name, when);
     host.appendChild(root);
-    skySlots.push({ root, name, when });
+    skySlots.push({ root, swatch, name: label, when });
   }
 }
 
@@ -139,10 +147,12 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
   // question this board exists to answer (DEC-031).
   const t = displayedNow();
   const favourites = planetsNow(t).filter((p) => p.name === "Saturn" || p.name === "Jupiter");
-  const rows: { name: string; phrase: string; up: boolean }[] = [
-    ...favourites.map((p) => ({ name: p.name, phrase: planetPhrase(p, t), up: p.upNow })),
+  const rows: { name: string; phrase: string; up: boolean; color: string | null }[] = [
+    ...favourites.map((p) => ({
+      name: p.name, phrase: planetPhrase(p, t), up: p.upNow, color: PLANET_COLORS[p.name] ?? null,
+    })),
     ...board.map((e) => ({
-      name: e.constellation.name, phrase: skyPhrase(e), up: e.status !== "down",
+      name: e.constellation.name, phrase: skyPhrase(e), up: e.status !== "down", color: null,
     })),
   ].slice(0, TONIGHT_SLOTS);
 
@@ -156,6 +166,10 @@ function drawTonight(siderealHours: number, sunAltitudeDeg: number): void {
     slot.root.classList.toggle("is-up", row.up);
     slot.name.textContent = row.name;
     slot.when.textContent = row.phrase;
+    // The swatch is the legend for the arcs on the dial (DEC-034).
+    slot.swatch.style.display = row.color === null ? "none" : "";
+    slot.swatch.style.background = row.color ?? "";
+    slot.name.style.color = row.color ?? "";
   });
 
   // Up is not the same as visible: only promise stars once the sky is dark.
@@ -188,8 +202,8 @@ function drawSunDay(t: number): void {
   if (key === sunDayKey) return;
   sunDayKey = key;
   const sd = sunDay(t, station.lat, station.lon);
-  setText("rise", sd.riseUnixMillis === null ? "—" : fmt12(sd.riseUnixMillis));
-  setText("set", sd.setUnixMillis === null ? "—" : fmt12(sd.setUnixMillis));
+  setText("rise", sd.riseUnixMillis === null ? "—" : `↑${fmt12(sd.riseUnixMillis)}`);
+  setText("set", sd.setUnixMillis === null ? "" : `↓${fmt12(sd.setUnixMillis)}`);
 }
 
 let planetDayKey = "";
@@ -238,6 +252,23 @@ function drawMoonDay(t: number): void {
   setText("moon-times", out);
 }
 
+/* ————— the season: Parker's month-by-month hunt, answered ————— */
+const seasonCache = new Map<string, string>();
+
+/** "season from Sep 14" for a planet not yet rising in the evening, else "". */
+function seasonNote(name: string, t: number): string {
+  const d = new Date(t);
+  const key = `${name}|${d.toDateString()}|${station.lat}|${station.lon}`;
+  const hit = seasonCache.get(key);
+  if (hit !== undefined) return hit;
+  const s = planetSeason(name, t, station.lat, station.lon);
+  const note = s.nowInSeason || s.fromUnixMillis === null
+    ? ""
+    : `season from ${new Date(s.fromUnixMillis).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  seasonCache.set(key, note);
+  return note;
+}
+
 /** "rises in 2h 14m · peaks 21:20" — the planning line for one planet. */
 function planetPhrase(p: PlanetTimes, t: number): string {
   const next = p.upNow ? p.setUnixMillis : p.riseUnixMillis;
@@ -248,6 +279,12 @@ function planetPhrase(p: PlanetTimes, t: number): string {
       p.transitUnixMillis < p.setUnixMillis) {
     // ⋆ marks the peak — the culmination Parker plans viewing around.
     out += ` ⋆${fmt12c(p.transitUnixMillis)}`;
+  }
+  // Not an evening object yet: say when it will be, so nobody has to step
+  // month by month to find out (DEC-031: "when will I be able to see Saturn?").
+  if (!p.upNow) {
+    const season = seasonNote(p.name, t);
+    if (season !== "") out += ` · ${season}`;
   }
   return out;
 }
@@ -262,21 +299,37 @@ function drawAllSky(lstHours: number): void {
   if (key === allSkyKey) return;
   allSkyKey = key;
 
+  // The program, in movements: the wandering stars first, then what is up,
+  // then what is still to rise — each counted, the Mazzaroth starred,
+  // never-risers left out. A programme, not a wall (DEC-030).
   const t = displayedNow();
+  const section = (title: string, count: number): string =>
+    `<div class="section"><span class="t">${title}</span><span class="rule"></span>` +
+    `<span class="c">${count}</span></div>`;
   const planetRows = planetsNow(t)
-    .map((p) => `<div class="sky-row${p.upNow ? " is-up" : ""}">` +
-      `<b class="planet" style="color:${PLANET_COLORS[p.name] ?? ""}">${p.name}</b>` +
-      `<span>${planetPhrase(p, t)}</span></div>`)
-    .join("");
-  const rows = planetRows + tonightBoard(lstHours, station.lat)
-    .filter((e) => e.status !== "never")
-    .map((e) => {
-      const mz = e.constellation.mazzaroth === true ? ` <i class="mz">★</i>` : "";
-      return `<div class="sky-row${e.status === "down" ? "" : " is-up"}">` +
-        `<b>${e.constellation.name}${mz}</b><span>${skyPhrase(e)}</span></div>`;
+    .map((p) => {
+      const c = PLANET_COLORS[p.name] ?? "";
+      return `<div class="lrow${p.upNow ? " is-up" : ""}">` +
+        `<span class="n" style="color:${c}"><i class="sw" style="background:${c}"></i>${p.name}</span>` +
+        `<span class="d">${planetPhrase(p, t)}</span></div>`;
     })
     .join("");
-  host.innerHTML = rows;
+  const all = tonightBoard(lstHours, station.lat).filter((e) => e.status !== "never");
+  // Short forms in the columns: the name never yields, so the verb does.
+  const short = (e: SkyEntry): string => skyPhrase(e).replace(" in ", " ").replace("up all night", "all night");
+  const crow = (e: SkyEntry): string => {
+    const mz = e.constellation.mazzaroth === true ? `<i class="mz">★</i>` : "";
+    return `<div class="crow${e.status === "down" ? "" : " is-up"}">` +
+      `<span class="n">${e.constellation.name}${mz}</span><span class="d">${short(e)}</span></div>`;
+  };
+  const up = all.filter((e) => e.status !== "down");
+  const rising = all.filter((e) => e.status === "down");
+  host.innerHTML =
+    section("THE WANDERING STARS", 5) + planetRows +
+    section("UP NOW", up.length) + `<div class="cols">${up.map(crow).join("")}</div>` +
+    section("STILL TO RISE", rising.length) + `<div class="cols">${rising.map(crow).join("")}</div>` +
+    `<div class="tonight-foot">★ Mazzaroth — the constellations of the sun’s path, ` +
+    `led out in their season <span style="white-space:nowrap">(Job 38:32)</span></div>`;
 }
 
 function wireTonightFold(): void {
@@ -287,9 +340,7 @@ function wireTonightFold(): void {
     section?.classList.toggle("open", open);
     btn?.setAttribute("aria-expanded", String(open));
     const all = el("tonight-all");
-    const foot = document.querySelector(".tonight-foot");
     if (all !== null) all.hidden = !open;
-    if (foot instanceof HTMLElement) foot.hidden = !open;
     allSkyKey = ""; // render immediately on open
     draw();
   });
@@ -320,6 +371,9 @@ function draw(): void {
   drawGrain(ctx, W, W);
   ctx.translate(W / 2, W / 2);
 
+  // The lapis ground: invisible at night, a dark medallion by day, so the
+  // gold keeps its drama at noon. No switch — it follows the sun (DEC-010).
+  drawGround(ctx, R, DPR, groundStrength(s.sun.altitudeDeg));
   drawSidereal(ctx, R, DPR, s.siderealHours);
   drawDial(ctx, R, DPR, {
     riseHours: s.sun.nextRiseUnixMillis === null ? null : localHoursOfDay(s.sun.nextRiseUnixMillis),
@@ -357,15 +411,17 @@ function draw(): void {
 
   drawSunDay(t);
   const phaseIdx = Math.floor((s.moon.phaseAngleDeg / 360) * 8 + 0.5) % 8;
-  setText("moon", `${s.moon.ageDays.toFixed(1)}d ${PHASE_NAMES[phaseIdx] ?? ""}`);
+  // The phase by name; the age lives in the spoken transcript.
+  setText("moon", PHASE_NAMES[phaseIdx] ?? "");
   setText(
     "station",
     `${Math.abs(station.lat).toFixed(1)}°${station.lat >= 0 ? "N" : "S"} ${Math.abs(station.lon).toFixed(1)}°${station.lon >= 0 ? "E" : "W"}`,
   );
-  setText("dateline", new Date(t)
-    .toLocaleDateString("en-GB", { weekday: "short", day: "2-digit", month: "short", year: "numeric" })
-    .toUpperCase());
-  setText("timeline", fmt12s(t));
+  setText("timeline", fmt12(t));
+  // Travelled: the header says where you have landed — the date Parker
+  // steps toward, month by month, looking for Saturn season (DEC-031).
+  setText("travelled", offsetMillis === 0 ? "" : new Date(t)
+    .toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }));
 
   // Times are rendered in the device's zone; say so, and say when that is not
   // the clock the station keeps (a New York sunrise on a Chicago clock).
@@ -480,10 +536,10 @@ const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "month", "pha
 function buildSteppers(): void {
   const host = el("steppers");
   if (host === null) return;
-  // One control per unit — a labelled cell flanked by its two chevrons.
+  // One cell per unit on the rail — the label flanked by its two chevrons.
   for (const { unit, label } of STEP_UNITS.filter((u) => SHOWN_UNITS.has(u.unit))) {
     const group = document.createElement("div");
-    group.className = "stepper";
+    group.className = "cell";
 
     const back = document.createElement("button");
     back.textContent = "‹";
@@ -520,7 +576,7 @@ function buildStationControls(): void {
   // itself once a new station takes (DEC-028 — the readout stays an
   // instrument, not a form).
   const toggle = el("station");
-  const cell = toggle?.closest(".r-br");
+  const cell = toggle?.closest(".bay");
   const setOpen = (open: boolean): void => {
     cell?.classList.toggle("open", open);
     toggle?.setAttribute("aria-expanded", String(open));

@@ -1,7 +1,11 @@
 /**
- * The moon: a phase-rendered disc riding its orbit ring at its true position
+ * The moon: a phase-rendered disc riding its orbit at its true position
  * relative to the sun (by hour-angle difference), with earthshine on the
  * dark side so the new moon still reads as a body.
+ *
+ * The orbit itself is not drawn (DEC-026 subtraction): it was a construction
+ * line that reported nothing. The disc alone rides the radius; the only line
+ * on it is the up-arc, which says how long the moon is up.
  */
 import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
 import { THEME } from "./theme";
@@ -77,19 +81,9 @@ export function drawMoon(
   const discR = R * 0.075;
   const a = hourToAngle(dialHours);
 
-  // Construction orbit, broken behind the moon (DESIGN-CONSOLIDATED #6):
-  // "fixed vs moving is read by openness, not color" — the gap demotes this
-  // to a construction line, leaving the sidereal ring as the only continuous
-  // articulated interior scale. Gap ≈ 2× disc angular width each side.
-  const gap = 2 * Math.atan(discR / orbitR) * 2;
-  ctx.lineWidth = 0.8 * dpr;
-  ctx.strokeStyle = THEME.inkLow;
-  ctx.globalAlpha = 0.95;
-  ctx.beginPath();
-  ctx.arc(0, 0, orbitR, a + gap / 2, a - gap / 2 + TAU);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-
+  // No construction orbit (DEC-026 subtraction): the ring was a construction
+  // line that reported nothing, and the interior was crowded. The up-arc
+  // (drawMoonUpArc) is the only line on this radius — it reports something.
   const pos = pointOnCircle(a, orbitR);
   drawMoonDisc(ctx, pos.x, pos.y, discR, phaseAngleDeg, dpr);
 }
@@ -98,6 +92,10 @@ export function drawMoon(
  * The moon's up-arc: an ivory band along the moon orbit from moonrise to
  * moonset — "the rings are a nice visual cue to show me how long something
  * is gonna be up" (DEC-031). Skipped on the monthly day with no moonrise.
+ *
+ * With the construction orbit gone (DEC-026) this is the only line on the
+ * moon's radius, so it carries a little more weight and alpha than it did
+ * when it had to sit on top of an inkLow ring.
  */
 export function drawMoonUpArc(
   ctx: CanvasRenderingContext2D,
@@ -109,8 +107,8 @@ export function drawMoonUpArc(
   if (riseHours === null || setHours === null) return;
   ctx.save();
   ctx.strokeStyle = THEME.moonlight;
-  ctx.globalAlpha = 0.4;
-  ctx.lineWidth = 2.4 * dpr;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 2.8 * dpr;
   ctx.lineCap = "round";
   ctx.beginPath();
   ctx.arc(0, 0, R * FACE.moonOrbit, hourToAngle(riseHours), hourToAngle(setHours));

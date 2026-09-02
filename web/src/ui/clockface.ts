@@ -35,8 +35,8 @@ export const FACE = {
   dialOuter: 0.985,
   dialInner: 0.875,
   numerals: 0.82,
-  moonOrbit: 0.72, // WI-005
-  sidereal: 0.575, // WI-005
+  moonOrbit: 0.565, // inside the five planet arcs (0.672..0.76), clear of them
+  sidereal: 0.46, // a hairline scale beneath the moon
   sunAnnotationInner: 0.32,
   earth: 0.3, // WI-005
   sunDisc: 0.03,

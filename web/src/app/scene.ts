@@ -181,6 +181,16 @@ export interface SceneTonight {
   readonly footnote: string;
 }
 
+/** How many rows the glance board carries; the rest live behind the fold. */
+export const GLANCE_ROWS = 3;
+
+/** The three movements of the programme, in order. */
+export const MOVEMENTS = {
+  wandering: "THE WANDERING STARS",
+  up: "UP NOW",
+  rising: "STILL TO RISE",
+} as const;
+
 /* ————————————————————————————— the whole ————————————————————————————— */
 
 export interface Scene {

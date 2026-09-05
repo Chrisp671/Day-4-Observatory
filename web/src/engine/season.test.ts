@@ -13,9 +13,9 @@ const isLocalMidnight = (ms: number): boolean => {
 };
 
 describe("planetSeason", () => {
-  it("throws on an unknown planet name", () => {
-    expect(() => planetSeason("Pluto", T, NYC.lat, NYC.lon)).toThrow(/Unknown planet/);
-    expect(() => planetSeason("", T, NYC.lat, NYC.lon)).toThrow();
+  it("gives an unknown planet no season instead of an error", () => {
+    expect(planetSeason("Pluto", T, NYC.lat, NYC.lon)).toEqual({ fromUnixMillis: null, nowInSeason: false });
+    expect(planetSeason("", T, NYC.lat, NYC.lon).nowInSeason).toBe(false);
   });
 
   const seasons = PLANETS.map(([name]) => [name, planetSeason(name, T, NYC.lat, NYC.lon)] as const);

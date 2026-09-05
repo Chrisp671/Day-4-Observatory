@@ -16,7 +16,7 @@
  * nothing for it and the page stays up.
  */
 import type { FrameState } from "../engine/frame";
-import { moonDay, planetBoard, planetDays, sunDay, type PlanetDay, type PlanetTimes } from "../engine/planets";
+import { planetBoard, planetDays, sunDay, type PlanetDay, type PlanetTimes } from "../engine/planets";
 import { planetSeason } from "../engine/season";
 import { localHoursOfDay, RING_ORDER, ringFraction } from "../ui/clockface";
 import { PLANET_COLORS } from "../ui/theme";
@@ -25,14 +25,17 @@ import { mismatchPhrase, zoneReport } from "./clockzone";
 import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./constellations";
 import { formatCountdown, nextSunEvent } from "./hero";
 import { passionHours } from "./hours";
-import type {
-  SceneMovement,
-  SceneReadouts,
-  SceneRequest,
-  SceneRing,
-  SceneRow,
-  SceneTonight,
+import {
+  GLANCE_ROWS,
+  MOVEMENTS,
+  type SceneMovement,
+  type SceneReadouts,
+  type SceneRequest,
+  type SceneRing,
+  type SceneRow,
+  type SceneTonight,
 } from "./scene";
+import { isTravelled, moonDayFor } from "./scene-core";
 import { compassAbbrev, transcript } from "./transcript";
 import { VERSE_VERSION, verseOfDay } from "./verse";
 
@@ -78,19 +81,6 @@ function sunDayNow(r: SceneRequest): typeof sunToday {
 
 /* ————————————————————————————— the moon's day ————————————————————————————— */
 
-let moonDayKey = "";
-let moonToday: { riseUnixMillis: number | null; setUnixMillis: number | null } =
-  { riseUnixMillis: null, setUnixMillis: null };
-
-/** Moon rise/set held steady for the displayed calendar day (REQ-008). */
-function moonDayNow(r: SceneRequest): typeof moonToday {
-  const key = dayKey(r);
-  if (key !== moonDayKey) {
-    moonDayKey = key;
-    moonToday = moonDay(r.displayedUnixMillis, r.station.lat, r.station.lon);
-  }
-  return moonToday;
-}
 
 /* ————————————————————————————— the rete ————————————————————————————— */
 
@@ -200,7 +190,7 @@ const phaseName = (phaseAngleDeg: number): string => {
 /** "↑6:12a · ↓9:40p Thu" / "no moonrise today" — the moon's day, worded. */
 function moonTimesLine(r: SceneRequest): string {
   const d = new Date(r.displayedUnixMillis);
-  const md = moonDayNow(r);
+  const md = moonDayFor(r);
   if (md.riseUnixMillis === null) return "no moonrise today";
   let out = `↑${fmt12c(md.riseUnixMillis)}`;
   if (md.setUnixMillis !== null) {
@@ -235,8 +225,7 @@ export function sceneReadouts(input: PlinthInput): SceneReadouts {
 
     // Travelled: the header says where you have landed — the date Parker
     // steps toward, month by month, looking for Saturn season (DEC-031).
-    const travelledDate = Math.abs(t - r.nowUnixMillis) < 1000
-      ? ""
+    const travelledDate = !isTravelled(r) ? ""
       : new Date(t).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
 
     // Times are rendered in the device's zone; say so, and say when that is not
@@ -280,7 +269,6 @@ export function sceneReadouts(input: PlinthInput): SceneReadouts {
 /* ————————————————————————————— tonight ————————————————————————————— */
 
 /** How many of the board's entries the glance shows; the rest wait in the fold. */
-const TONIGHT_SLOTS = 3;
 
 let boardKey = "";
 let board: readonly PlanetTimes[] = [];
@@ -370,9 +358,9 @@ const EMPTY_TONIGHT: SceneTonight = {
   note: "",
   glance: [],
   programme: [
-    { title: "THE WANDERING STARS", rows: [] },
-    { title: "UP NOW", rows: [] },
-    { title: "STILL TO RISE", rows: [] },
+    { title: MOVEMENTS.wandering, rows: [] },
+    { title: MOVEMENTS.up, rows: [] },
+    { title: MOVEMENTS.rising, rows: [] },
   ],
   footnote: FOOTNOTE,
 };
@@ -401,7 +389,7 @@ export function sceneTonight(input: PlinthInput): SceneTonight {
     const glance: SceneRow[] = [
       ...favourites.map((p) => planetRow(p, r)),
       ...notable.map((e) => skyRow(e, skyPhrase(e))),
-    ].slice(0, TONIGHT_SLOTS);
+    ].slice(0, GLANCE_ROWS);
 
     // The program, in movements: the wandering stars first, then what is up,
     // then what is still to rise — each counted, the Mazzaroth starred,
@@ -410,9 +398,9 @@ export function sceneTonight(input: PlinthInput): SceneTonight {
     const up = all.filter((e) => e.status !== "down");
     const rising = all.filter((e) => e.status === "down");
     const programme: SceneMovement[] = [
-      { title: "THE WANDERING STARS", rows: planets.map((p) => planetRow(p, r)) },
-      { title: "UP NOW", rows: up.map((e) => skyRow(e, shortSkyPhrase(e))) },
-      { title: "STILL TO RISE", rows: rising.map((e) => skyRow(e, shortSkyPhrase(e))) },
+      { title: MOVEMENTS.wandering, rows: planets.map((p) => planetRow(p, r)) },
+      { title: MOVEMENTS.up, rows: up.map((e) => skyRow(e, shortSkyPhrase(e))) },
+      { title: MOVEMENTS.rising, rows: rising.map((e) => skyRow(e, shortSkyPhrase(e))) },
     ];
 
     return {

@@ -8,10 +8,6 @@
  * composer calls frame() once per tick and hands the result in; nothing here
  * calls the engine except moonDay, which is day-anchored and memoised.
  *
- * Every rule below is a straight port of what main.ts's draw() did before
- * the seam went in. Where main.ts's behaviour needed a decision, the comment
- * at that line says what was chosen and why.
- *
  * Never throws. Polar cases (no rise, no set) pass through as null.
  */
 import type { FrameState } from "../engine/frame";
@@ -38,9 +34,8 @@ export interface CoreInput {
 
 /* ————————————————————————————— memo ————————————————————————————— */
 
-/** One remembered value per family, keyed the way main.ts keyed its
- * day-anchored caches: local date string + station. A new key for the same
- * family replaces the old entry, so the memo never grows. */
+/** One remembered value per family, keyed by local date and station. A new
+ * key for the same family replaces the old entry, so the memo never grows. */
 const dayMemo = new Map<string, { readonly key: string; readonly value: unknown }>();
 
 function memoByDay<T>(
@@ -78,11 +73,11 @@ export function sceneLight(input: CoreInput): SceneLight {
     stars: pal.starAlpha,
     horizonGlow: pal.horizonGlow,
     ground: groundStrength(alt),
-    // Plain by day, luminous once the sky darkens (main.ts drawAxis call).
+    // Plain by day, luminous once the sky darkens.
     axis: 0.55 + 0.45 * pal.starAlpha,
     sunColor: pal.sunCore,
-    // main.ts's skyKey was `${altitude to 0.5°}|${viewport}`; the viewport
-    // is the shell's business, so the Scene carries only the light's part.
+    // The light's half of the firmament's redraw key; the viewport is the
+    // shell's business.
     key: `${Math.round(alt * 2) / 2}`,
   };
 }
@@ -116,14 +111,24 @@ export function sceneSun(input: CoreInput): SceneSun {
 
 /* ————————————————————————————— the moon ————————————————————————————— */
 
-export function sceneMoon(input: CoreInput): SceneMoon {
-  const { frame, request } = input;
+/** The moon's rise and following set for the displayed calendar day, held
+ * steady until the date changes (REQ-008); shared with the plinth's wording. */
+export function moonDayFor(request: SceneRequest): ReturnType<typeof moonDay> {
   const { lat, lon } = request.station;
   const t = request.displayedUnixMillis;
-  const md = memoByDay("moonDay", t, lat, lon, () => moonDay(t, lat, lon));
-  // main.ts drew the arc from a null rise as nothing, and from a rise with
-  // no following set as an open arc. The Scene's contract is both-or-null,
-  // so the second case (rare: a set beyond the search window) is null too.
+  return memoByDay("moonDay", t, lat, lon, () => moonDay(t, lat, lon));
+}
+
+/** Live means the displayed instant and the present are within a second;
+ * anything more is a journey. One rule, used by the marks and the readouts. */
+export const isTravelled = (request: SceneRequest): boolean =>
+  Math.abs(request.displayedUnixMillis - request.nowUnixMillis) >= 1000;
+
+export function sceneMoon(input: CoreInput): SceneMoon {
+  const { frame, request } = input;
+  const md = moonDayFor(request);
+  // The contract is both-or-null: a rise with no following set inside the
+  // search window draws nothing, rather than an open arc.
   const upArc = md.riseUnixMillis === null || md.setUnixMillis === null
     ? null
     : { riseHours: localHoursOfDay(md.riseUnixMillis), setHours: localHoursOfDay(md.setUnixMillis) };
@@ -144,13 +149,8 @@ export function sceneEarth(input: CoreInput): SceneEarth {
 /* ————————————————————————————— the marks ————————————————————————————— */
 
 export function sceneMarks(input: CoreInput): SceneMarks {
-  const { displayedUnixMillis, nowUnixMillis } = input.request;
   return {
-    nowHours: localHoursOfDay(nowUnixMillis),
-    // main.ts said "travelled" when the shell's offset was non-zero. The
-    // Scene sees two instants, not an offset, and the shell's cadence is one
-    // second — so anything under a second of drift between them is "live",
-    // and one second or more is a journey.
-    travelled: Math.abs(displayedUnixMillis - nowUnixMillis) >= 1000,
+    nowHours: localHoursOfDay(input.request.nowUnixMillis),
+    travelled: isTravelled(input.request),
   };
 }

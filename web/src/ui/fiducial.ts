@@ -17,22 +17,6 @@ import { FACE, hourToAngle, pointOnCircle } from "./clockface";
 import { THEME } from "./theme";
 import type { SceneMarks } from "../app/scene";
 
-/** Hours of travel between the displayed time and the present, in [-12, 12). */
-export function travelHours(displayedHours: number, nowHours: number): number {
-  return ((((displayedHours - nowHours) % 24) + 36) % 24) - 12;
-}
-
-/** Below a minute apart the cross and the sun are the same moment. */
-export const AT_PRESENT_HOURS = 1 / 60;
-
-export const isAtPresent = (displayedHours: number, nowHours: number): boolean =>
-  Math.abs(travelHours(displayedHours, nowHours)) < AT_PRESENT_HOURS;
-
-/**
- * Draw the gnomon at the present hour on the dial band. When the instrument
- * is live the sun already sits here, so the mark stays quiet; once time has
- * been scrubbed it brightens — it is the way home.
- */
 export function drawFiducial(
   ctx: CanvasRenderingContext2D,
   R: number,

@@ -18,7 +18,7 @@
  *
  * It holds no astronomy, no formatting, no caching.
  */
-import type { Scene, SceneMovement, SceneRow } from "./scene";
+import { GLANCE_ROWS, type Scene, type SceneMovement, type SceneRow } from "./scene";
 import { parseCoordinate, type Station } from "./location";
 import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
@@ -105,7 +105,7 @@ type Found = Partial<Record<Role, HTMLElement>>;
 const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "month", "phase"]);
 
 /** How many glance rows the ledger shows; the rest live behind the fold. */
-const GLANCE_SLOTS = 3;
+const GLANCE_SLOTS = GLANCE_ROWS;
 
 interface Slot {
   readonly root: HTMLElement;
@@ -158,7 +158,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       dial.style.height = `${size}px`;
       W = size * DPR;
       // The rete rides outside the band, so the band yields the rim to it.
-      R = (W * 0.5 * 0.985) / FACE.reteOuter;
+      R = (W * 0.5 * FACE.dialOuter) / FACE.reteOuter;
       if (ctx !== null) buildGrain(ctx);
     }
     if (firm !== null && fctx !== null) {
@@ -236,7 +236,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     const host = els.tonightAll;
     if (host === undefined || !isFoldOpen()) return;
     const key = programme
-      .map((m) => `${m.title}|${m.rows.map((r) => r.name + r.line).join("|")}`)
+      .map((m) => `${m.title}|${m.rows.map((r) => `${r.name}${r.line}${r.lit ? "*" : ""}${r.up ? "^" : ""}`).join("|")}`)
       .join("\n") + `\n${footnote}`;
     if (key === programmeKey) return;
     programmeKey = key;

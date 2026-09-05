@@ -20,6 +20,17 @@ export const THEME = {
   fontCaps: "'Cinzel', 'Times New Roman', serif",
 } as const;
 
+/** The planets' sky colours, muted — colour only where the sky provides it
+ * (DEC-008): Mercury dusk-grey, Venus brilliant white, Mars rust, Jupiter
+ * cream, Saturn pale gold. Shared by the rete and the ledger's swatches. */
+export const PLANET_COLORS: Readonly<Record<string, string>> = {
+  Mercury: "#9FA6B8",
+  Venus: "#EDEFF4",
+  Mars: "#C97B5A",
+  Jupiter: "#E3D3AE",
+  Saturn: "#D9C27E",
+};
+
 /**
  * Gold leaf is a material, not a colour (DEC-016): it has a shadow side, a
  * body, and a specular highlight. A flat yellow reads as paint; this reads as

@@ -41,4 +41,18 @@ export const FACE = {
   earth: 0.3, // WI-005
   sunDisc: 0.03,
   sunGlow: 0.085,
+  /** The rete (DEC-036): first ring outside the band, and the step between rings. */
+  ringBase: 1.14,
+  ringStep: 0.042,
+  /** Outer edge of the rete; the canvas fit and the ground disc reach to it. */
+  reteOuter: 1.14 + 4 * 0.042 + 0.02,
 } as const;
+
+/** The order of the spheres outward from the Sun's band: Mercury nearest. */
+export const RING_ORDER: readonly string[] = ["Mercury", "Venus", "Mars", "Jupiter", "Saturn"];
+
+/** Radius of a planet's ring as a fraction of R, by name; unknown names take the first ring. */
+export function ringFraction(name: string): number {
+  const k = RING_ORDER.indexOf(name);
+  return FACE.ringBase + (k < 0 ? 0 : k) * FACE.ringStep;
+}

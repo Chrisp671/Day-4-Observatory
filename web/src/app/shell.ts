@@ -18,7 +18,8 @@
  *
  * It holds no astronomy, no formatting, no caching.
  */
-import { GLANCE_ROWS, type Scene, type SceneMovement, type SceneRow } from "./scene";
+import type { Scene, SceneMovement, SceneRow } from "./scene";
+import { GLANCE_ROWS } from "./scene-consts";
 import { parseCoordinate, type Station } from "./location";
 import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";

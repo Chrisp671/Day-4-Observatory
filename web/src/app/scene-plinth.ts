@@ -25,15 +25,14 @@ import { mismatchPhrase, zoneReport } from "./clockzone";
 import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./constellations";
 import { formatCountdown, nextSunEvent } from "./hero";
 import { passionHours } from "./hours";
-import {
-  GLANCE_ROWS,
-  MOVEMENTS,
-  type SceneMovement,
-  type SceneReadouts,
-  type SceneRequest,
-  type SceneRing,
-  type SceneRow,
-  type SceneTonight,
+import { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
+import type {
+  SceneMovement,
+  SceneReadouts,
+  SceneRequest,
+  SceneRing,
+  SceneRow,
+  SceneTonight,
 } from "./scene";
 import { isTravelled, moonDayFor } from "./scene-core";
 import { compassAbbrev, transcript } from "./transcript";

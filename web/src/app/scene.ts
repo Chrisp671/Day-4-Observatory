@@ -34,6 +34,7 @@
  * minute; the frame by second. Callers call once per tick and keep nothing.
  */
 import type { Station } from "./location";
+export { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
 import { frame, type FrameState } from "../engine/frame";
 import { sceneBand, sceneEarth, sceneLight, sceneMarks, sceneMoon, sceneSun } from "./scene-core";
 import { sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
@@ -180,16 +181,6 @@ export interface SceneTonight {
   readonly programme: readonly SceneMovement[];
   readonly footnote: string;
 }
-
-/** How many rows the glance board carries; the rest live behind the fold. */
-export const GLANCE_ROWS = 3;
-
-/** The three movements of the programme, in order. */
-export const MOVEMENTS = {
-  wandering: "THE WANDERING STARS",
-  up: "UP NOW",
-  rising: "STILL TO RISE",
-} as const;
 
 /* ————————————————————————————— the whole ————————————————————————————— */
 

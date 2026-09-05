@@ -5,10 +5,16 @@
  *
  * The orbit itself is not drawn (DEC-026 subtraction): it was a construction
  * line that reported nothing. The disc alone rides the radius; the only line
- * on it is the up-arc, which says how long the moon is up.
+ * on it is the up-arc, which says how long the moon is up (DEC-031).
+ *
+ * drawMoon paints SceneMoon: hours on the dial, phase, the orbit's fraction
+ * of R, and today's up-arc or null. Where the moon is and whether it rose
+ * today are the Scene's business; moonDialHours stays here only because it
+ * is pure dial arithmetic and pinned by test (CHK-002).
  */
-import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
+import { hourToAngle, pointOnCircle, TAU } from "./clockface";
 import { THEME } from "./theme";
+import type { SceneMoon } from "../app/scene";
 
 /** Normalize hours into [0, 24). */
 const wrap24 = (h: number): number => ((h % 24) + 24) % 24;
@@ -70,49 +76,33 @@ export function drawMoonDisc(
   ctx.globalAlpha = 1;
 }
 
+/**
+ * The up-arc first — an ivory band along the orbit from moonrise to moonset,
+ * a little heavier than it was when it sat on a construction ring — then
+ * the disc riding over it.
+ */
 export function drawMoon(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  dialHours: number,
-  phaseAngleDeg: number,
+  moon: SceneMoon,
 ): void {
-  const orbitR = R * FACE.moonOrbit;
+  const orbitR = R * moon.orbit;
   const discR = R * 0.075;
-  const a = hourToAngle(dialHours);
 
-  // No construction orbit (DEC-026 subtraction): the ring was a construction
-  // line that reported nothing, and the interior was crowded. The up-arc
-  // (drawMoonUpArc) is the only line on this radius — it reports something.
-  const pos = pointOnCircle(a, orbitR);
-  drawMoonDisc(ctx, pos.x, pos.y, discR, phaseAngleDeg, dpr);
-}
+  if (moon.upArc !== null) {
+    ctx.save();
+    ctx.strokeStyle = THEME.moonlight;
+    ctx.globalAlpha = 0.5;
+    ctx.lineWidth = 2.8 * dpr;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.arc(0, 0, orbitR, hourToAngle(moon.upArc.riseHours), hourToAngle(moon.upArc.setHours));
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
 
-/**
- * The moon's up-arc: an ivory band along the moon orbit from moonrise to
- * moonset — "the rings are a nice visual cue to show me how long something
- * is gonna be up" (DEC-031). Skipped on the monthly day with no moonrise.
- *
- * With the construction orbit gone (DEC-026) this is the only line on the
- * moon's radius, so it carries a little more weight and alpha than it did
- * when it had to sit on top of an inkLow ring.
- */
-export function drawMoonUpArc(
-  ctx: CanvasRenderingContext2D,
-  R: number,
-  dpr: number,
-  riseHours: number | null,
-  setHours: number | null,
-): void {
-  if (riseHours === null || setHours === null) return;
-  ctx.save();
-  ctx.strokeStyle = THEME.moonlight;
-  ctx.globalAlpha = 0.5;
-  ctx.lineWidth = 2.8 * dpr;
-  ctx.lineCap = "round";
-  ctx.beginPath();
-  ctx.arc(0, 0, R * FACE.moonOrbit, hourToAngle(riseHours), hourToAngle(setHours));
-  ctx.stroke();
-  ctx.restore();
-  ctx.globalAlpha = 1;
+  const pos = pointOnCircle(hourToAngle(moon.hours), orbitR);
+  drawMoonDisc(ctx, pos.x, pos.y, discR, moon.phaseAngleDeg, dpr);
 }

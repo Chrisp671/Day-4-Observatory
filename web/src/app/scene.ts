@@ -34,6 +34,9 @@
  * minute; the frame by second. Callers call once per tick and keep nothing.
  */
 import type { Station } from "./location";
+import { frame, type FrameState } from "../engine/frame";
+import { sceneBand, sceneEarth, sceneLight, sceneMarks, sceneMoon, sceneSun } from "./scene-core";
+import { sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
 
 /* ————————————————————————————— request ————————————————————————————— */
 
@@ -198,5 +201,38 @@ export interface Scene {
 /**
  * The only entry point. Pure with respect to its arguments; memoised inside.
  * Never throws.
+ *
+ * Composition: one engine frame per displayed second and station, handed to
+ * the two halves of the scene — the core (light and dial) and the plinth
+ * (rete, readouts, tonight, transcript). Each half keeps its own day-anchored
+ * memos; this function keeps only the frame.
  */
-export declare function scene(request: SceneRequest): Scene;
+export function scene(request: SceneRequest): Scene {
+  const f = frameFor(request);
+  const input = { frame: f, request };
+  return {
+    light: sceneLight(input),
+    band: sceneBand(input),
+    sun: sceneSun(input),
+    moon: sceneMoon(input),
+    earth: sceneEarth(input),
+    rete: sceneRete(input),
+    marks: sceneMarks(input),
+    readouts: sceneReadouts(input),
+    tonight: sceneTonight(input),
+    spoken: sceneSpoken(input),
+  };
+}
+
+let frameKey = "";
+let frameMemo: FrameState | null = null;
+
+/** The engine frame for the displayed second at this station, memoised. */
+function frameFor(request: SceneRequest): FrameState {
+  const key = `${Math.floor(request.displayedUnixMillis / 1000)}|${request.station.lat}|${request.station.lon}`;
+  if (frameMemo === null || key !== frameKey) {
+    frameKey = key;
+    frameMemo = frame(request.displayedUnixMillis, request.station.lat, request.station.lon);
+  }
+  return frameMemo;
+}

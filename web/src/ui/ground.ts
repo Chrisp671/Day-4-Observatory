@@ -12,8 +12,13 @@
  * civil twilight it rises; by full day it is the ground the marks stand
  * on. There is no switch anywhere — only the sun's altitude, interpolated
  * continuously, the way everything else on this page moves.
+ *
+ * drawGround paints SceneLight.ground and reaches to the rete's edge. The
+ * altitude itself never arrives here; groundStrength is the pure curve the
+ * Scene applies, exported so the curve stays pinned by test.
  */
 import { FACE, TAU } from "./clockface";
+import type { SceneLight } from "../app/scene";
 
 /** Altitude at or below which the ground is fully transparent (civil dusk). */
 const NIGHT_ALT = -6;
@@ -28,17 +33,17 @@ export function groundStrength(sunAltitudeDeg: number): number {
 }
 
 /** The lapis medallion, centred at the current origin (the caller has already
- * translated to the dial centre). R is the dial radius in device pixels. */
+ * translated to the dial centre). R is the band's face radius in device pixels. */
 export function drawGround(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  strength: number,
-  outerFrac: number = FACE.dialOuter + 0.012,
+  light: SceneLight,
 ): void {
+  const strength = light.ground;
   if (strength < 0.01) return;
 
-  const r = R * outerFrac;
+  const r = R * (FACE.reteOuter + 0.02);
 
   ctx.save();
 

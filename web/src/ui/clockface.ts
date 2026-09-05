@@ -36,7 +36,6 @@ export const FACE = {
   dialInner: 0.875,
   numerals: 0.82,
   moonOrbit: 0.66, // the interior holds only earth, axis and moon
-  sidereal: 0.46, // a hairline scale beneath the moon
   sunAnnotationInner: 0.32,
   earth: 0.3, // WI-005
   sunDisc: 0.03,

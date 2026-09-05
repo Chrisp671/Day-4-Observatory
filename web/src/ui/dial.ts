@@ -1,22 +1,21 @@
 /**
  * The 24-hour dial band: ticks, numerals, and the real day/night arcs.
- * Thin drawing layer over clockface.ts math; reads only FrameState-derived
- * values passed in (never calls the engine — SEAM-001).
+ *
+ * Paints SceneBand's rise and set hours and nothing else. It knows no
+ * timestamp, no station and no sun: the Scene has already turned the sky
+ * into dial hours (SEAM-003), so this file is a thin drawing layer over
+ * clockface.ts geometry. Polar day and night arrive as null and leave the
+ * band unshaded.
  */
 import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
 import { goldLeaf, THEME } from "./theme";
-
-export interface DialTimes {
-  /** Civil local hours-of-day of the next sunrise/sunset, or null (polar). */
-  readonly riseHours: number | null;
-  readonly setHours: number | null;
-}
+import type { SceneBand } from "../app/scene";
 
 export function drawDial(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  times: DialTimes,
+  band: SceneBand,
 ): void {
   const rOut = R * FACE.dialOuter;
   const rIn = R * FACE.dialInner;
@@ -34,7 +33,8 @@ export function drawDial(
   // Night arc as ambience; rise/set encoded by SHAPE — full-band boundary
   // ticks — never by tint alone (DESIGN-CONSOLIDATED #2/#3: gold day-wash
   // deleted; the sun disc itself is the day indicator).
-  if (times.riseHours !== null && times.setHours !== null) {
+  if (band.riseHours !== null && band.setHours !== null) {
+    const { riseHours, setHours } = band;
     ctx.lineWidth = rOut - rIn;
     ctx.lineCap = "butt";
     // Night is DARKER than the field, day is LIGHTER: a value ladder, so the
@@ -42,12 +42,12 @@ export function drawDial(
     ctx.strokeStyle = THEME.shadow;
     ctx.globalAlpha = 0.75;
     ctx.beginPath();
-    ctx.arc(0, 0, rMid, hourToAngle(times.setHours), hourToAngle(times.riseHours + 24));
+    ctx.arc(0, 0, rMid, hourToAngle(setHours), hourToAngle(riseHours + 24));
     ctx.stroke();
     ctx.strokeStyle = THEME.inkHi;
     ctx.globalAlpha = 0.08;
     ctx.beginPath();
-    ctx.arc(0, 0, rMid, hourToAngle(times.riseHours), hourToAngle(times.setHours));
+    ctx.arc(0, 0, rMid, hourToAngle(riseHours), hourToAngle(setHours));
     ctx.stroke();
     ctx.globalAlpha = 1;
 
@@ -59,7 +59,7 @@ export function drawDial(
     const TWILIGHT_STEPS = 24;
     ctx.lineWidth = rOut - rIn;
     ctx.strokeStyle = THEME.dawn;
-    for (const boundary of [times.riseHours, times.setHours]) {
+    for (const boundary of [riseHours, setHours]) {
       for (let i = 0; i < TWILIGHT_STEPS; i++) {
         const t0 = -1 + (2 * i) / TWILIGHT_STEPS;
         const t1 = -1 + (2 * (i + 1)) / TWILIGHT_STEPS;
@@ -75,7 +75,7 @@ export function drawDial(
       }
     }
     ctx.globalAlpha = 1;
-    for (const h of [times.riseHours, times.setHours]) {
+    for (const h of [riseHours, setHours]) {
       const a = hourToAngle(h);
       const inner = pointOnCircle(a, rIn - R * 0.012);
       const outer = pointOnCircle(a, rOut);

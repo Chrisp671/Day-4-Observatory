@@ -6,9 +6,14 @@
  * Wilson-globe rule: the limb is strongest; one curve family mid-weight,
  * the other hairline. Night hemisphere is one crisp clipped shape — the
  * old "softener" ellipse (an airbrush in disguise) is gone.
+ *
+ * Paints SceneEarth: only where the sun stands on the dial, in hours. The
+ * night hemisphere faces away from it; the globe knows no clock and no
+ * station beyond that.
  */
-import { FACE, TAU } from "./clockface";
+import { FACE, hourToAngle, TAU } from "./clockface";
 import { THEME } from "./theme";
+import type { SceneEarth } from "../app/scene";
 
 const TROPIC_SIN = Math.sin((23.44 * Math.PI) / 180); // ≈ 0.398
 
@@ -16,9 +21,10 @@ export function drawEarth(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  sunDialAngleRad: number,
+  earth: SceneEarth,
 ): void {
   const r = R * FACE.earth;
+  const sunDialAngleRad = hourToAngle(earth.sunHours);
 
   // Limb — strongest line on the body.
   ctx.lineWidth = 1.9 * dpr;

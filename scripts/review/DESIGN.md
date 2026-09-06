@@ -1,5 +1,21 @@
 # Review pipeline design
 
+## OpenCode Go activation amendment
+
+The owner requested a different vision reviewer after the configured MiMo Pro
+proved text-only. Qwen3.7 Plus is served by the same existing Go account and accepts
+images. The new adapter uses only the fixed HTTPS endpoint
+`https://opencode.ai/zen/go/v1/messages`; it does not accept arbitrary
+OpenAI-compatible base URLs. The allowlist initially contains only `qwen3.7-plus`,
+mapped to the underlying `qwen` family. A proxy's provider name is not a
+model family and cannot evade independence checks. Unknown/text-only models fail
+before a paid request. Credentials remain step-scoped and no new dependency is
+introduced. Responses must end normally. Only text and reasoning blocks are accepted;
+reasoning is discarded and only final text enters the strict review validator.
+Tool-use and other unexpected blocks are rejected, even with an end-turn marker.
+The HTTP adapter retains no-redirect, size and time bounds. This amendment was
+walked through the Rafter ingestion/deployment and LLM/CWE questions before code.
+
 ## Contract and ownership
 
 The pipeline owns `.github/workflows/review-web.yml`,

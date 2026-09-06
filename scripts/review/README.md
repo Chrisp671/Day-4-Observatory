@@ -14,8 +14,11 @@ modified by the reviewer.
 2. Under repository Settings > Secrets and variables > Actions, add the secret
    `REVIEW_API_KEY` for your chosen provider. Add repository variables
    `REVIEW_PROVIDER` and `REVIEW_MODEL`. Provider values are `openai`, `anthropic`,
-   or `google`; use a currently available vision model ID from that provider.
+   `google`, or `opencode-go`; use an approved vision model ID from that provider.
    The key must belong to that provider. No endpoint URL or key belongs in code.
+   The owner's selected reviewer is `REVIEW_PROVIDER=opencode-go` and
+   `REVIEW_MODEL=qwen3.7-plus`, using the existing Go account. Qwen is Alibaba's
+   family; the account's text-only MiMo Pro reviewer cannot inspect screenshots.
 3. Open a small web PR with the metadata below. Verify eight screenshots, a single
    comment, and the **Web review** check. Re-run **Web review evidence** to retry a
    failed model call or to review after changing the variables/key. Editing the PR
@@ -35,9 +38,13 @@ Implements DEC-036 and WI-027.
 ```
 
 The family declaration is required, case-insensitive, and must appear exactly once
-on its own line. Accepted families match the provider values. All models from the
-same provider count as one family, conservatively; choosing another model from
-that provider does not establish independence. For multiple builders, use a
+on its own line. Accepted families are `openai`, `anthropic`, `google`, and
+`qwen`. Models from the same developer count as one family, conservatively;
+using a different API gateway does not establish independence. OpenCode Go is a
+gateway, not a family: its initially allowlisted `qwen3.7-plus` maps to `qwen`.
+Other Go models are rejected until explicitly reviewed and added with their family
+and vision capability. The Messages adapter discards reasoning blocks and validates
+only the final JSON review; tool-use blocks and truncated answers fail. For multiple builders, use a
 reviewer provider different from all of them and document the contributors; the
 current machine-readable field records the lead builder only. Model provenance
 is declared, not cryptographically verified.
@@ -129,5 +136,7 @@ and validation limits.
 - [OpenAI Responses API](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
 - [Anthropic image inputs](https://platform.claude.com/docs/en/build-with-claude/vision)
 - [Google generateContent API](https://ai.google.dev/api/generate-content)
+- [OpenCode Go endpoints](https://opencode.ai/docs/go/)
+- [Qwen vision inputs](https://www.alibabacloud.com/help/en/model-studio/vision-model/)
 
 Keep browser and action pins current through separately reviewed dependency updates.

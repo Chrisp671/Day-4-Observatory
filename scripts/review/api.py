@@ -6,7 +6,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from contract import Incomplete, SCHEMA, require, strict_json
+from contract import Incomplete, OPENCODE_GO_MODELS, SCHEMA, require, strict_json
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -107,6 +107,16 @@ def model_request(provider, model, key, instructions, evidence, images):
         headers = {'x-api-key': key, 'anthropic-version': '2023-06-01'}
         body = {'model': model, 'system': instructions, 'max_tokens': 12000,
                 'messages': [{'role': 'user', 'content': content}]}
+    elif provider == 'opencode-go':
+        require(model in OPENCODE_GO_MODELS, 'OpenCode Go reviewer must be an approved vision model: qwen3.7-plus.')
+        content = [{'type': 'text', 'text': evidence}]
+        for name, data in encoded:
+            content.extend([{'type': 'text', 'text': name}, {'type': 'image', 'source':
+                            {'type': 'base64', 'media_type': 'image/png', 'data': data}}])
+        url = 'https://opencode.ai/zen/go/v1/messages'
+        headers = {'x-api-key': key, 'anthropic-version': '2023-06-01', 'User-Agent': 'day4-review/1.0'}
+        body = {'model': model, 'system': instructions, 'max_tokens': 12000,
+                'messages': [{'role': 'user', 'content': content}]}
     else:
         require(provider == 'google', 'Unknown model provider.')
         parts = [{'text': evidence}]
@@ -127,6 +137,14 @@ def model_request(provider, model, key, instructions, evidence, images):
     elif provider == 'anthropic':
         require(response.get('stop_reason') == 'end_turn', 'Anthropic response was incomplete or refused.')
         text = ''.join(c.get('text', '') for c in response.get('content', []) if c.get('type') == 'text')
+    elif provider == 'opencode-go':
+        require(response.get('stop_reason') == 'end_turn', 'OpenCode Go response was incomplete or refused.')
+        blocks = response.get('content')
+        require(type(blocks) is list and bool(blocks) and all(
+            type(c) is dict and (c.get('type') in ('thinking', 'redacted_thinking') or
+                                (c.get('type') == 'text' and type(c.get('text')) is str)) for c in blocks),
+            'OpenCode Go returned non-text content instead of a review.')
+        text = ''.join(c['text'] for c in blocks if c['type'] == 'text')
     else:
         candidates = response.get('candidates', [])
         require(len(candidates) == 1 and candidates[0].get('finishReason') == 'STOP', 'Google response was incomplete or refused.')

@@ -74,10 +74,17 @@ class ContractTests(unittest.TestCase):
 
     def test_model_family_is_enforced_before_request(self):
         self.assertEqual(provider_config('google', 'gemini-example', 'Builder-Model-Family: openai'), 'openai')
+        self.assertEqual(provider_config('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: anthropic'), 'anthropic')
+        self.assertEqual(provider_config('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: OPENAI\r\nCHK-004'), 'openai')
         for args in [('google', 'gemini-example', 'Builder-Model-Family: google'),
                      ('openai', 'claude-example', 'Builder-Model-Family: google'),
                      ('openai', '../evil', 'Builder-Model-Family: google'),
-                     ('openai', 'gpt-example', ''), ('unknown', 'x', 'Builder-Model-Family: openai')]:
+                     ('openai', 'gpt-example', ''), ('unknown', 'x', 'Builder-Model-Family: openai'),
+                     ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: qwen'),
+                     ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: opencode-go'),
+                     ('opencode-go', 'mimo-v2.5-pro', 'Builder-Model-Family: openai'),
+                     ('opencode-go', 'gpt-example', 'Builder-Model-Family: openai'),
+                     ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: openai\nBuilder-Model-Family: qwen')]:
             with self.assertRaises(Incomplete): provider_config(*args)
 
     def test_plan_requires_citations_and_includes_canon(self):
@@ -95,17 +102,39 @@ class ContractTests(unittest.TestCase):
             'openai': {'status': 'completed', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '{}'}]}]},
             'anthropic': {'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': '{}'}]},
             'google': {'candidates': [{'finishReason': 'STOP', 'content': {'parts': [{'text': '{}'}]}}]},
+            'opencode-go': {'stop_reason': 'end_turn', 'content': [{'type': 'thinking', 'thinking': 'discard'}, {'type': 'text', 'text': '{}'}]},
         }
         for provider, response in responses.items():
+            model = 'qwen3.7-plus' if provider == 'opencode-go' else 'model'
             with self.subTest(provider=provider), patch('api.request', return_value=json.dumps(response).encode()) as transport:
-                self.assertEqual(api.model_request(provider, 'model', 'test-key', 'policy', 'evidence', images), '{}')
+                self.assertEqual(api.model_request(provider, model, 'test-key', 'policy', 'evidence', images), '{}')
                 args = transport.call_args.args
                 payload = json.dumps(args[2])
                 self.assertEqual(payload.count(base64.b64encode(b'image').decode()), 8)
                 self.assertNotIn('tools', args[2])
                 self.assertNotIn('test-key', payload)
+                if provider == 'opencode-go':
+                    self.assertEqual(args[0], 'https://opencode.ai/zen/go/v1/messages')
+                    self.assertEqual(args[2]['system'], 'policy')
+                    self.assertEqual(args[2]['messages'][0]['role'], 'user')
+                    self.assertEqual(args[2]['max_tokens'], 12000)
             with patch('api.request', return_value=b'{}'), self.assertRaises(Incomplete):
-                api.model_request(provider, 'model', 'test-key', 'policy', 'evidence', images)
+                api.model_request(provider, model, 'test-key', 'policy', 'evidence', images)
+
+    def test_opencode_refuses_tool_calls_refusals_truncation_and_unknown_models(self):
+        for response in (
+            {'stop_reason': 'tool_use', 'content': [{'type': 'text', 'text': '{}'}]},
+            {'stop_reason': 'max_tokens', 'content': [{'type': 'text', 'text': '{}'}]},
+            {'stop_reason': 'refusal', 'content': [{'type': 'text', 'text': '{}'}]},
+            {'stop_reason': 'end_turn', 'content': [{'type': 'tool_use', 'input': {}}]},
+            {'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': None}]},
+            {'stop_reason': 'end_turn', 'content': []},
+            {'stop_reason': 'end_turn', 'content': [{'type': 'thinking', 'thinking': '{}'}]}):
+            with patch('api.request', return_value=json.dumps(response).encode()), self.assertRaises(Incomplete):
+                api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'policy', 'evidence', {})
+        with patch('api.request') as transport, self.assertRaises(Incomplete):
+            api.model_request('opencode-go', 'mimo-v2.5-pro', 'test-key', 'policy', 'evidence', {})
+        transport.assert_not_called()
 
     def test_artifact_redirect_never_forwards_auth_and_rejects_foreign_host(self):
         github = api.GitHub('Chrisp671/Day-4-Observatory', 'test-key')

@@ -1,5 +1,29 @@
 # Pipeline security review and validation
 
+## OpenCode Go adapter follow-up
+
+The activation follow-up adds Qwen3.7 Plus through the existing OpenCode Go account.
+Rafter's LLM and CWE review confirms a fixed HTTPS destination, no redirects,
+step-scoped credentials, no added dependencies and unchanged evidence/output
+limits. Only the approved vision model `qwen3.7-plus` is accepted. Its underlying
+family is `qwen`, so naming a proxy cannot bypass the different-family rule.
+Conflicting family declarations, text-only/unapproved models, tool-call results,
+refusals, missing final text and truncated responses fail closed. Reasoning blocks
+are discarded, never parsed as the final review or published. Thirteen Python
+tests pass, including the added adapter and family cases. The follow-up's local
+pattern-based secret scan returned no findings. Remote Rafter remains deferred
+by the owner; this is not a remote SAST/SCA certification.
+
+Live OpenCode Go validation used `qwen3.7-plus` with the existing account key,
+235,421 characters of diff/source/rubric evidence and all eight real PNGs. The
+response passed the strict schema and source-line validator: eight judgements,
+two advisory visual findings and no blocking findings. It identified the known
+tablet dial overlap and phone ledger truncation, but still marked every screenshot
+legible. This proves API/image/response integration, not human-equivalent visual
+judgement; the owner's rendered-size judgement remains authoritative.
+
+The remaining evidence below records the original PR #4 validation.
+
 Reviewed with the Rafter secure-design, LLM and CWE walkthroughs. The design and
 trust boundaries were recorded in DESIGN.md before implementation. No unresolved
 blocking finding was identified in this manual walkthrough. Remote Rafter

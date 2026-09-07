@@ -9,6 +9,7 @@ STATES = ('loaded', 'month', 'tonight', 'second-row')
 IMAGES = {f'{device}-{state}.png': size for device, size in
           [('phone', (390, 844)), ('tablet', (820, 1180))] for state in STATES}
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'REQ-011'}
+OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
 
 
 class Incomplete(Exception):
@@ -130,14 +131,22 @@ def read_artifact(data):
 
 
 def provider_config(provider, model, body):
-    require(provider in ('openai', 'anthropic', 'google'), 'Set REVIEW_PROVIDER to openai, anthropic or google.')
+    require(provider in ('openai', 'anthropic', 'google', 'opencode-go'),
+            'Set REVIEW_PROVIDER to openai, anthropic, google or opencode-go.')
     require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}', model or ''), 'Set REVIEW_MODEL to a valid vision model ID.')
     prefixes = {'openai': r'(?:gpt-|o[1-9])', 'anthropic': r'claude-', 'google': r'gemini-'}
-    require(re.match(prefixes[provider], model), 'REVIEW_MODEL does not match the configured provider family.')
-    declarations = re.findall(r'^Builder-Model-Family:\s*(openai|anthropic|google)\s*$', body, re.M | re.I)
-    require(len(declarations) == 1, 'PR body must contain one Builder-Model-Family: openai, anthropic or google line.')
-    builder = declarations[0].lower()
-    require(builder != provider, 'Reviewer and builder must use different model families.')
+    if provider == 'opencode-go':
+        require(model in OPENCODE_GO_MODELS, 'OpenCode Go reviewer must be an approved vision model: qwen3.7-plus.')
+        family = OPENCODE_GO_MODELS[model]
+    else:
+        require(re.match(prefixes[provider], model), 'REVIEW_MODEL does not match the configured provider family.')
+        family = provider
+    declarations = re.findall(r'^Builder-Model-Family:[ \t]*([^\r\n]*)\r?$', body, re.M | re.I)
+    require(len(declarations) == 1, 'PR body must contain exactly one Builder-Model-Family line.')
+    builder = declarations[0].strip().lower()
+    require(builder in ('openai', 'anthropic', 'google', 'qwen'),
+            'Builder-Model-Family must be openai, anthropic, google or qwen (not a proxy provider).')
+    require(builder != family, 'Reviewer and builder must use different model families.')
     return builder
 
 

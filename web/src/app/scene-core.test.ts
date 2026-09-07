@@ -27,8 +27,10 @@ function at(displayed: number, station = NYC, now = displayed): CoreInput {
   };
 }
 
-const NOON = new Date(2026, 5, 21, 12, 30, 0).getTime(); // 21 Jun 2026, near solar noon
-const MIDNIGHT = new Date(2026, 5, 21, 0, 30, 0).getTime();
+// Instants are fixed in UTC so the tests mean the same thing on any machine:
+// 17:00Z is solar noon at 74°W on 21 Jun 2026; 05:00Z is the small hours.
+const NOON = Date.UTC(2026, 5, 21, 17, 0, 0);
+const MIDNIGHT = Date.UTC(2026, 5, 21, 5, 0, 0);
 
 describe("sceneLight", () => {
   it("has no ground at night and full ground at noon", () => {
@@ -54,13 +56,15 @@ describe("sceneLight", () => {
 });
 
 describe("sceneBand", () => {
-  it("puts the next sunrise before the next sunset on a summer noon", () => {
-    // At noon the sun is up: the next set is this evening, the next rise
-    // tomorrow morning — so on the dial, rise hours < set hours.
+  it("spans a long summer day between sunrise and sunset", () => {
+    // Dial hours are in the viewer's zone, so "rise before set" is not an
+    // invariant; the daylight span (set minus rise, round the dial) is.
     const b = sceneBand(at(NOON));
     expect(b.riseHours).not.toBeNull();
     expect(b.setHours).not.toBeNull();
-    expect(b.riseHours as number).toBeLessThan(b.setHours as number);
+    const span = (((b.setHours as number) - (b.riseHours as number)) % 24 + 24) % 24;
+    expect(span).toBeGreaterThan(13);
+    expect(span).toBeLessThan(16);
   });
 
   it("marks solar noon at the sixth hour", () => {
@@ -124,8 +128,9 @@ describe("sceneMarks", () => {
 });
 
 describe("polar night (85°N, December)", () => {
-  const ARCTIC = { lat: 85.0, lon: 0.0 };
-  const T = new Date(2026, 11, 15, 12, 0, 0).getTime();
+  // 88°N in December: the sun stays well below -18° all day, in any zone.
+  const ARCTIC = { lat: 88.0, lon: 0.0 };
+  const T = Date.UTC(2026, 11, 15, 12, 0, 0);
   const input = at(T, ARCTIC);
 
   it("returns from every slice without throwing", () => {

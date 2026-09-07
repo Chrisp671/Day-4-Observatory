@@ -1,0 +1,13 @@
+{
+  "name": "day4-review-pipeline",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "capture": "node capture.mjs",
+    "verify-live": "node verify-live.mjs",
+    "test": "node --test *.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

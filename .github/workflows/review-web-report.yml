@@ -1,0 +1,41 @@
+name: Publish web review
+
+on:
+  workflow_run:
+    workflows: [Web review evidence]
+    types: [in_progress, completed]
+
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  pull-requests: write
+
+# Serialize callbacks for a commit; the reporter also checks run/attempt freshness.
+concurrency:
+  group: web-review-report-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # github.sha is the trusted default-branch commit for workflow_run.
+      # Never replace this with the PR head or execute any downloaded artifact.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/review
+            .github/review-rubric.md
+          sparse-checkout-cone-mode: false
+      - name: Review evidence and publish head-commit check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REVIEW_API_KEY: ${{ secrets.REVIEW_API_KEY }}
+          REVIEW_PROVIDER: ${{ vars.REVIEW_PROVIDER }}
+          REVIEW_MODEL: ${{ vars.REVIEW_MODEL }}
+        run: python3 scripts/review/review.py

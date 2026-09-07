@@ -1,0 +1,83 @@
+name: Web review evidence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-review-evidence-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: Gate and capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Determine review scope
+        id: scope
+        run: python3 scripts/review/changes.py
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        if: steps.scope.outputs.relevant == 'true'
+        with:
+          node-version: 22
+      - name: Install application
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: web
+        run: npm ci
+      - name: Test application
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: web
+        run: npm test
+      - name: Typecheck application
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: web
+        run: npx --no-install tsc --noEmit
+      - name: Build application
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: web
+        run: npm run build
+      - name: Install capture tooling
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: scripts/review
+        run: npm ci --ignore-scripts
+      - name: Test review boundaries
+        if: steps.scope.outputs.relevant == 'true'
+        run: |
+          python3 -m unittest discover -s scripts/review -p 'test_*.py'
+          npm test --prefix scripts/review
+      - name: Install Chromium
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: scripts/review
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Capture four states at phone and tablet sizes
+        if: steps.scope.outputs.relevant == 'true'
+        working-directory: web
+        shell: bash
+        run: |
+          npx --no-install vite preview --host 127.0.0.1 --port 4173 --strictPort > "$RUNNER_TEMP/vite-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 1
+          done
+          node ../scripts/review/capture.mjs http://127.0.0.1:4173/ ../scripts/review/output
+      - name: Upload screenshot evidence
+        if: always() && steps.scope.outputs.relevant == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: web-review-evidence
+          path: |
+            scripts/review/output/*.png
+            scripts/review/output/manifest.json
+          if-no-files-found: error
+          retention-days: 14

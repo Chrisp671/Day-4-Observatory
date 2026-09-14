@@ -267,7 +267,11 @@
     .parc:empty,.pwhere:empty{display:none}
     .stage[hidden]{display:none!important}
 
-    /* ————— the Constellations view: one chart, then the sky to choose from (REQ-015) ————— */
+    /* ————— the Constellations view: one chart, then the sky to choose from (REQ-015) —————
+       The lists are long, so this view scrolls on every screen and the chart
+       keeps a fixed height instead of yielding to them. */
+    html[data-mode="constellations"] body{overflow-y:auto;height:auto;min-height:100dvh}
+    .chart-stage{flex:none;height:clamp(260px,52vh,600px)}
     .chart-head{padding:10px 2px 6px;text-align:center}
     .chart-title{font-family:var(--caps);font-weight:700;font-size:15px;letter-spacing:.3em;
       text-transform:uppercase;color:var(--gold-soft);display:flex;align-items:center;

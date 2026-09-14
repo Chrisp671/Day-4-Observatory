@@ -509,6 +509,8 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     if (els.focusContext !== undefined) els.focusContext.hidden = mode === "day4";
     // The dial is shared by Day 4 and Planets; Constellations has its own view.
     if (els.stage !== undefined) els.stage.hidden = mode === "constellations";
+    // The page's own layout rules may differ by view (the Constellations lists scroll).
+    doc.documentElement.dataset["mode"] = mode;
   };
 
   /* ————— the rail: steppers and NOW ————— */

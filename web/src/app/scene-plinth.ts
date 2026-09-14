@@ -22,11 +22,12 @@ import { localHoursOfDay, RING_ORDER, ringFraction } from "../ui/clockface";
 import { PLANET_COLORS } from "../ui/theme";
 import { fmt12, fmt12c } from "./clock12";
 import { mismatchPhrase, zoneReport } from "./clockzone";
-import { CONSTELLATIONS, isDarkEnough, tonightBoard, type SkyEntry } from "./constellations";
+import { altAz, CONSTELLATIONS, isDarkEnough, skyEntry, tonightBoard, type SkyEntry } from "./constellations";
 import { formatCountdown, nextSunEvent } from "./hero";
 import { passionHours } from "./hours";
 import { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
 import type {
+  SceneConstellation,
   SceneMovement,
   ScenePlanet,
   SceneReadouts,
@@ -356,12 +357,12 @@ const planetRow = (p: PlanetTimes, r: SceneRequest): SceneRow => ({
   starred: false,
 });
 
-const skyRow = (e: SkyEntry, line: string): SceneRow => ({
+const skyRow = (e: SkyEntry, line: string, chart: string | null): SceneRow => ({
   name: e.constellation.name,
   line,
   up: e.status !== "down",
   color: null,
-  lit: false,
+  lit: e.constellation.name === chart,
   starred: e.constellation.mazzaroth === true,
 });
 
@@ -402,7 +403,7 @@ export function sceneTonight(input: PlinthInput): SceneTonight {
       .sort((a, b) => (a.name === lit ? -1 : b.name === lit ? 1 : RING_ORDER.indexOf(a.name) - RING_ORDER.indexOf(b.name)));
     const glance: SceneRow[] = [
       ...favourites.map((p) => planetRow(p, r)),
-      ...notable.map((e) => skyRow(e, skyPhrase(e))),
+      ...notable.map((e) => skyRow(e, skyPhrase(e), r.chart)),
     ].slice(0, GLANCE_ROWS);
 
     // The program, in movements: the wandering stars first, then what is up,
@@ -413,8 +414,8 @@ export function sceneTonight(input: PlinthInput): SceneTonight {
     const rising = all.filter((e) => e.status === "down");
     const programme: SceneMovement[] = [
       { title: MOVEMENTS.wandering, rows: planets.map((p) => planetRow(p, r)) },
-      { title: MOVEMENTS.up, rows: up.map((e) => skyRow(e, shortSkyPhrase(e))) },
-      { title: MOVEMENTS.rising, rows: rising.map((e) => skyRow(e, shortSkyPhrase(e))) },
+      { title: MOVEMENTS.up, rows: up.map((e) => skyRow(e, shortSkyPhrase(e), r.chart)) },
+      { title: MOVEMENTS.rising, rows: rising.map((e) => skyRow(e, shortSkyPhrase(e), r.chart)) },
     ];
 
     return {
@@ -519,6 +520,63 @@ export function scenePlanets(input: PlinthInput): readonly ScenePlanet[] {
         };
       });
   }, EMPTY_PLANETS);
+}
+
+/* ————————————————————————————— the chosen constellation ————————————————————————————— */
+
+/**
+ * The chosen constellation for the Constellations view (REQ-015): its
+ * standing in the sky at the shared place and time, tracked by its
+ * brightest star, and an honest sentence on seeing it. Null when nothing is
+ * chosen or the name is not in the catalog; never throws.
+ */
+export function sceneConstellation(input: PlinthInput): SceneConstellation | null {
+  return safely((): SceneConstellation | null => {
+    const { frame: s, request: r } = input;
+    if (r.chart === null) return null;
+    const c = CONSTELLATIONS.find((k) => k.name === r.chart);
+    if (c === undefined) return null;
+    const lst = s.siderealHours + r.station.lon / 15;
+    const e = skyEntry(c, lst, r.station.lat);
+    const { altitudeDeg, azimuthDeg } = altAz(c.raHours, c.decDeg, lst, r.station.lat);
+    const up = e.status === "up" || e.status === "circumpolar";
+    const dir = compassPoint(azimuthDeg);
+    const alt = Math.round(altitudeDeg);
+    const dark = isDarkEnough(s.sun.altitudeDeg);
+    const hemi = r.station.lat >= 0 ? "N" : "S";
+
+    const status =
+      e.status === "circumpolar" ? "Up all night"
+      : e.status === "never" ? "Never rises from this station"
+      : e.status === "up" ? `Up now · sets in ${formatCountdown(e.untilMillis ?? 0)}`
+      : `Rises in ${formatCountdown(e.untilMillis ?? 0)}`;
+
+    let visibility: string;
+    if (e.status === "never") {
+      visibility = `From ${Math.abs(r.station.lat).toFixed(0)}°${hemi}, ${c.star} never clears the horizon; travel ${hemi === "N" ? "south" : "north"} to see it.`;
+    } else if (up && alt > 0) {
+      visibility = !dark
+        ? `Up now, but the sky is not dark yet; look ${dir}, ${alt}° up, once it is.`
+        : alt < 10
+          ? `Up now, low in the ${dir}: it needs a clear horizon.`
+          : `Up now and the sky is dark: look ${dir}, ${alt}° above the horizon.`;
+    } else if (up) {
+      // Circumpolar, but grazing the horizon at this moment.
+      visibility = `Up now, but right on the ${dir} horizon; it climbs later in the night.`;
+    } else {
+      visibility = `Below the horizon; rises in the ${dir} in ${formatCountdown(e.untilMillis ?? 0)}.`;
+    }
+
+    return {
+      name: c.name,
+      tracked: `tracked by ${c.star}`,
+      status,
+      where: up && alt > 0 ? `${alt}° up, ${dir}` : "",
+      visibility,
+      note: c.mazzaroth === true ? FOOTNOTE : "",
+      starred: c.mazzaroth === true,
+    };
+  }, null);
 }
 
 /* ————————————————————————————— spoken ————————————————————————————— */

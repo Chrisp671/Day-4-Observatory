@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { frame } from "../engine/frame";
 import { RING_ORDER } from "../ui/clockface";
-import { type PlinthInput, scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
+import { type PlinthInput, sceneConstellation, scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
 import type { SceneRequest } from "./scene";
 
 const NYC = { lat: 40.0, lon: -74.0 };
@@ -17,6 +17,7 @@ function input(t: number, lit: string | null, now: number = t): PlinthInput {
     nowUnixMillis: now,
     station: NYC,
     lit,
+    chart: null,
   };
   return { frame: frame(t, NYC.lat, NYC.lon), request };
 }
@@ -179,7 +180,7 @@ describe("scenePlanets (REQ-014)", () => {
 
   it("keeps every row and explains the missing ring at a polar station in midsummer", () => {
     const polar = { lat: 85.0, lon: -74.0 };
-    const request: SceneRequest = { displayedUnixMillis: NOON, nowUnixMillis: NOON, station: polar, lit: null };
+    const request: SceneRequest = { displayedUnixMillis: NOON, nowUnixMillis: NOON, station: polar, lit: null, chart: null };
     const inp: PlinthInput = { frame: frame(NOON, polar.lat, polar.lon), request };
     const planets = scenePlanets(inp);
     const rete = sceneRete(inp);
@@ -188,5 +189,49 @@ describe("scenePlanets (REQ-014)", () => {
     const noRing = planets.filter((p) => p.arcNote !== "");
     expect(noRing.length).toBe(5 - rete.length);
     for (const p of noRing) expect(p.arcNote).toMatch(/^No ring today/);
+  });
+});
+
+describe("sceneConstellation (REQ-015)", () => {
+  const withChart = (t: number, chart: string | null): PlinthInput => {
+    const request: SceneRequest = { displayedUnixMillis: t, nowUnixMillis: t, station: NYC, lit: null, chart };
+    return { frame: frame(t, NYC.lat, NYC.lon), request };
+  };
+
+  it("is null when nothing is chosen or the name is unknown", () => {
+    expect(sceneConstellation(withChart(NIGHT, null))).toBeNull();
+    expect(sceneConstellation(withChart(NIGHT, "Atlantis"))).toBeNull();
+  });
+
+  it("words an up constellation with where to look, and marks the chosen row lit", () => {
+    const out = sceneConstellation(withChart(NIGHT, "Cassiopeia"));
+    expect(out?.status).toBe("Up all night");
+    expect(out?.where).toMatch(/^\d+° up, [a-z]+$/);
+    expect(out?.visibility).toMatch(/^Up now/);
+    expect(out?.tracked).toBe("tracked by Schedar");
+    const rows = sceneTonight(withChart(NIGHT, "Cassiopeia")).programme.flatMap((m) => m.rows);
+    expect(rows.filter((r) => r.lit).map((r) => r.name)).toEqual(["Cassiopeia"]);
+  });
+
+  it("says plainly when a constellation never rises from the station", () => {
+    const out = sceneConstellation(withChart(NIGHT, "Crux"));
+    expect(out?.status).toBe("Never rises from this station");
+    expect(out?.where).toBe("");
+    expect(out?.visibility).toMatch(/never clears the horizon/);
+  });
+
+  it("gives a rise countdown for one below the horizon, and stars the Mazzaroth", () => {
+    const down = ["Leo", "Virgo", "Aries", "Taurus", "Libra"].map((n) => sceneConstellation(withChart(NIGHT, n)))
+      .find((o) => o?.status.startsWith("Rises in"));
+    expect(down).toBeDefined();
+    expect(down?.starred).toBe(true);
+    expect(down?.note).toContain("Mazzaroth");
+    expect(down?.where).toBe("");
+    expect(down?.visibility).toMatch(/^Below the horizon; rises in the [a-z]+ in \d/);
+  });
+
+  it("does not promise stars before dark", () => {
+    const out = sceneConstellation(withChart(NOON, "Cassiopeia"));
+    expect(out?.visibility).toMatch(/not dark yet/);
   });
 });

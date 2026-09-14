@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  altAz,
   CONSTELLATIONS,
   horizonHourAngle,
   isDarkEnough,
@@ -168,5 +169,38 @@ describe("isDarkEnough", () => {
     expect(isDarkEnough(5)).toBe(false); // daylight
     expect(isDarkEnough(-2)).toBe(false); // sun just down, sky still bright
     expect(isDarkEnough(-10)).toBe(true); // nautical twilight and beyond
+  });
+});
+
+describe("altAz", () => {
+  it("puts Polaris at the observer's latitude, due north", () => {
+    const polaris = find("Ursa Minor");
+    for (const lat of [40, 60, 10]) {
+      const { altitudeDeg, azimuthDeg } = altAz(polaris.raHours, polaris.decDeg, 7.3, lat);
+      expect(altitudeDeg).toBeCloseTo(lat, 0);
+      expect(azimuthDeg < 3 || azimuthDeg > 357).toBe(true);
+    }
+  });
+
+  it("puts a star on the meridian due south of a northern observer, at 90 - lat + dec", () => {
+    const sirius = find("Canis Major");
+    const { altitudeDeg, azimuthDeg } = altAz(sirius.raHours, sirius.decDeg, sirius.raHours, 40);
+    expect(altitudeDeg).toBeCloseTo(90 - 40 + sirius.decDeg, 5);
+    expect(azimuthDeg).toBeCloseTo(180, 5);
+  });
+
+  it("puts a star at the horizon exactly when horizonHourAngle says so", () => {
+    const antares = find("Scorpius");
+    const h0 = horizonHourAngle(antares.decDeg, 40) as number;
+    expect(altAz(antares.raHours, antares.decDeg, antares.raHours + h0, 40).altitudeDeg).toBeCloseTo(0, 5);
+    expect(altAz(antares.raHours, antares.decDeg, antares.raHours + h0 / 2, 40).altitudeDeg).toBeGreaterThan(0);
+    expect(altAz(antares.raHours, antares.decDeg, antares.raHours + h0 * 1.5, 40).altitudeDeg).toBeLessThan(0);
+  });
+
+  it("rises in the east and sets in the west", () => {
+    const vega = find("Lyra");
+    const h0 = horizonHourAngle(vega.decDeg, 40) as number;
+    expect(altAz(vega.raHours, vega.decDeg, vega.raHours - h0, 40).azimuthDeg).toBeLessThan(180);
+    expect(altAz(vega.raHours, vega.decDeg, vega.raHours + h0, 40).azimuthDeg).toBeGreaterThan(180);
   });
 });

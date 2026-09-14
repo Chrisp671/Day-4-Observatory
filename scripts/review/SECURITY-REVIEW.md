@@ -1,5 +1,32 @@
 # Pipeline security review and validation
 
+## PR #3 failure repair
+
+Read-only replay of PR #3's exact head and screenshot artifact reproduced HTTP
+400 `MissingSessionID` on a 6,202,288-byte request. The provider required the
+`x-opencode-session` routing header; the response did not report a size limit.
+
+Rafter LLM/CWE review: `api.py` bounds text at 600,000 UTF-8 bytes and complete
+request JSON at 8 MiB before HTTP. Only model requests opt into error excerpts;
+8192 bytes are read, credential header values/URLs/image data are redacted, then
+at most 500 characters pass to the existing Markdown-escaped comment sink.
+No API key enters prompts or the stable session digest. The digest is routing
+metadata, not authentication. No new dependencies or execution of PR code.
+
+`review.py` loads changed files plus one hop of local imports from the Git tree;
+regular-file, hidden-file and repository path guards apply to dependencies too.
+Python imports are parsed with AST, never imported. The eight actual PNGs were
+verified at CSS dimensions and total 4,269,438 bytes: resizing is unnecessary.
+Tests cover missing session header, exact/over-limit and multibyte text, oversized
+serialized image payloads, provider error redaction/opt-in, and direct versus
+transitive/unrelated context selection. Seventeen Python and two Node tests pass. A second replay returned valid JSON
+inside one code fence; accepting only that whole-response envelope passed the
+unchanged strict review validator on the actual saved final response: complete,
+eight screenshots, four advisory architecture findings and no blocking findings.
+This was a local read-only replay, not a posted GitHub check.
+The local pattern-based secret scan found no secrets. Remote SAST/SCA remains
+owner-deferred; no remote certification is claimed.
+
 ## OpenCode Go adapter follow-up
 
 The activation follow-up adds Qwen3.7 Plus through the existing OpenCode Go account.

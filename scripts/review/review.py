@@ -1,6 +1,8 @@
 """Trusted workflow_run reporter. Never checkout, import or execute PR code."""
+import ast
 import json
 import os
+import posixpath
 from pathlib import Path
 import re
 import sys
@@ -46,17 +48,17 @@ def source_context(github, pr, changed):
     sha = pr['head']['sha']
     tree = github.call(f'/git/trees/{sha}?recursive=1')
     require(not tree.get('truncated'), 'Repository tree was truncated.')
-    text_extensions = ('.ts', '.tsx', '.js', '.mjs', '.cjs', '.html', '.css', '.md', '.json', '.yml', '.yaml', '.py')
+    text_extensions = ('.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.html', '.css', '.md', '.json', '.yml', '.yaml', '.py')
     paths = {f['filename'] for f in changed if f['status'] != 'removed'
              and f['filename'].endswith(text_extensions) and not f['filename'].endswith('package-lock.json')}
-    paths.update(item['path'] for item in tree['tree'] if item['path'].startswith('web/src/')
-                 and item['path'].endswith(text_extensions) and not item['path'].endswith('.test.ts'))
-    paths.add('web/index.html')
     entries = {item['path']: item for item in tree['tree']}
     require(len(paths) <= 120, 'Too many context files; split the PR.')
     sources = {}
     total = 0
-    for path in sorted(paths):
+    def load(path):
+        nonlocal total
+        if path in sources:
+            return
         require(not any(part.startswith('.') and part not in ('.github',) for part in path.split('/')),
                 'Hidden source files require manual review before provider submission.')
         item = entries.get(path, {})
@@ -65,6 +67,52 @@ def source_context(github, pr, changed):
         sources[path] = github.file(path, sha)
         total += len(sources[path])
         require(total <= 500_000, 'Source context too large; split the PR.')
+    for path in sorted(paths):
+        load(path)
+    # One hop from changed files only; do not expand imports of dependencies.
+    direct = set()
+    for path in sorted(paths):
+        if path.endswith('.py'):
+            try:
+                syntax = ast.parse(sources[path])
+            except (SyntaxError, ValueError, RecursionError):
+                raise Incomplete('Python imports could not be parsed for direct context.') from None
+            for node in ast.walk(syntax):
+                modules = [alias.name for alias in node.names] if isinstance(node, ast.Import) else (
+                    [node.module or ''] if isinstance(node, ast.ImportFrom) else [])
+                for module in modules:
+                    parent = posixpath.dirname(path)
+                    for _ in range(max(0, getattr(node, 'level', 0) - 1)):
+                        parent = posixpath.dirname(parent)
+                    target = posixpath.join(parent, module.replace('.', '/'))
+                    for candidate in (target + '.py', target + '/__init__.py'):
+                        if candidate in entries:
+                            direct.add(candidate)
+                            break
+            continue
+        if not path.endswith(('.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.css')):
+            continue
+        # Literal relative imports/re-exports, side-effect imports, and require/import().
+        references = re.findall(r"(?:\bfrom\s*|\bimport\s*(?:\(\s*)?|\brequire\s*\(\s*|@import\s*)['\"](\.[^'\"]+)['\"]", sources[path])
+        for reference in references:
+            require('\\' not in reference and '?' not in reference and '#' not in reference,
+                    'Unsupported relative import requires manual context review.')
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(path), reference))
+            require(not target.startswith('../') and target != '..', 'Relative import escapes repository.')
+            ext = posixpath.splitext(target)[1]
+            candidates = [target]
+            if ext in ('.js', '.mjs', '.cjs'):
+                candidates += [target[:-len(ext)] + suffix for suffix in ('.ts', '.tsx', '.mts', '.cts')]
+            elif not ext:
+                candidates += [target + suffix for suffix in ('.ts', '.tsx', '.js', '.mjs', '.css', '/index.ts', '/index.tsx', '/index.js')]
+            match = next((candidate for candidate in candidates if candidate in entries), None)
+            if match and match.endswith(text_extensions):
+                direct.add(match)
+            elif not ext or ext in text_extensions:
+                raise Incomplete('Direct relative import could not be resolved; supply reviewable context.')
+    require(len(paths | direct) <= 120, 'Too many context files; split the PR.')
+    for path in sorted(direct):
+        load(path)
     return sources
 
 

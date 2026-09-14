@@ -1,5 +1,33 @@
 # Review pipeline design
 
+## PR #3 diagnostics and evidence bounds
+
+The original 6,202,288-byte PR #3 request reproduced HTTP 400 with
+`MissingSessionID`, not a context/image limit. Add `x-opencode-session` derived
+from a SHA-256 digest of the bounded review text: stable for a repeated snapshot,
+distinct for changed evidence, no credentials or raw PR text in the header.
+Cap instructions plus evidence at 600,000 UTF-8 bytes and the serialized request
+at 8 MiB before HTTP. These are local safety limits, not provider token guarantees.
+
+Provider errors may cross into a public PR comment. Read only a bounded error
+prefix, redact credential header values and common token/URL forms before
+truncating to 500 characters, and retain Markdown escaping at publication.
+Enable body diagnostics only for the fixed model endpoints, never GitHub or
+signed artifact storage. Error text remains untrusted data, never instructions.
+
+Source context will consist of changed text files and their direct relative
+imports only. Resolve imports against the Git tree with POSIX paths, reject
+hidden/non-regular files, never import or execute source, and do not recursively
+expand the dependency graph. No silent truncation: oversized evidence fails
+locally before the model call. Keep the existing CSS-size PNG validation and
+lossless compression; do not reduce resolution below the rendered viewport.
+The successful provider response wrapped its JSON in one Markdown `json` fence.
+Allow exactly that outer wrapper (or an unlabelled fence) before strict parsing;
+no JSON repair, substring extraction or trailing commentary is accepted. The
+same complete/schema/location/legibility checks still govern the final verdict.
+Regression tests must exercise request boundaries, redaction and source selection.
+These changes retain the existing trust split and require no new dependencies.
+
 ## OpenCode Go activation amendment
 
 The owner requested a different vision reviewer after the configured MiMo Pro

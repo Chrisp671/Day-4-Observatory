@@ -28,6 +28,7 @@ import { passionHours } from "./hours";
 import { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
 import type {
   SceneMovement,
+  ScenePlanet,
   SceneReadouts,
   SceneRequest,
   SceneRing,
@@ -35,7 +36,7 @@ import type {
   SceneTonight,
 } from "./scene";
 import { isTravelled, moonDayFor } from "./scene-core";
-import { compassAbbrev, transcript } from "./transcript";
+import { compassAbbrev, compassPoint, transcript } from "./transcript";
 import { VERSE_VERSION, verseOfDay } from "./verse";
 
 export interface PlinthInput {
@@ -121,9 +122,17 @@ interface DayArc {
 }
 
 let planetDayKey = "";
+let planetDayList: readonly PlanetDay[] = [];
 let planetArcs: readonly DayArc[] = [];
 
-/** The five up-arcs for the displayed calendar day (cached daily). */
+/** Every planet's day — rise, following set, peak — whether or not it makes an arc. */
+function planetDaysNow(r: SceneRequest): readonly PlanetDay[] {
+  planetArcsNow(r);
+  return planetDayList;
+}
+
+/** The up-arcs for the displayed calendar day (cached daily); a planet with
+ * no rise-and-set pair that day has no arc and is absent here. */
 function planetArcsNow(r: SceneRequest): readonly DayArc[] {
   const key = dayKey(r);
   if (key !== planetDayKey) {
@@ -131,7 +140,8 @@ function planetArcsNow(r: SceneRequest): readonly DayArc[] {
     const sd = sunDayNow(r);
     const dayRise = sd.riseUnixMillis === null ? null : localHoursOfDay(sd.riseUnixMillis);
     const daySet = sd.setUnixMillis === null ? null : localHoursOfDay(sd.setUnixMillis);
-    planetArcs = planetDays(r.displayedUnixMillis, r.station.lat, r.station.lon)
+    planetDayList = planetDays(r.displayedUnixMillis, r.station.lat, r.station.lon);
+    planetArcs = planetDayList
       .filter((p: PlanetDay) => p.riseUnixMillis !== null && p.setUnixMillis !== null)
       .map((p: PlanetDay) => {
         const riseHours = localHoursOfDay(p.riseUnixMillis as number);
@@ -305,20 +315,25 @@ function planetPhrase(p: PlanetTimes, r: SceneRequest): string {
   const t = r.displayedUnixMillis;
   const next = p.upNow ? p.setUnixMillis : p.riseUnixMillis;
   const verb = p.upNow ? "sets in" : "rises in";
-  let out = next === null ? "" : `${verb} ${formatCountdown(next - t)}`;
-  if (p.upNow) out += ` · ${Math.round(p.altitudeDeg)}° ${compassAbbrev(p.azimuthDeg)}`;
-  if (p.upNow && p.transitUnixMillis !== null && p.setUnixMillis !== null &&
-      p.transitUnixMillis < p.setUnixMillis) {
-    // ⋆ marks the peak — the culmination Parker plans viewing around.
-    out += ` ⋆${fmt12c(p.transitUnixMillis)}`;
-  }
-  // Not an evening object yet: say when it will be, so nobody has to step
-  // month by month to find out (DEC-031: "when will I be able to see Saturn?").
-  if (!p.upNow) {
+  // Parts joined by " · ", so a planet with no next event (up all day at a
+  // polar station) never starts its line with a stray separator.
+  const parts: string[] = [];
+  if (next !== null) parts.push(`${verb} ${formatCountdown(next - t)}`);
+  else parts.push(p.upNow ? "up all day" : "not rising");
+  if (p.upNow) {
+    let where = `${Math.round(p.altitudeDeg)}° ${compassAbbrev(p.azimuthDeg)}`;
+    if (p.transitUnixMillis !== null && p.setUnixMillis !== null && p.transitUnixMillis < p.setUnixMillis) {
+      // ⋆ marks the peak — the culmination Parker plans viewing around.
+      where += ` ⋆${fmt12c(p.transitUnixMillis)}`;
+    }
+    parts.push(where);
+  } else {
+    // Not an evening object yet: say when it will be, so nobody has to step
+    // month by month to find out (DEC-031: "when will I be able to see Saturn?").
     const season = seasonNote(p.name, r);
-    if (season !== "") out += ` · ${season}`;
+    if (season !== "") parts.push(season);
   }
-  return out;
+  return parts.join(" · ");
 }
 
 /** "up all night" / "sets in 3h 40m" / "rises in 2h 14m". */
@@ -410,6 +425,100 @@ export function sceneTonight(input: PlinthInput): SceneTonight {
       footnote: FOOTNOTE,
     };
   }, EMPTY_TONIGHT);
+}
+
+/* ————————————————————————————— planets ————————————————————————————— */
+
+/** "↓4:05 am Thu" — a time, with the weekday when it falls on another date. */
+function dayTagged(prefix: string, unixMillis: number, displayed: number): string {
+  const d = new Date(unixMillis);
+  const tag = d.getDate() === new Date(displayed).getDate() ? "" : ` ${WEEKDAY[d.getDay()] ?? ""}`;
+  return `${prefix}${fmt12(unixMillis)}${tag}`;
+}
+
+/** Below this altitude a planet needs a clear, unobstructed horizon. */
+const LOW_ALTITUDE_DEG = 10;
+/** Roughly how long after sunset the sky is still too bright for a faint planet. */
+const TWILIGHT_MS = 45 * 60_000;
+
+/** One honest sentence about seeing this planet at the displayed instant. */
+function visibilityLine(p: PlanetTimes, r: SceneRequest, sunAltitudeDeg: number, sunSet: number | null): string {
+  const t = r.displayedUnixMillis;
+  const dir = compassPoint(p.azimuthDeg);
+  const alt = Math.round(p.altitudeDeg);
+  if (p.upNow) {
+    if (isDarkEnough(sunAltitudeDeg)) {
+      return alt < LOW_ALTITUDE_DEG
+        ? `Up now, low in the ${dir}: it needs a clear horizon.`
+        : `Up now and the sky is dark: look ${dir}, ${alt}° above the horizon.`;
+    }
+    // Daylight. Does it survive until dark, set in twilight, or go before the sun?
+    if (p.setUnixMillis !== null && sunSet !== null) {
+      if (p.setUnixMillis < sunSet) {
+        return `Up now, but in daylight; it sets at ${fmt12(p.setUnixMillis)}, before the sun does.`;
+      }
+      if (p.setUnixMillis < sunSet + TWILIGHT_MS) {
+        return `Up now in daylight; it sets at ${fmt12(p.setUnixMillis)}, in twilight — look low in the ${dir} just after sunset.`;
+      }
+    }
+    return `Up now in daylight, ${alt}° up in the ${dir}; visible after dark.`;
+  }
+  if (p.riseUnixMillis === null) return "Below the horizon, and it does not rise from this station on this date.";
+  const season = seasonNote(p.name, r);
+  const when = `Below the horizon; rises in ${formatCountdown(p.riseUnixMillis - t)}, at ${fmt12(p.riseUnixMillis)}.`;
+  return season === "" ? when : `${when} Evening ${season}.`;
+}
+
+/** Why this planet has no arc on the rete today, or "" when it has one. */
+function arcNoteFor(p: PlanetTimes, day: PlanetDay | undefined, r: SceneRequest): string {
+  if (day !== undefined && day.riseUnixMillis !== null && day.setUnixMillis !== null) return "";
+  if (p.riseUnixMillis === null && p.setUnixMillis === null) {
+    return p.upNow
+      ? "No ring today: from this station it stays above the horizon all day and night, so there is no rise or set to draw."
+      : "No ring today: from this station it stays below the horizon, so there is no rise or set to draw.";
+  }
+  if (day === undefined || day.riseUnixMillis === null) {
+    return p.riseUnixMillis === null
+      ? "No ring today: no rise falls on this calendar date."
+      : `No ring today: its rise slipped past midnight — the next is ${dayTagged("", p.riseUnixMillis, r.displayedUnixMillis)}, and the ring returns with it.`;
+  }
+  return `No ring today: it rises at ${fmt12(day.riseUnixMillis)} but no set follows soon enough to close the arc.`;
+}
+
+const EMPTY_PLANETS: readonly ScenePlanet[] = [];
+
+/**
+ * The five wandering stars for the Planets view (REQ-014): the ledger's own
+ * line, the day's rise, peak and set, where to look now, one honest
+ * sentence on visibility, and — when the rete has no ring for it — why.
+ * Always five rows, in ring order; never throws.
+ */
+export function scenePlanets(input: PlinthInput): readonly ScenePlanet[] {
+  return safely((): readonly ScenePlanet[] => {
+    const { frame: s, request: r } = input;
+    const t = r.displayedUnixMillis;
+    const days = planetDaysNow(r);
+    return [...planetsNow(r)]
+      .sort((a, b) => RING_ORDER.indexOf(a.name) - RING_ORDER.indexOf(b.name))
+      .map((p): ScenePlanet => {
+        const day = days.find((d) => d.name === p.name);
+        return {
+          name: p.name,
+          color: PLANET_COLORS[p.name] ?? "",
+          up: p.upNow,
+          lit: p.name === r.lit,
+          line: planetPhrase(p, r),
+          rise: day?.riseUnixMillis == null ? "—" : `↑${fmt12(day.riseUnixMillis)}`,
+          peak: day?.transitUnixMillis == null ? "—" : dayTagged("⋆", day.transitUnixMillis, t),
+          set: day?.setUnixMillis == null ? "—" : dayTagged("↓", day.setUnixMillis, t),
+          // Where to look, only when there is somewhere to look; the
+          // visibility sentence says "below the horizon" once, not twice.
+          where: p.upNow ? `${Math.round(p.altitudeDeg)}° up, ${compassPoint(p.azimuthDeg)}` : "",
+          visibility: visibilityLine(p, r, s.sun.altitudeDeg, s.sun.nextSetUnixMillis),
+          arcNote: arcNoteFor(p, day, r),
+        };
+      });
+  }, EMPTY_PLANETS);
 }
 
 /* ————————————————————————————— spoken ————————————————————————————— */

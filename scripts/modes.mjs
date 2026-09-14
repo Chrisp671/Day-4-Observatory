@@ -16,6 +16,9 @@ import { resolve } from "node:path";
 const { chromium } = createRequire(new URL("./review/package.json", import.meta.url))("playwright");
 
 const url = process.argv[2] ?? "http://127.0.0.1:4173/";
+// A local check only: it seeds storage and patches canvas APIs in the page it drives.
+const target = new URL(url);
+assert(["localhost", "127.0.0.1"].includes(target.hostname) && target.protocol === "http:", "drive a local preview only");
 const out = resolve(process.argv[3] ?? "web/.shots/modes");
 const FIXED_TIME = "2026-09-02T23:00:00.000Z";
 const VIEWPORTS = [

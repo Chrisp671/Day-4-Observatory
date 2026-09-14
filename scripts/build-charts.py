@@ -16,8 +16,10 @@ usage: python scripts/build-charts.py [--cache DIR]
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -26,6 +28,20 @@ REPO = "ofrohn/d3-celestial"
 COMMIT = "7e720a3de062059d4c5400a379146a601d9010e0"
 FILES = ["data/stars.6.json", "data/starnames.json", "data/constellations.json",
          "data/constellations.lines.json", "LICENSE"]
+# SHA-256 of each source file at COMMIT: a download (or a cached copy) that
+# does not match is refused, so the charts can only be built from the bytes
+# that were reviewed.
+SHA256 = {
+    "stars.6.json": "0297b8fa3adfbce1dc26566f61c4abcc1df4f29c6a28729ca06b56d1c6d25602",
+    "starnames.json": "19c84bc885f8a97c3b8e1f6a380084c575a9758dedfe35256e911a823ec3a695",
+    "constellations.json": "ab4ae692027cbc042c0d6791a84456a65eb7c55656107fd00c58ff6e55d4d8b2",
+    "constellations.lines.json": "294f66bef5d5cf50b1e17f16d2efa1d97a15131612c68dd935adef6e7373e13c",
+    "LICENSE": "a8c79239001ad4bea243d1796b85084e1fc39309c5c5a663930a1b46320254c6",
+}
+# The largest of them is under 1 MB; anything bigger is not the file we pinned.
+MAX_BYTES = 4 * 1024 * 1024
+# A chart's file stem: the IAU abbreviation, letters and digits only.
+ABBR = re.compile(r"^[A-Za-z0-9]{1,16}$")
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "web" / "public" / "charts"
 
@@ -49,12 +65,20 @@ GREEK = {"α": "Alpha", "β": "Beta", "γ": "Gamma", "δ": "Delta", "ε": "Epsil
 
 
 def fetch(cache: Path, rel: str) -> Path:
-    target = cache / Path(rel).name
+    """The pinned source file, from the cache or the network, verified by hash."""
+    name = Path(rel).name
+    target = cache / name
     if not target.exists():
         url = f"https://raw.githubusercontent.com/{REPO}/{COMMIT}/{rel}"
         print("fetch", url)
         with urllib.request.urlopen(url, timeout=60) as r:  # noqa: S310 - pinned GitHub raw URL
-            target.write_bytes(r.read())
+            data = r.read(MAX_BYTES + 1)
+        if len(data) > MAX_BYTES:
+            raise SystemExit(f"{name}: larger than {MAX_BYTES} bytes; refusing")
+        target.write_bytes(data)
+    digest = hashlib.sha256(target.read_bytes()).hexdigest()
+    if digest != SHA256[name]:
+        raise SystemExit(f"{name}: sha256 {digest} does not match the pinned {SHA256[name]}; refusing")
     return target
 
 
@@ -124,6 +148,8 @@ def main() -> int:
                for c in cons if c["id"] not in merged_parts]
     entries += [(abbr, name, gen) for abbr, (name, gen, _) in MERGE.items()]
     for abbr, name, genitive in entries:
+        if not ABBR.match(abbr):
+            raise SystemExit(f"refusing to write a chart for abbreviation {abbr!r}")
         parts = MERGE[abbr][2] if abbr in MERGE else [abbr]
         members = [s for part in parts for s in by_con.get(part, [])]
         figure = [poly for part in parts for poly in lines.get(part, [])]

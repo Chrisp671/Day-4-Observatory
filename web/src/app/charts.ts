@@ -79,15 +79,18 @@ async function getJson(url: string): Promise<unknown> {
  * index (name → file) is fetched once; each chart once; both are kept.
  */
 export function chartLoader(base = "charts/"): ChartLoader {
-  let index: Promise<Readonly<Record<string, string>> | null> | null = null;
+  let index: Promise<ReadonlyMap<string, string> | null> | null = null;
   const charts = new Map<string, Promise<Chart | null>>();
-  const indexOnce = (): Promise<Readonly<Record<string, string>> | null> => {
+  // The index is a Map, not an object, so a name like "constructor" or
+  // "__proto__" finds nothing rather than something inherited; and only a
+  // plain alphanumeric file stem can ever reach a URL.
+  const indexOnce = (): Promise<ReadonlyMap<string, string> | null> => {
     if (index === null) {
       index = getJson(`${base}index.json`).then((raw) => {
-        if (typeof raw !== "object" || raw === null) return null;
-        const out: Record<string, string> = {};
+        if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+        const out = new Map<string, string>();
         for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-          if (typeof v === "string" && /^[A-Za-z0-9]+$/.test(v)) out[k] = v;
+          if (typeof v === "string" && /^[A-Za-z0-9]{1,16}$/.test(v)) out.set(k, v);
         }
         return out;
       });
@@ -97,7 +100,7 @@ export function chartLoader(base = "charts/"): ChartLoader {
   return {
     load: async (name: string): Promise<Chart | null> => {
       const idx = await indexOnce();
-      const abbr = idx?.[name];
+      const abbr = idx?.get(name);
       if (abbr === undefined) return null;
       let hit = charts.get(abbr);
       if (hit === undefined) {

@@ -6,11 +6,12 @@
  *   - the shell: DOM binding and input (app/shell.ts).
  *   - the painters: pure functions of a Scene slice (ui/*).
  * State here is exactly what the viewer can change: the station, the travel
- * offset, and the lit ring. Nothing else is remembered.
+ * offset, the lit ring, and the mode. Nothing else is remembered.
  */
 import { scene, type Scene } from "./app/scene";
 import { bind, type Stage } from "./app/shell";
 import { loadStation, saveStation, type Station } from "./app/location";
+import { loadMode, saveMode, type Mode } from "./app/mode";
 import { stepTime, type StepUnit } from "./app/timecontrol";
 import { drawDial } from "./ui/dial";
 import { drawEarth } from "./ui/earth";
@@ -38,6 +39,10 @@ let lit: string | null = (() => {
     return "Saturn";
   }
 })();
+
+/** Which view is showing: Day 4 on a first visit, then whatever was chosen
+ * last. The station and the travel offset are shared by every view. */
+let mode: Mode = loadMode();
 
 /* ————— the shell ————— */
 const shell = bind(document, {
@@ -90,8 +95,17 @@ const shell = bind(document, {
     firmamentKey = "";
     tick();
   },
+  onMode: (next: Mode) => {
+    mode = next;
+    saveMode(mode);
+    shell.showMode(mode);
+    // Day 4's stage may have just come back into the layout: refit before painting.
+    stage = shell.fit();
+    tick();
+  },
 });
 
+shell.showMode(mode);
 let stage: Stage = shell.fit();
 let firmamentKey = "";
 
@@ -105,7 +119,8 @@ function paint(s: Scene): void {
     drawFirmament(fctx, viewport.width, viewport.height, s.light);
     firmamentKey = key;
   }
-  if (ctx === null) return;
+  // No dial to paint while another view is showing and the stage has never been sized.
+  if (ctx === null || W === 0) return;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, W, W);

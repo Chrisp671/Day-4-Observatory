@@ -21,6 +21,7 @@
 import type { Scene, SceneMovement, SceneRow } from "./scene";
 import { GLANCE_ROWS } from "./scene-consts";
 import { parseCoordinate, type Station } from "./location";
+import { MODES, stepMode, type Mode } from "./mode";
 import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
 import { FACE } from "../ui/clockface";
@@ -58,6 +59,16 @@ export const IDS = {
   tonightNote: "tonight-note",
   tonightList: "tonight-list",
   tonightAll: "tonight-all",
+  /* The three views (DEC-038): the selector, one panel per mode, and the
+   * shared station/time line the focused views stand on. */
+  modes: "modes",
+  viewDay4: "view-day4",
+  viewConstellations: "view-constellations",
+  viewPlanets: "view-planets",
+  focusContext: "focus-context",
+  focusStation: "focus-station",
+  focusClock: "focus-clock",
+  focusZone: "focus-zone",
 } as const;
 
 /** What the shell can tell the app about. */
@@ -72,6 +83,8 @@ export interface ShellHandlers {
   readonly onScrub: (deltaHours: number) => void;
   /** The stage changed size; the app should refit and repaint. */
   readonly onResize: () => void;
+  /** The viewer chose a view: Day 4, Constellations or Planets. */
+  readonly onMode: (mode: Mode) => void;
 }
 
 /** The canvases, sized, with the geometry the painters need. */
@@ -97,6 +110,8 @@ export interface Shell {
   showStation(station: Station): void;
   /** Show a one-line status under the station entry; "" clears it. */
   stationStatus(text: string): void;
+  /** Show one view and mark its tab; the others are hidden, not removed. */
+  showMode(mode: Mode): void;
 }
 
 type Role = keyof typeof IDS;
@@ -141,8 +156,10 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   /* ————— fit ————— */
   const fit = (): Stage => {
     const parent = dial?.parentElement ?? null;
-    if (dial !== null && parent !== null) {
-      const box = parent.getBoundingClientRect();
+    const box = parent?.getBoundingClientRect() ?? null;
+    // A hidden stage (another view is showing) keeps its last size; it is
+    // refitted the moment Day 4 returns.
+    if (dial !== null && parent !== null && box !== null && box.width > 0) {
       // The stage's CONTENT box: a dial sized to the border box overflows
       // into whatever sits above and below.
       const pad = win.getComputedStyle(parent);
@@ -301,6 +318,60 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     paintGlance(scene.tonight.glance);
     setText("tonightNote", scene.tonight.note);
     paintProgramme(scene.tonight.programme, scene.tonight.footnote);
+
+    // The focused views stand on the same station and clock as Day 4.
+    setText("focusStation", r.station);
+    setText("focusClock", r.clock);
+    setText("focusZone", r.zone);
+    els.focusClock?.classList.toggle("shifted", scene.marks.travelled);
+  };
+
+  /* ————— the modes: one row of tabs, one panel each (DEC-038) ————— */
+  const views: Readonly<Record<Mode, HTMLElement | undefined>> = {
+    day4: els.viewDay4,
+    constellations: els.viewConstellations,
+    planets: els.viewPlanets,
+  };
+  const tabs = new Map<Mode, HTMLButtonElement>();
+  if (els.modes !== undefined) {
+    for (const { mode, label } of MODES) {
+      const tab = doc.createElement("button");
+      tab.type = "button";
+      tab.id = `tab-${mode}`;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-selected", "false");
+      tab.setAttribute("aria-controls", views[mode]?.id ?? "");
+      tab.tabIndex = -1;
+      tab.textContent = label;
+      tab.addEventListener("click", () => handlers.onMode(mode));
+      // Arrow keys walk the row; Home and End jump to its ends.
+      tab.addEventListener("keydown", (e) => {
+        const next: Mode | null =
+          e.key === "ArrowRight" || e.key === "ArrowDown" ? stepMode(mode, 1)
+          : e.key === "ArrowLeft" || e.key === "ArrowUp" ? stepMode(mode, -1)
+          : e.key === "Home" ? (MODES[0]?.mode ?? mode)
+          : e.key === "End" ? (MODES[MODES.length - 1]?.mode ?? mode)
+          : null;
+        if (next === null) return;
+        e.preventDefault();
+        handlers.onMode(next);
+        tabs.get(next)?.focus();
+      });
+      els.modes.appendChild(tab);
+      tabs.set(mode, tab);
+    }
+  }
+  const showMode = (mode: Mode): void => {
+    for (const { mode: m } of MODES) {
+      const view = views[m];
+      if (view !== undefined) view.hidden = m !== mode;
+      const tab = tabs.get(m);
+      if (tab !== undefined) {
+        tab.setAttribute("aria-selected", String(m === mode));
+        tab.tabIndex = m === mode ? 0 : -1;
+      }
+    }
+    if (els.focusContext !== undefined) els.focusContext.hidden = mode === "day4";
   };
 
   /* ————— the rail: steppers and NOW ————— */
@@ -419,7 +490,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }).observe(stage);
   }
 
-  return { fit, paint, isFoldOpen, showStation, stationStatus };
+  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode };
 }
 
 /* ————— element lookup and row builders ————— */

@@ -17,7 +17,9 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 MAX_TEXT_BYTES = 600_000
-MAX_REQUEST_BYTES = 8 * 1024 * 1024
+# Twelve 1x PNGs (six states at two sizes) base64-encode to about 8 MB with
+# the Day 4 firmament's grain; the bound leaves headroom for text.
+MAX_REQUEST_BYTES = 12 * 1024 * 1024
 
 
 def provider_error_excerpt(raw, headers):

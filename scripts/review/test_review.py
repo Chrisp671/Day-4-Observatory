@@ -128,7 +128,7 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(relevant('PLAN.md'))
         self.assertFalse(relevant('Resources/help.html'))
 
-    def test_provider_adapters_send_eight_images_and_reject_truncation(self):
+    def test_provider_adapters_send_every_image_and_reject_truncation(self):
         images = {name: b'image' for name in IMAGES}
         responses = {
             'openai': {'status': 'completed', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '{}'}]}]},
@@ -142,7 +142,7 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(api.model_request(provider, model, 'test-key', 'policy', 'evidence', images), '{}')
                 args = transport.call_args.args
                 payload = json.dumps(args[2])
-                self.assertEqual(payload.count(base64.b64encode(b'image').decode()), 8)
+                self.assertEqual(payload.count(base64.b64encode(b'image').decode()), len(IMAGES))
                 self.assertNotIn('tools', args[2])
                 self.assertNotIn('test-key', payload)
                 if provider == 'opencode-go':
@@ -166,7 +166,7 @@ class ContractTests(unittest.TestCase):
                 api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', oversized, {})
             transport.assert_not_called()
         with patch('api.request') as transport, self.assertRaises(Incomplete):
-            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', 'small', {'large.png': b'x' * (7 * 1024 * 1024)})
+            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', 'small', {'large.png': b'x' * (10 * 1024 * 1024)})
         transport.assert_not_called()
 
     def test_provider_error_is_bounded_redacted_and_opt_in(self):

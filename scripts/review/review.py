@@ -49,8 +49,11 @@ def source_context(github, pr, changed):
     tree = github.call(f'/git/trees/{sha}?recursive=1')
     require(not tree.get('truncated'), 'Repository tree was truncated.')
     text_extensions = ('.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.html', '.css', '.md', '.json', '.yml', '.yaml', '.py')
+    # Generated assets under web/public (chart data, manifest) are reviewed
+    # through their generator and tests, not as source; they stay in the diff.
     paths = {f['filename'] for f in changed if f['status'] != 'removed'
-             and f['filename'].endswith(text_extensions) and not f['filename'].endswith('package-lock.json')}
+             and f['filename'].endswith(text_extensions) and not f['filename'].endswith('package-lock.json')
+             and not f['filename'].startswith('web/public/')}
     entries = {item['path']: item for item in tree['tree']}
     require(len(paths) <= 120, 'Too many context files; split the PR.')
     sources = {}

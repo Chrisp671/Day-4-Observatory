@@ -8,7 +8,9 @@ export const VIEWPORTS = [
   { name: 'phone', width: 390, height: 844 },
   { name: 'tablet', width: 820, height: 1180 },
 ];
-export const STATES = ['loaded', 'month', 'tonight', 'second-row'];
+// Day 4's four states, then the two other views (DEC-038): the Planets
+// ledger with its second row chosen, and the Constellations chart as opened.
+export const STATES = ['loaded', 'month', 'tonight', 'second-row', 'planets', 'constellations'];
 export const FIXED_TIME = '2026-09-02T23:00:00.000Z';
 
 export async function settle(page) {
@@ -79,11 +81,27 @@ export async function capture(url, output) {
           assert(planet, 'Second row is not a selectable planet in this fixture');
           await row.click();
           assert.equal(await page.evaluate(() => localStorage.getItem('day4.lit')), planet);
+        } else if (state === 'planets') {
+          await page.getByRole('tab', { name: 'Planets', exact: true }).click();
+          await page.locator('#view-planets').waitFor({ state: 'visible' });
+          // Choose the second planet row so the chosen state is in the picture.
+          const row = page.locator('#planets-list button[data-planet]').nth(1);
+          const planet = await row.getAttribute('data-planet');
+          assert(planet, 'Planets view has no second planet row');
+          await row.click();
+          assert.equal(await page.evaluate(() => localStorage.getItem('day4.lit')), planet);
+          await page.waitForFunction(() => document.querySelector('#planets-list button[aria-pressed="true"] + *:not([hidden])') !== null);
+        } else if (state === 'constellations') {
+          await page.getByRole('tab', { name: 'Constellations', exact: true }).click();
+          await page.locator('#view-constellations').waitFor({ state: 'visible' });
+          // The view opens on a constellation that is up; wait for its chart to load.
+          await page.waitForFunction(() => document.getElementById('chart-load')?.textContent === '');
+          await page.locator('[data-constellation][aria-pressed="true"]').waitFor({ state: 'visible' });
         }
         await settle(page);
-        if (state === 'month' || state === 'second-row') {
+        if (state === 'month' || state === 'second-row' || state === 'planets' || state === 'constellations') {
           const afterCanvas = await page.locator('canvas').evaluateAll((nodes) => nodes.map((node) => node.toDataURL()));
-          assert.notDeepEqual(afterCanvas, beforeCanvas, `${state} did not change the rendered dial`);
+          assert.notDeepEqual(afterCanvas, beforeCanvas, `${state} did not change the rendered canvases`);
         }
         // Clicking scrolls controls into view; all screenshots use the same top-of-page frame.
         await page.evaluate(() => window.scrollTo(0, 0));

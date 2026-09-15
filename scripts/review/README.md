@@ -98,6 +98,34 @@ against the current Pages configuration. A future custom-domain migration needs
 an intentional verifier allowlist change. Local tests explicitly opt into loopback
 HTTP. Production requests reject redirects and cross-origin bundle references.
 
+## Request bounds and diagnostics
+
+The reviewer receives the full diff, cited PLAN entries, trusted rubric, changed
+text files and their direct local imports (one hop, not all `web/src`). Literal
+relative JS/TS imports, re-exports, dynamic imports/require and CSS imports are
+resolved against the Git tree; local Python imports are parsed without execution.
+Package dependencies and computed imports are not expanded. Existing hidden-file,
+regular-file, 120-file and 500,000-source-character guards remain in force.
+
+Instructions plus serialized evidence must fit **600,000 UTF-8 bytes**. The entire
+serialized model request, including base64 images, must fit **8 MiB**. Both checks
+run before HTTP; nothing is silently truncated. These byte limits are conservative
+local bounds, not a claim about a provider's tokenizer or context allowance.
+
+Screenshots are already compressed PNG at **1x CSS pixels**: 390x844 and 820x1180,
+four states each. The trusted reporter rejects other dimensions. Keep the native
+pixels for legibility review; further downscaling or lossy JPEG is unnecessary.
+PR #3's eight PNGs total 4,269,438 bytes and fit the request limit.
+
+OpenCode Go receives our own User-Agent and a stable `x-opencode-session` digest
+for each review snapshot, as required for routing. HTTP failures include status
+and at most the first 500 sanitized characters of the provider response in the
+incomplete-review comment. Credential values, URLs and image data are redacted;
+Markdown is escaped. GitHub/artifact errors never include response bodies.
+A final review may be plain JSON or exactly one whole-response JSON code fence.
+After removing that wrapper, the same strict schema, duplicate-key, source-line,
+completion and eight-image legibility checks apply; no JSON repair is attempted.
+
 ## Local verification
 
 From the repository root, after building `web/`:

@@ -13,7 +13,7 @@ OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
 
 
 class Incomplete(Exception):
-    """Messages are pipeline-authored and safe to publish; never include API bodies."""
+    """Safe to publish: pipeline diagnostics or bounded, redacted provider error excerpts."""
 
 
 def require(condition, message):
@@ -82,6 +82,12 @@ def strict_json(raw):
 
 
 def validate_review(raw, sources):
+    # Some Messages providers fence JSON despite the prompt. Remove only one
+    # whole-response wrapper; never search for a JSON substring or repair it.
+    if type(raw) is str:
+        fenced = re.fullmatch(r'```(?:json)?[ \t]*\r?\n(.*?)\r?\n```', raw.strip(), re.S)
+        if fenced:
+            raw = fenced[1]
     review = strict_json(raw)
     validate_schema(review, SCHEMA)
     require(review['complete'], 'The model could not complete its review.')

@@ -12,7 +12,7 @@ import zipfile
 
 import api
 import review
-from contract import (CANON, IMAGES, Incomplete, plan_entries, provider_config,
+from contract import (is_generated, strip_generated, CANON, IMAGES, Incomplete, plan_entries, provider_config,
                       read_artifact, relevant, safe_text, strict_json, validate_review)
 
 
@@ -118,6 +118,19 @@ class ContractTests(unittest.TestCase):
         files['web/src/main.ts'] = "import '../../../secret';"
         with self.assertRaises(Incomplete):
             review.source_context(github, {'head': {'sha': 'a'*40}}, [{'filename': 'web/src/main.ts', 'status': 'modified'}])
+
+    def test_generated_assets_leave_the_diff_but_source_stays(self):
+        section = lambda path, body: f'diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n@@ -1 +1 @@\n{body}\n'
+        diff = (section('web/src/main.ts', '-a\n+b') + section('web/public/charts/Ori.json', '+{"abbr":"Ori"}')
+                + section('PLAN.md', '-x\n+y'))
+        kept = strip_generated(diff)
+        self.assertNotIn('web/public/charts', kept)
+        self.assertIn('diff --git a/web/src/main.ts', kept)
+        self.assertIn('diff --git a/PLAN.md', kept)
+        self.assertEqual(kept.count('diff --git '), 2)
+        self.assertEqual(strip_generated(section('web/public/x.json', '+{}')).strip(), '')
+        self.assertTrue(is_generated('web/public/charts/index.json'))
+        self.assertFalse(is_generated('web/src/app/charts.ts'))
 
     def test_plan_requires_citations_and_includes_canon(self):
         plan = '\n'.join(f'- {key} — policy' for key in sorted(CANON | {'WI-027'}))

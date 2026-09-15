@@ -7,7 +7,7 @@ The original 6,202,288-byte PR #3 request reproduced HTTP 400 with
 from a SHA-256 digest of the bounded review text: stable for a repeated snapshot,
 distinct for changed evidence, no credentials or raw PR text in the header.
 Cap instructions plus evidence at 600,000 UTF-8 bytes and the serialized request
-at 12 MiB before HTTP (raised from 8 MiB when the captures grew from eight to twelve). These are local safety limits, not provider token guarantees.
+at 8 MiB before HTTP (a 12 MiB trial was rejected by the provider; ten captures fit). These are local safety limits, not provider token guarantees.
 
 Provider errors may cross into a public PR comment. Read only a bounded error
 prefix, redact credential header values and common token/URL forms before

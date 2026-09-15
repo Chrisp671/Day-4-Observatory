@@ -179,7 +179,7 @@ class ContractTests(unittest.TestCase):
                 api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', oversized, {})
             transport.assert_not_called()
         with patch('api.request') as transport, self.assertRaises(Incomplete):
-            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', 'small', {'large.png': b'x' * (10 * 1024 * 1024)})
+            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', 'small', {'large.png': b'x' * (7 * 1024 * 1024)})
         transport.assert_not_called()
 
     def test_provider_error_is_bounded_redacted_and_opt_in(self):

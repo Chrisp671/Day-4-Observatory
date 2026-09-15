@@ -5,9 +5,11 @@ import re
 import struct
 import zipfile
 
-# Day 4's four states, then the two other views of the same instrument
-# (DEC-038): the Planets ledger with a row chosen, and a constellation chart.
-STATES = ('loaded', 'month', 'tonight', 'second-row', 'planets', 'constellations')
+# Day 4's three states, then the two other views of the same instrument
+# (DEC-038): the Planets ledger with its second row chosen (which lights the
+# ring on the shared dial, as Day 4's own second row did), and a
+# constellation chart. Ten images: twelve exceeded the provider's request size.
+STATES = ('loaded', 'month', 'tonight', 'planets', 'constellations')
 IMAGES = {f'{device}-{state}.png': size for device, size in
           [('phone', (390, 844)), ('tablet', (820, 1180))] for state in STATES}
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}

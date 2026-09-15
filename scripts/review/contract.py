@@ -5,15 +5,17 @@ import re
 import struct
 import zipfile
 
-STATES = ('loaded', 'month', 'tonight', 'second-row')
+# Day 4's four states, then the two other views of the same instrument
+# (DEC-038): the Planets ledger with a row chosen, and a constellation chart.
+STATES = ('loaded', 'month', 'tonight', 'second-row', 'planets', 'constellations')
 IMAGES = {f'{device}-{state}.png': size for device, size in
           [('phone', (390, 844)), ('tablet', (820, 1180))] for state in STATES}
-CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'REQ-011'}
+CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}
 OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
 
 
 class Incomplete(Exception):
-    """Messages are pipeline-authored and safe to publish; never include API bodies."""
+    """Safe to publish: pipeline diagnostics or bounded, redacted provider error excerpts."""
 
 
 def require(condition, message):
@@ -39,7 +41,7 @@ SCHEMA = object_schema({
         'file': string_schema(250), 'line': {'type': 'integer', 'minimum': 1},
         'title': string_schema(160), 'evidence': string_schema(1200), 'fix': string_schema(500),
     })},
-    'screenshots': {'type': 'array', 'minItems': 8, 'maxItems': 8, 'items': object_schema({
+    'screenshots': {'type': 'array', 'minItems': len(IMAGES), 'maxItems': len(IMAGES), 'items': object_schema({
         'file': {'type': 'string', 'enum': list(IMAGES)},
         'legibility': {'type': 'string', 'enum': ['LEGIBLE', 'ILLEGIBLE', 'UNCERTAIN']},
         'reason': string_schema(700),
@@ -82,6 +84,12 @@ def strict_json(raw):
 
 
 def validate_review(raw, sources):
+    # Some Messages providers fence JSON despite the prompt. Remove only one
+    # whole-response wrapper; never search for a JSON substring or repair it.
+    if type(raw) is str:
+        fenced = re.fullmatch(r'```(?:json)?[ \t]*\r?\n(.*?)\r?\n```', raw.strip(), re.S)
+        if fenced:
+            raw = fenced[1]
     review = strict_json(raw)
     validate_schema(review, SCHEMA)
     require(review['complete'], 'The model could not complete its review.')
@@ -104,7 +112,7 @@ def read_artifact(data):
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             entries = archive.infolist()
-            require(len(entries) == 9 and {e.filename for e in entries} == set(IMAGES) | {'manifest.json'},
+            require(len(entries) == len(IMAGES) + 1 and {e.filename for e in entries} == set(IMAGES) | {'manifest.json'},
                     'Screenshot archive has missing, duplicate or unexpected entries.')
             require(sum(e.file_size for e in entries) <= 16 * 1024 * 1024, 'Expanded screenshot archive too large.')
             require(all(e.file_size <= (100000 if e.filename == 'manifest.json' else 2 * 1024 * 1024)
@@ -121,7 +129,7 @@ def read_artifact(data):
             and manifest.get('timezone') == 'America/New_York'
             and manifest.get('station') == {'lat': 40, 'lon': -74}, 'Capture fixture changed; update trusted policy first.')
     shots = manifest.get('screenshots')
-    require(type(shots) is list and len(shots) == 8 and all(type(s) is dict for s in shots), 'Incomplete capture manifest.')
+    require(type(shots) is list and len(shots) == len(IMAGES) and all(type(s) is dict for s in shots), 'Incomplete capture manifest.')
     require({s.get('file') for s in shots} == set(IMAGES), 'Capture manifest does not match images.')
     for shot in shots:
         require(shot.get('errors') == [], 'Browser errors were recorded during capture.')

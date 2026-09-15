@@ -58,7 +58,7 @@ jobs:
         if: steps.scope.outputs.relevant == 'true'
         working-directory: scripts/review
         run: npx --no-install playwright install --with-deps chromium
-      - name: Capture four states at phone and tablet sizes
+      - name: Capture six states at phone and tablet sizes
         if: steps.scope.outputs.relevant == 'true'
         working-directory: web
         shell: bash

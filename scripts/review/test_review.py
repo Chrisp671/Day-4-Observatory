@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import struct
 import unittest
+import urllib.error
 from unittest.mock import patch
 import zipfile
 
@@ -57,6 +58,15 @@ class ContractTests(unittest.TestCase):
             with self.assertRaises(Incomplete):
                 validate_review(json.dumps(good), {'web/src/a.ts': 'one line'})
 
+    def test_review_accepts_one_json_fence_without_relaxing_validation(self):
+        raw = json.dumps(good_review())
+        self.assertEqual(validate_review('```json\n' + raw + '\n```', {})['findings'], [])
+        for wrapped in ('Commentary\n```json\n' + raw + '\n```',
+                        '```json\n' + raw + '\n```\n```json\n{}\n```',
+                        '```json\n{"complete":true,"complete":false}\n```',
+                        '```json\n{}\n```'):
+            with self.assertRaises(Incomplete): validate_review(wrapped, {})
+
     def test_json_and_comment_injection(self):
         for raw in ('{"complete":true,"complete":false}', '{"n":NaN}', 'not JSON'):
             with self.assertRaises(Incomplete): strict_json(raw)
@@ -87,6 +97,28 @@ class ContractTests(unittest.TestCase):
                      ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: openai\nBuilder-Model-Family: qwen')]:
             with self.assertRaises(Incomplete): provider_config(*args)
 
+    def test_context_includes_changed_files_and_only_direct_imports(self):
+        files = {
+            'web/src/main.ts': "import {x} from './dep.js'; export {y} from './barrel'; import('./lazy');",
+            'web/src/dep.ts': "import './transitive';", 'web/src/barrel/index.ts': 'export const y=1;',
+            'web/src/lazy.ts': '', 'web/src/transitive.ts': '', 'web/src/unrelated.ts': '',
+            'web/src/removed.ts': '', 'web/index.html': '',
+            'scripts/review/run.py': 'import helper', 'scripts/review/helper.py': 'import deeper',
+            'scripts/review/deeper.py': '',
+        }
+        github = unittest.mock.Mock()
+        github.call.return_value = {'tree': [{'path': p, 'type': 'blob', 'mode': '100644', 'size': len(v)} for p,v in files.items()]}
+        github.file.side_effect = lambda p, sha: files[p]
+        selected = review.source_context(github, {'head': {'sha': 'a'*40}}, [
+            {'filename': 'web/src/main.ts', 'status': 'modified'},
+            {'filename': 'web/src/removed.ts', 'status': 'removed'},
+            {'filename': 'scripts/review/run.py', 'status': 'modified'}])
+        self.assertEqual(set(selected), {'web/src/main.ts', 'web/src/dep.ts', 'web/src/barrel/index.ts', 'web/src/lazy.ts',
+                                         'scripts/review/run.py', 'scripts/review/helper.py'})
+        files['web/src/main.ts'] = "import '../../../secret';"
+        with self.assertRaises(Incomplete):
+            review.source_context(github, {'head': {'sha': 'a'*40}}, [{'filename': 'web/src/main.ts', 'status': 'modified'}])
+
     def test_plan_requires_citations_and_includes_canon(self):
         plan = '\n'.join(f'- {key} — policy' for key in sorted(CANON | {'WI-027'}))
         self.assertEqual(set(plan_entries(plan, 'Implements WI-027')), CANON | {'WI-027'})
@@ -96,7 +128,7 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(relevant('PLAN.md'))
         self.assertFalse(relevant('Resources/help.html'))
 
-    def test_provider_adapters_send_eight_images_and_reject_truncation(self):
+    def test_provider_adapters_send_every_image_and_reject_truncation(self):
         images = {name: b'image' for name in IMAGES}
         responses = {
             'openai': {'status': 'completed', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': '{}'}]}]},
@@ -110,7 +142,7 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(api.model_request(provider, model, 'test-key', 'policy', 'evidence', images), '{}')
                 args = transport.call_args.args
                 payload = json.dumps(args[2])
-                self.assertEqual(payload.count(base64.b64encode(b'image').decode()), 8)
+                self.assertEqual(payload.count(base64.b64encode(b'image').decode()), len(IMAGES))
                 self.assertNotIn('tools', args[2])
                 self.assertNotIn('test-key', payload)
                 if provider == 'opencode-go':
@@ -120,6 +152,43 @@ class ContractTests(unittest.TestCase):
                     self.assertEqual(args[2]['max_tokens'], 12000)
             with patch('api.request', return_value=b'{}'), self.assertRaises(Incomplete):
                 api.model_request(provider, model, 'test-key', 'policy', 'evidence', images)
+
+    def test_model_payload_limit_and_session_header(self):
+        response = b'{"stop_reason":"end_turn","content":[{"type":"text","text":"{}"}]}'
+        evidence = 'x' * 599999
+        with patch('api.request', return_value=response) as transport:
+            self.assertEqual(api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', evidence, {}), '{}')
+            first = transport.call_args.args[1]['x-opencode-session']
+            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', evidence, {})
+            self.assertEqual(first, transport.call_args.args[1]['x-opencode-session'])
+        for oversized in (evidence + 'x', '\u00e9' * 300000):
+            with patch('api.request') as transport, self.assertRaises(Incomplete):
+                api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', oversized, {})
+            transport.assert_not_called()
+        with patch('api.request') as transport, self.assertRaises(Incomplete):
+            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'p', 'small', {'large.png': b'x' * (10 * 1024 * 1024)})
+        transport.assert_not_called()
+
+    def test_provider_error_is_bounded_redacted_and_opt_in(self):
+        body = b'{"error":"MissingSessionID", "key":"test-private-key", "url":"https://example.test/?token=secret", "image":"data:image/png;base64,AAAA"}' + b'x' * 1000
+        def failure():
+            return urllib.error.HTTPError('https://opencode.ai/zen/go/v1/messages', 400, 'bad', {}, io.BytesIO(body))
+        opener = unittest.mock.Mock()
+        with patch('api.urllib.request.build_opener', return_value=opener):
+            opener.open.side_effect = failure()
+            with self.assertRaises(Incomplete) as caught:
+                api.request('https://opencode.ai/zen/go/v1/messages', {'x-api-key': 'test-private-key'}, {}, provider_error=True)
+            message = str(caught.exception)
+            self.assertIn('HTTP 400', message)
+            self.assertIn('MissingSessionID', message)
+            self.assertNotIn('test-private-key', message)
+            self.assertNotIn('token=secret', message)
+            self.assertNotIn('AAAA', message)
+            self.assertLessEqual(len(message.split(': ', 1)[1]), 500)
+            opener.open.side_effect = failure()
+            with self.assertRaises(Incomplete) as caught:
+                api.request('https://api.github.com', {'Authorization': 'Bearer test-private-key'}, {})
+            self.assertNotIn('MissingSessionID', str(caught.exception))
 
     def test_opencode_refuses_tool_calls_refusals_truncation_and_unknown_models(self):
         for response in (

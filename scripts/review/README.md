@@ -122,8 +122,9 @@ PR #3's eight PNGs totalled 4,269,438 bytes; the twelve for the three-mode app
 measure about 6.1 MB, which is why the request bound is 12 MiB.
 
 Generated assets under `web/public/` (the constellation chart data, the PWA
-manifest) are excluded from the source context sent to the model; they remain
-in the diff and are reviewed through their generator and tests.
+manifest) are excluded from both the source context and the diff sent to the
+model; they are reviewed through their generator and tests. A PR whose diff
+holds only generated assets is reported incomplete rather than reviewed.
 
 OpenCode Go receives our own User-Agent and a stable `x-opencode-session` digest
 for each review snapshot, as required for routing. HTTP failures include status

@@ -175,6 +175,28 @@ def plan_entries(plan, body):
     return selected
 
 
+GENERATED_PREFIXES = ('web/public/',)
+
+
+def is_generated(path):
+    """Generated assets (chart data, PWA manifest, icons) are reviewed through
+    their generator and tests, never as source or diff text."""
+    return path.startswith(GENERATED_PREFIXES)
+
+
+def strip_generated(diff):
+    """Drop every file section of a unified diff whose path is generated. The
+    sections keep their order; nothing else in the diff is touched."""
+    sections = []
+    for index, section in enumerate(diff.split('\ndiff --git ')):
+        head = section if index == 0 else 'diff --git ' + section
+        first = head.split('\n', 1)[0]
+        path = first.removeprefix('diff --git a/').split(' b/', 1)[0] if first.startswith('diff --git a/') else ''
+        if not is_generated(path):
+            sections.append(head)
+    return '\n'.join(sections)
+
+
 def relevant(path):
     return path.startswith(('web/', 'scripts/review/')) or path in {
         'PLAN.md', '.github/review-rubric.md', '.github/workflows/review-web.yml',

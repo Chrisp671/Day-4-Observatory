@@ -1,7 +1,9 @@
 """Fixed-destination, bounded HTTP clients. No PR code or downloaded file execution."""
 import base64
+import hashlib
 import json
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -14,7 +16,26 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def request(url, headers=None, data=None, method=None, limit=2_000_000, timeout=60, redirect=False):
+MAX_TEXT_BYTES = 600_000
+MAX_REQUEST_BYTES = 8 * 1024 * 1024
+
+
+def provider_error_excerpt(raw, headers):
+    text = raw.decode('utf-8', errors='replace')
+    for name, value in (headers or {}).items():
+        if name.lower() in ('authorization', 'x-api-key', 'x-goog-api-key'):
+            for secret in (value, value.removeprefix('Bearer ')):
+                if secret:
+                    text = text.replace(secret, '[REDACTED]')
+    text = re.sub(r'data:[^\s"<>]+', '[IMAGE DATA]', text, flags=re.I)
+    text = re.sub(r'https?://[^\s"<>]+', '[URL]', text, flags=re.I)
+    text = re.sub(r'Bearer\s+[^\s"<>]+', 'Bearer [REDACTED]', text, flags=re.I)
+    text = re.sub(r'(?:sk-|gh[pousr]_)[A-Za-z0-9_-]+', '[REDACTED]', text)
+    text = re.sub(r'[A-Za-z0-9+/=_-]{80,}', '[LONG VALUE]', text)
+    return ''.join(c if c.isprintable() else ' ' for c in text)[:500]
+
+
+def request(url, headers=None, data=None, method=None, limit=2_000_000, timeout=60, redirect=False, provider_error=False):
     raw = None if data is None else json.dumps(data).encode()
     req = urllib.request.Request(url, data=raw, headers=headers or {}, method=method)
     try:
@@ -25,6 +46,9 @@ def request(url, headers=None, data=None, method=None, limit=2_000_000, timeout=
     except urllib.error.HTTPError as error:
         if redirect and error.code == 302:
             return error.headers['Location']
+        if provider_error:
+            excerpt = provider_error_excerpt(error.read(8192), headers)
+            raise Incomplete(f'Provider request failed (HTTP {error.code}): {excerpt}') from None
         raise Incomplete(f'API request failed (HTTP {error.code}); inspect repository configuration and provider account.') from None
     except (urllib.error.URLError, TimeoutError) as error:
         raise Incomplete('API request timed out or could not connect.') from error
@@ -87,6 +111,8 @@ class GitHub:
 
 def model_request(provider, model, key, instructions, evidence, images):
     require(bool(key), 'Set the repository secret REVIEW_API_KEY.')
+    text_bytes = len(instructions.encode('utf-8')) + len(evidence.encode('utf-8'))
+    require(text_bytes <= MAX_TEXT_BYTES, 'Review text exceeds 600,000 UTF-8 bytes; split the PR.')
     encoded = [(name, base64.b64encode(data).decode()) for name, data in images.items()]
     if provider == 'openai':
         content = [{'type': 'input_text', 'text': evidence}]
@@ -114,7 +140,8 @@ def model_request(provider, model, key, instructions, evidence, images):
             content.extend([{'type': 'text', 'text': name}, {'type': 'image', 'source':
                             {'type': 'base64', 'media_type': 'image/png', 'data': data}}])
         url = 'https://opencode.ai/zen/go/v1/messages'
-        headers = {'x-api-key': key, 'anthropic-version': '2023-06-01', 'User-Agent': 'day4-review/1.0'}
+        headers = {'x-api-key': key, 'anthropic-version': '2023-06-01', 'User-Agent': 'day4-review/1.0',
+                   'x-opencode-session': 'day4-' + hashlib.sha256((instructions + '\0' + evidence).encode()).hexdigest()}
         body = {'model': model, 'system': instructions, 'max_tokens': 12000,
                 'messages': [{'role': 'user', 'content': content}]}
     else:
@@ -129,7 +156,9 @@ def model_request(provider, model, key, instructions, evidence, images):
                 'generationConfig': {'maxOutputTokens': 12000, 'responseMimeType': 'application/json',
                                      'responseJsonSchema': SCHEMA}}
     headers['Content-Type'] = 'application/json'
-    response = strict_json(request(url, headers, body, timeout=240, limit=200_000))
+    require(len(json.dumps(body).encode()) <= MAX_REQUEST_BYTES,
+            'Serialized review request exceeds 8 MiB; split the PR or reduce image byte size.')
+    response = strict_json(request(url, headers, body, timeout=240, limit=200_000, provider_error=True))
     if provider == 'openai':
         require(response.get('status') == 'completed', 'OpenAI response was incomplete or refused.')
         text = ''.join(c.get('text', '') for item in response.get('output', [])

@@ -18,7 +18,7 @@
  *
  * It holds no astronomy, no formatting, no caching.
  */
-import type { Scene, SceneMovement, SceneRow } from "./scene";
+import type { Scene, SceneMovement, ScenePlanet, SceneRow } from "./scene";
 import { GLANCE_ROWS } from "./scene-consts";
 import { parseCoordinate, type Station } from "./location";
 import { MODES, stepMode, type Mode } from "./mode";
@@ -62,7 +62,10 @@ export const IDS = {
   /* The three views (DEC-038): the selector, one panel per mode, and the
    * shared station/time line the focused views stand on. */
   modes: "modes",
+  stage: "stage",
   viewDay4: "view-day4",
+  planetsList: "planets-list",
+  planetsNote: "planets-note",
   viewConstellations: "view-constellations",
   viewPlanets: "view-planets",
   focusContext: "focus-context",
@@ -123,11 +126,31 @@ const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "month", "pha
 /** How many glance rows the ledger shows; the rest live behind the fold. */
 const GLANCE_SLOTS = GLANCE_ROWS;
 
+/** A glance slot is one row element, rebuilt only when its kind changes: a
+ * real button for a planet (the control for its ring), a plain row for a
+ * constellation. The list stays three `.lrow` elements in order. */
 interface Slot {
+  row: HTMLElement;
+  kind: "planet" | "sky" | null;
+  swatch: HTMLElement;
+  label: HTMLElement;
+  line: HTMLElement;
+}
+
+/** One row of the Planets view: the button, and the details it expands. */
+interface PlanetSlot {
   readonly root: HTMLElement;
+  readonly button: HTMLButtonElement;
   readonly swatch: HTMLElement;
   readonly label: HTMLElement;
   readonly line: HTMLElement;
+  readonly detail: HTMLElement;
+  readonly rise: HTMLElement;
+  readonly peak: HTMLElement;
+  readonly set: HTMLElement;
+  readonly where: HTMLElement;
+  readonly visibility: HTMLElement;
+  readonly arcNote: HTMLElement;
 }
 
 /**
@@ -196,28 +219,35 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   };
 
   /* ————— the ledger: three glance slots, built once ————— */
+  /** A planet row is the control for its ring: tap to light, tap to release. */
+  const toggleLit = (name: string, lit: boolean): void => handlers.onLit(lit ? null : name);
+
+  /** A fresh row of the given kind; planet rows are buttons for their ring. */
+  const buildRow = (kind: "planet" | "sky"): Omit<Slot, "kind"> => {
+    if (kind === "planet") {
+      const b = planetButton(doc);
+      b.button.addEventListener("click", () => {
+        toggleLit(b.button.dataset["planet"] ?? "", b.button.classList.contains("chosen"));
+      });
+      return { row: b.button, swatch: b.swatch, label: b.label, line: b.line };
+    }
+    const row = doc.createElement("div");
+    row.className = "lrow";
+    const label = doc.createElement("span");
+    label.className = "n";
+    const line = doc.createElement("span");
+    line.className = "d";
+    row.append(label, line);
+    return { row, swatch: label, label, line };
+  };
+
   const slots: Slot[] = [];
   if (els.tonightList !== undefined) {
     for (let i = 0; i < GLANCE_SLOTS; i++) {
-      const root = doc.createElement("div");
-      root.className = "lrow";
-      const name = doc.createElement("span");
-      name.className = "n";
-      const swatch = doc.createElement("i");
-      swatch.className = "sw";
-      const label = doc.createElement("span");
-      name.append(swatch, label);
-      const line = doc.createElement("span");
-      line.className = "d";
-      root.append(name, line);
-      // A planet row is the control for its ring: tap to light, tap to release.
-      root.addEventListener("click", () => {
-        const planet = root.dataset["planet"];
-        if (planet === undefined || planet === "") return;
-        handlers.onLit(root.classList.contains("chosen") ? null : planet);
-      });
-      els.tonightList.appendChild(root);
-      slots.push({ root, swatch, label, line });
+      const built = buildRow("sky");
+      built.row.hidden = true;
+      els.tonightList.appendChild(built.row);
+      slots.push({ ...built, kind: null });
     }
   }
 
@@ -225,22 +255,61 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     slots.forEach((slot, i) => {
       const row = rows[i];
       if (row === undefined) {
-        slot.root.style.display = "none";
+        slot.row.hidden = true;
         return;
       }
-      slot.root.style.display = "";
-      slot.root.classList.toggle("is-up", row.up);
-      slot.root.classList.toggle("chosen", row.color !== null && row.lit);
-      slot.root.dataset["planet"] = row.color === null ? "" : row.name;
-      if (row.color === null) slot.root.removeAttribute("role");
-      else slot.root.setAttribute("role", "button");
+      const kind = row.color === null ? "sky" : "planet";
+      if (kind !== slot.kind) {
+        const built = buildRow(kind);
+        slot.row.replaceWith(built.row);
+        Object.assign(slot, built, { kind });
+      }
+      slot.row.hidden = false;
+      slot.row.classList.toggle("is-up", row.up);
       slot.label.textContent = row.name;
       slot.line.textContent = row.line;
-      // The swatch is the legend for the rings on the rete (DEC-034).
-      slot.swatch.style.display = row.color === null ? "none" : "";
-      slot.swatch.style.background = row.color ?? "";
-      slot.label.style.color = row.color ?? "";
+      if (kind === "planet") {
+        slot.row.classList.toggle("chosen", row.lit);
+        slot.row.setAttribute("aria-pressed", String(row.lit));
+        slot.row.dataset["planet"] = row.name;
+        // The swatch is the legend for the rings on the rete (DEC-034).
+        slot.swatch.style.background = row.color ?? "";
+        slot.label.style.color = row.color ?? "";
+      }
     });
+  };
+
+  /* ————— the Planets view: five rows, built once, each a real button ————— */
+  const planetSlots = new Map<string, PlanetSlot>();
+  const paintPlanets = (planets: readonly ScenePlanet[]): void => {
+    const host = els.planetsList;
+    if (host === undefined) return;
+    for (const p of planets) {
+      let slot = planetSlots.get(p.name);
+      if (slot === undefined) {
+        const built = planetRow(doc, p.name);
+        built.button.addEventListener("click", () => toggleLit(p.name, built.button.classList.contains("chosen")));
+        host.appendChild(built.root);
+        planetSlots.set(p.name, built);
+        slot = built;
+      }
+      slot.root.classList.toggle("is-up", p.up);
+      slot.root.classList.toggle("chosen", p.lit);
+      slot.button.classList.toggle("chosen", p.lit);
+      slot.button.setAttribute("aria-pressed", String(p.lit));
+      slot.button.setAttribute("aria-expanded", String(p.lit));
+      slot.swatch.style.background = p.color;
+      slot.label.style.color = p.color;
+      slot.label.textContent = p.name;
+      slot.line.textContent = p.line;
+      slot.detail.hidden = !p.lit;
+      slot.rise.textContent = p.rise;
+      slot.peak.textContent = p.peak;
+      slot.set.textContent = p.set;
+      slot.where.textContent = p.where;
+      slot.visibility.textContent = p.visibility;
+      slot.arcNote.textContent = p.arcNote;
+    }
   };
 
   /* ————— the fold: the programme, rebuilt only when its words change ————— */
@@ -264,7 +333,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       frag.append(sectionHeader(doc, movement.title, movement.rows.length));
       // Planets keep the ledger's full row; the constellations fold into columns.
       if (movement.rows.some((r) => r.color !== null)) {
-        for (const row of movement.rows) frag.append(ledgerRow(doc, row));
+        for (const row of movement.rows) frag.append(ledgerRow(doc, row, toggleLit));
       } else {
         const cols = doc.createElement("div");
         cols.className = "cols";
@@ -319,6 +388,9 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     setText("tonightNote", scene.tonight.note);
     paintProgramme(scene.tonight.programme, scene.tonight.footnote);
 
+    paintPlanets(scene.planets);
+    setText("planetsNote", scene.tonight.note);
+
     // The focused views stand on the same station and clock as Day 4.
     setText("focusStation", r.station);
     setText("focusClock", r.clock);
@@ -372,6 +444,8 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       }
     }
     if (els.focusContext !== undefined) els.focusContext.hidden = mode === "day4";
+    // The dial is shared by Day 4 and Planets; Constellations has its own view.
+    if (els.stage !== undefined) els.stage.hidden = mode === "constellations";
   };
 
   /* ————— the rail: steppers and NOW ————— */
@@ -531,22 +605,82 @@ function sectionHeader(doc: Document, title: string, count: number): HTMLElement
   return section;
 }
 
-/** A planet row in the programme: swatch, coloured name, line. */
-function ledgerRow(doc: Document, row: SceneRow): HTMLElement {
-  const root = doc.createElement("div");
-  root.className = `lrow${row.up ? " is-up" : ""}${row.lit ? " chosen" : ""}`;
+/** An empty planet row that is a real button: swatch, coloured name, line. */
+function planetButton(doc: Document): {
+  button: HTMLButtonElement; swatch: HTMLElement; label: HTMLElement; line: HTMLElement;
+} {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = "lrow";
+  button.setAttribute("aria-pressed", "false");
   const name = doc.createElement("span");
   name.className = "n";
-  name.style.color = row.color ?? "";
   const swatch = doc.createElement("i");
   swatch.className = "sw";
-  swatch.style.background = row.color ?? "";
-  name.append(swatch, doc.createTextNode(row.name));
+  const label = doc.createElement("span");
+  name.append(swatch, label);
   const line = doc.createElement("span");
   line.className = "d";
-  line.textContent = row.line;
-  root.append(name, line);
-  return root;
+  button.append(name, line);
+  return { button, swatch, label, line };
+}
+
+/** A planet row in the programme: a button that lights the planet's ring. */
+function ledgerRow(
+  doc: Document, row: SceneRow, toggleLit: (name: string, lit: boolean) => void,
+): HTMLElement {
+  const b = planetButton(doc);
+  b.button.className = `lrow${row.up ? " is-up" : ""}${row.lit ? " chosen" : ""}`;
+  b.button.setAttribute("aria-pressed", String(row.lit));
+  b.button.dataset["planet"] = row.name;
+  b.label.style.color = row.color ?? "";
+  b.swatch.style.background = row.color ?? "";
+  b.label.textContent = row.name;
+  b.line.textContent = row.line;
+  b.button.addEventListener("click", () => toggleLit(row.name, row.lit));
+  return b.button;
+}
+
+/** A row of the Planets view: the button, and the details that open under it. */
+function planetRow(doc: Document, name: string): PlanetSlot {
+  const root = doc.createElement("div");
+  root.className = "prow";
+  const b = planetButton(doc);
+  b.button.className = "lrow pbtn";
+  b.button.dataset["planet"] = name;
+  const detail = doc.createElement("div");
+  detail.className = "pdetail";
+  detail.id = `planet-detail-${name.toLowerCase()}`;
+  detail.hidden = true;
+  b.button.setAttribute("aria-controls", detail.id);
+  b.button.setAttribute("aria-expanded", "false");
+
+  const times = doc.createElement("div");
+  times.className = "ptimes";
+  const cell = (k: string): HTMLElement => {
+    const wrap = doc.createElement("span");
+    const key = doc.createElement("em");
+    key.textContent = k;
+    const val = doc.createElement("b");
+    wrap.append(key, val);
+    times.append(wrap);
+    return val;
+  };
+  const rise = cell("RISE");
+  const peak = cell("PEAK");
+  const set = cell("SET");
+  const where = doc.createElement("div");
+  where.className = "pwhere";
+  const visibility = doc.createElement("p");
+  visibility.className = "pvis";
+  const arcNote = doc.createElement("p");
+  arcNote.className = "parc";
+  detail.append(times, where, visibility, arcNote);
+  root.append(b.button, detail);
+  return {
+    root, button: b.button, swatch: b.swatch, label: b.label, line: b.line,
+    detail, rise, peak, set, where, visibility, arcNote,
+  };
 }
 
 /** A constellation row in the columns, starred when Mazzaroth. */

@@ -37,7 +37,7 @@ import type { Station } from "./location";
 export { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
 import { frame, type FrameState } from "../engine/frame";
 import { sceneBand, sceneEarth, sceneLight, sceneMarks, sceneMoon, sceneSun } from "./scene-core";
-import { sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
+import { scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
 
 /* ————————————————————————————— request ————————————————————————————— */
 
@@ -172,6 +172,33 @@ export interface SceneMovement {
   readonly rows: readonly SceneRow[];
 }
 
+/**
+ * One of the five wandering stars, worded for the Planets view (REQ-014).
+ * Always present — a planet without a ring on the rete keeps its row and
+ * says why the arc is absent. Every string is final.
+ */
+export interface ScenePlanet {
+  readonly name: string;
+  readonly color: string;
+  /** Above the horizon at the displayed instant. */
+  readonly up: boolean;
+  /** True for the tapped planet; its ring is the lit one. */
+  readonly lit: boolean;
+  /** The row's own line, as the ledger words it: "sets in 3h 40m · 23° SE ⋆11:40p". */
+  readonly line: string;
+  /** Rise, peak and set of the displayed calendar day: "↑7:12 pm", "⋆11:40 pm",
+   * "↓4:05 am Thu"; "—" when the day has none. */
+  readonly rise: string;
+  readonly peak: string;
+  readonly set: string;
+  /** "23° up, southeast"; "" while it is below the horizon. */
+  readonly where: string;
+  /** One honest sentence: whether it can be seen now, and if not, when. */
+  readonly visibility: string;
+  /** "" while its ring is drawn; otherwise why there is no arc on this date. */
+  readonly arcNote: string;
+}
+
 export interface SceneTonight {
   /** "visible after dark" until the sky is dark enough; else "". */
   readonly note: string;
@@ -195,6 +222,8 @@ export interface Scene {
   readonly marks: SceneMarks;
   readonly readouts: SceneReadouts;
   readonly tonight: SceneTonight;
+  /** The five wandering stars in ring order, always all five (REQ-014). */
+  readonly planets: readonly ScenePlanet[];
   /** The dial in one plain paragraph, for aria-describedby (DEC-029). */
   readonly spoken: string;
 }
@@ -221,6 +250,7 @@ export function scene(request: SceneRequest): Scene {
     marks: sceneMarks(input),
     readouts: sceneReadouts(input),
     tonight: sceneTonight(input),
+    planets: scenePlanets(input),
     spoken: sceneSpoken(input),
   };
 }

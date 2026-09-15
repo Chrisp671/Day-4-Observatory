@@ -200,7 +200,12 @@
     .ledger-h .rule{flex:1;height:1px;background:var(--hair-soft);align-self:center}
     .lrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
       padding:5px 2px;border-bottom:1px solid var(--hair-soft)}
+    /* A planet row is a real button (REQ-014) dressed exactly as the row it was. */
+    button.lrow{width:100%;background:transparent;border:0;border-bottom:1px solid var(--hair-soft);
+      font:inherit;color:inherit;text-align:left;cursor:pointer;
+      -webkit-appearance:none;appearance:none;border-radius:0}
     .lrow:last-child{border-bottom:none}
+    .lrow[hidden]{display:none}
     .lrow .n{font-family:var(--caps);font-weight:600;font-size:10.5px;
       letter-spacing:.14em;color:var(--ink-mid);white-space:nowrap;flex-shrink:0}
     .lrow .d{font-size:clamp(11px,1.5vh,12.5px);color:var(--ink-hi);
@@ -236,6 +241,31 @@
     .crow .mz{color:var(--gold-soft);font-size:8px;margin-left:4px}
     .tonight-foot{font-family:var(--serif);font-style:italic;font-size:12px;
       color:var(--gold-soft);text-align:center;margin-top:10px}
+
+    /* ————— the Planets view: five rows, the chosen one opened (REQ-014) ————— */
+    .planets .lh{font-family:var(--caps);font-weight:700;font-size:9.5px;
+      letter-spacing:.3em;color:var(--ink-mid)}
+    .prow{border-bottom:1px solid var(--hair-soft)}
+    .prow:last-child{border-bottom:none}
+    .prow .pbtn{border-bottom:none;padding:8px 2px}
+    .prow .pbtn .n{font-size:11px}
+    .prow.is-up .n{color:var(--scripture)}
+    .prow.chosen .n{color:var(--sunlight)!important}
+    .prow.chosen .d{color:var(--scripture)}
+    .pdetail{padding:0 2px 12px 23px}
+    .pdetail[hidden]{display:none}
+    .ptimes{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--ink-hi);
+      font-variant-numeric:tabular-nums}
+    .ptimes em{font-family:var(--caps);font-style:normal;font-weight:700;font-size:8.5px;
+      letter-spacing:.22em;color:var(--ink-mid);margin-right:7px}
+    .ptimes b{font-weight:500}
+    .pwhere{margin-top:7px;font-size:12.5px;color:var(--ink-hi);font-variant-numeric:tabular-nums}
+    .pvis{font-family:var(--serif);font-style:italic;font-weight:600;font-size:15px;line-height:1.4;
+      color:var(--scripture);margin-top:6px;max-width:52ch;text-wrap:pretty}
+    .parc{font-family:var(--serif);font-weight:500;font-size:13.5px;line-height:1.45;
+      color:var(--gold-soft);margin-top:5px;max-width:52ch;text-wrap:pretty}
+    .parc:empty,.pwhere:empty{display:none}
+    .stage[hidden]{display:none!important}
 
     @media (max-width:720px){
       /* Portrait is a STACK: seal, verse, hero, dial, plinth. Nothing is
@@ -288,13 +318,15 @@
     <div class="modes" id="modes" role="tablist" aria-label="Views"></div>
   </header>
 
-  <div class="view" id="view-day4" role="tabpanel" aria-labelledby="tab-day4">
-  <div class="stage">
+  <!-- The dial is shared by Day 4 and Planets (the rete is the planets'
+       own element, DEC-036); Constellations has its own view. -->
+  <div class="stage" id="stage">
     <canvas id="sky" role="img" aria-describedby="sky-transcript"
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
     <p id="sky-transcript" class="sr-only"></p>
   </div>
 
+  <div class="view" id="view-day4" role="tabpanel" aria-labelledby="tab-day4">
   <section class="plinth" aria-label="Readouts and controls">
     <div class="plinth-in">
       <p class="passion" id="passion"></p>
@@ -348,10 +380,22 @@
     <p class="focus-lead">Up now and rising later &mdash; each with its own chart: the stars where they stand, the lines between them, the brightest named.</p>
     <p class="focus-note">This view is being built. Until it lands, tonight&rsquo;s constellations are in Day&nbsp;4, behind TONIGHT.</p>
   </section>
-  <section class="view focus" id="view-planets" role="tabpanel" aria-labelledby="tab-planets" hidden>
-    <h2 class="focus-t">Planets</h2>
-    <p class="focus-lead">Mercury, Venus, Mars, Jupiter and Saturn &mdash; when each rises, peaks and sets, and where to look.</p>
-    <p class="focus-note">This view is being built. Until it lands, the planets are in Day&nbsp;4: the rings on the dial, and the TONIGHT ledger.</p>
+  <!-- Planets (REQ-014): the five wandering stars under the shared dial.
+       Each row is a real button for its ring; the chosen one opens its
+       rise, peak, set, where to look, and an honest word on visibility. -->
+  <section class="view" id="view-planets" role="tabpanel" aria-labelledby="tab-planets" hidden>
+    <section class="plinth" aria-label="The wandering stars">
+      <div class="plinth-in">
+        <div class="ledger planets">
+          <div class="ledger-h">
+            <span class="lh">THE WANDERING STARS</span>
+            <em id="planets-note"></em>
+            <span class="rule"></span>
+          </div>
+          <div id="planets-list"></div>
+        </div>
+      </div>
+    </section>
   </section>
   <!-- The focused views stand on the same station and clock as Day 4. -->
   <p class="focus-context" id="focus-context" hidden>

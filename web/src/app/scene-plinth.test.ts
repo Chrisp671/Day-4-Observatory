@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { frame } from "../engine/frame";
 import { RING_ORDER } from "../ui/clockface";
-import { type PlinthInput, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
+import { type PlinthInput, scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
 import type { SceneRequest } from "./scene";
 
 const NYC = { lat: 40.0, lon: -74.0 };
@@ -129,5 +129,64 @@ describe("sceneSpoken", () => {
     const spoken = sceneSpoken(input(NOON, null));
     expect(spoken.length).toBeGreaterThan(0);
     expect(spoken).toContain("moon");
+  });
+});
+
+describe("scenePlanets (REQ-014)", () => {
+  it("always carries all five, in ring order, each with a colour and final strings", () => {
+    const out = scenePlanets(input(NIGHT, null));
+    expect(out.map((p) => p.name)).toEqual([...RING_ORDER]);
+    for (const p of out) {
+      expect(p.color).toMatch(/^#/);
+      for (const s of [p.line, p.rise, p.peak, p.set, p.visibility]) expect(s).not.toBe("");
+      expect(p.line).not.toMatch(/^ ·/);
+      expect(p.rise === "—" || /^↑\d{1,2}:\d{2} [ap]m$/.test(p.rise)).toBe(true);
+      expect(p.set === "—" || /^↓\d{1,2}:\d{2} [ap]m( [A-Z][a-z]{2})?$/.test(p.set)).toBe(true);
+      expect(p.peak === "—" || /^⋆\d{1,2}:\d{2} [ap]m( [A-Z][a-z]{2})?$/.test(p.peak)).toBe(true);
+    }
+  });
+
+  it("marks exactly the tapped planet lit, and none when nothing is tapped", () => {
+    expect(scenePlanets(input(NIGHT, "Mars")).filter((p) => p.lit).map((p) => p.name)).toEqual(["Mars"]);
+    expect(scenePlanets(input(NIGHT, null)).some((p) => p.lit)).toBe(false);
+  });
+
+  it("agrees with the rete: a planet has an arc note exactly when it has no ring", () => {
+    for (const t of [NOON, NIGHT]) {
+      const ringed = new Set(sceneRete(input(t, null)).map((r) => r.name));
+      for (const p of scenePlanets(input(t, null))) {
+        expect(p.arcNote === "").toBe(ringed.has(p.name));
+      }
+    }
+  });
+
+  it("words a planet below the horizon honestly, with when it rises", () => {
+    const down = scenePlanets(input(NIGHT, null)).filter((p) => !p.up);
+    for (const p of down) {
+      expect(p.where).toBe("");
+      expect(p.visibility).toMatch(/^Below the horizon/);
+      expect(p.visibility).toMatch(/rises in \d|does not rise/);
+    }
+  });
+
+  it("tells a viewer where to look when a planet is up after dark", () => {
+    const up = scenePlanets(input(NIGHT, null)).filter((p) => p.up);
+    for (const p of up) {
+      expect(p.where).toMatch(/^\d+° up, [a-z]+$/);
+      expect(p.visibility).toMatch(/^Up now/);
+    }
+  });
+
+  it("keeps every row and explains the missing ring at a polar station in midsummer", () => {
+    const polar = { lat: 85.0, lon: -74.0 };
+    const request: SceneRequest = { displayedUnixMillis: NOON, nowUnixMillis: NOON, station: polar, lit: null };
+    const inp: PlinthInput = { frame: frame(NOON, polar.lat, polar.lon), request };
+    const planets = scenePlanets(inp);
+    const rete = sceneRete(inp);
+    expect(planets.length).toBe(5);
+    expect(rete.length).toBeLessThan(5);
+    const noRing = planets.filter((p) => p.arcNote !== "");
+    expect(noRing.length).toBe(5 - rete.length);
+    for (const p of noRing) expect(p.arcNote).toMatch(/^No ring today/);
   });
 });

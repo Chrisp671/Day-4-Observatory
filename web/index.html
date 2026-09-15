@@ -267,6 +267,38 @@
     .parc:empty,.pwhere:empty{display:none}
     .stage[hidden]{display:none!important}
 
+    /* ————— the Constellations view: one chart, then the sky to choose from (REQ-015) —————
+       The lists are long, so this view scrolls on every screen and the chart
+       keeps a fixed height instead of yielding to them. */
+    html[data-mode="constellations"] body{overflow-y:auto;height:auto;min-height:100dvh}
+    .chart-stage{flex:none;height:clamp(260px,52vh,600px)}
+    .chart-head{padding:10px 2px 6px;text-align:center}
+    .chart-title{font-family:var(--caps);font-weight:700;font-size:15px;letter-spacing:.3em;
+      text-transform:uppercase;color:var(--gold-soft);display:flex;align-items:center;
+      justify-content:center;gap:14px}
+    .chart-title::before,.chart-title::after{content:"";width:24px;height:1px;
+      background:var(--gold-soft);opacity:.55}
+    .chart-sub{margin-top:6px;font-size:12.5px;color:var(--ink-hi);font-variant-numeric:tabular-nums}
+    .chart-sub b{font-weight:500}
+    .chart-sub span{font-family:var(--serif);font-style:italic;font-size:14px;color:var(--ink-mid)}
+    .chart-where{margin-top:4px;font-size:12.5px;color:var(--ink-hi);font-variant-numeric:tabular-nums}
+    .chart-vis{font-family:var(--serif);font-style:italic;font-weight:600;font-size:15px;line-height:1.4;
+      color:var(--scripture);margin:6px auto 0;max-width:46ch;text-wrap:pretty}
+    .chart-note{font-family:var(--serif);font-style:italic;font-size:12.5px;color:var(--gold-soft);
+      margin:6px auto 0;max-width:46ch}
+    .chart-load{font-family:var(--caps);font-weight:600;font-size:9px;letter-spacing:.2em;
+      color:var(--ink-mid);margin-top:6px}
+    .chart-where:empty,.chart-note:empty,.chart-load:empty,.chart-sub span:empty{display:none}
+    .skylist .lh{font-family:var(--caps);font-weight:700;font-size:9.5px;letter-spacing:.3em;color:var(--ink-mid)}
+    .skylist .ledger-h{margin-top:8px}
+    .skylist .cols{padding-top:2px}
+    /* A constellation row is a real button dressed as the column row it was. */
+    button.crow{width:100%;background:transparent;border:0;border-bottom:1px solid var(--hair-soft);
+      font:inherit;color:inherit;text-align:left;cursor:pointer;-webkit-appearance:none;appearance:none;border-radius:0}
+    button.crow:hover .n{color:var(--ink-hi)}
+    .crow.chosen .n{color:var(--sunlight)!important}
+    .crow.chosen .d{color:var(--scripture)}
+
     @media (max-width:720px){
       /* Portrait is a STACK: seal, verse, hero, dial, plinth. Nothing is
          absolutely positioned; nothing can overlap; the body scrolls. */
@@ -375,10 +407,39 @@
   <!-- The two focused views (DEC-038). Their content lands in WI-031 and
        WI-032; until then each says plainly what it will be and where the
        same information lives today. Never presented as finished. -->
-  <section class="view focus" id="view-constellations" role="tabpanel" aria-labelledby="tab-constellations" hidden>
-    <h2 class="focus-t">Constellations</h2>
-    <p class="focus-lead">Up now and rising later &mdash; each with its own chart: the stars where they stand, the lines between them, the brightest named.</p>
-    <p class="focus-note">This view is being built. Until it lands, tonight&rsquo;s constellations are in Day&nbsp;4, behind TONIGHT.</p>
+  <!-- Constellations (REQ-015): one chart at a time where the dial would
+       stand — the stars where they are, the figure's lines, the brightest
+       named — and, below it, where it is in the viewer's own sky, then the
+       lists to choose from. Chart data loads only when a chart is chosen. -->
+  <section class="view" id="view-constellations" role="tabpanel" aria-labelledby="tab-constellations" hidden>
+    <div class="stage chart-stage" id="chart-stage">
+      <canvas id="chart" role="img" aria-labelledby="chart-title" aria-describedby="chart-vis"></canvas>
+    </div>
+    <section class="plinth" aria-label="Constellations">
+      <div class="plinth-in">
+        <div class="chart-head">
+          <h2 class="chart-title" id="chart-title">&mdash;</h2>
+          <p class="chart-sub"><b id="chart-status"></b> <span id="chart-tracked"></span></p>
+          <p class="chart-where" id="chart-where"></p>
+          <p class="chart-vis" id="chart-vis"></p>
+          <p class="chart-note" id="chart-note"></p>
+          <p class="chart-load" id="chart-load"></p>
+        </div>
+        <div class="ledger skylist">
+          <div class="ledger-h">
+            <span class="lh">UP NOW</span>
+            <em id="sky-note"></em>
+            <span class="rule"></span>
+          </div>
+          <div class="cols" id="sky-up"></div>
+          <div class="ledger-h">
+            <span class="lh">RISING LATER</span>
+            <span class="rule"></span>
+          </div>
+          <div class="cols" id="sky-rising"></div>
+        </div>
+      </div>
+    </section>
   </section>
   <!-- Planets (REQ-014): the five wandering stars under the shared dial.
        Each row is a real button for its ring; the chosen one opens its

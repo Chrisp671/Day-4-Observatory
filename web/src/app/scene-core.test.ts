@@ -23,7 +23,7 @@ const HOUR = 3600000;
 function at(displayed: number, station = NYC, now = displayed): CoreInput {
   return {
     frame: frame(displayed, station.lat, station.lon),
-    request: { displayedUnixMillis: displayed, nowUnixMillis: now, station, lit: null },
+    request: { displayedUnixMillis: displayed, nowUnixMillis: now, station, lit: null, chart: null },
   };
 }
 

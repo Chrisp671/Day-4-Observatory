@@ -37,7 +37,7 @@ import type { Station } from "./location";
 export { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
 import { frame, type FrameState } from "../engine/frame";
 import { sceneBand, sceneEarth, sceneLight, sceneMarks, sceneMoon, sceneSun } from "./scene-core";
-import { scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
+import { sceneConstellation, scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
 
 /* ————————————————————————————— request ————————————————————————————— */
 
@@ -49,6 +49,8 @@ export interface SceneRequest {
   readonly station: Station;
   /** The ring the viewer tapped, or null for honest weights all round. */
   readonly lit: string | null;
+  /** The constellation the viewer chose in the Constellations view, or null. */
+  readonly chart: string | null;
 }
 
 /* ————————————————————————————— the light ————————————————————————————— */
@@ -161,7 +163,7 @@ export interface SceneRow {
   readonly up: boolean;
   /** Ring colour for a planet; null for a constellation. */
   readonly color: string | null;
-  /** True for the tapped planet's row. */
+  /** True for the tapped planet's row, or the chosen constellation's. */
   readonly lit: boolean;
   /** Mazzaroth: a constellation of the sun's path (Job 38:32). */
   readonly starred: boolean;
@@ -199,6 +201,27 @@ export interface ScenePlanet {
   readonly arcNote: string;
 }
 
+/**
+ * The chosen constellation, worded for the Constellations view (REQ-015):
+ * where it stands in the viewer's sky at the shared place and time, and an
+ * honest word on whether it can be seen. The chart itself is content
+ * (app/charts.ts), loaded on demand; the Scene never carries star data.
+ */
+export interface SceneConstellation {
+  readonly name: string;
+  /** The star the position describes: "tracked by Rigel". */
+  readonly tracked: string;
+  /** "Up now · sets in 3h 40m" / "Rises in 2h 14m" / "Up all night" / "Never rises from this station". */
+  readonly status: string;
+  /** "34° up, southeast"; "" while below the horizon. */
+  readonly where: string;
+  /** One honest sentence on seeing it now. */
+  readonly visibility: string;
+  /** The Mazzaroth footnote for one of the twelve; else "". */
+  readonly note: string;
+  readonly starred: boolean;
+}
+
 export interface SceneTonight {
   /** "visible after dark" until the sky is dark enough; else "". */
   readonly note: string;
@@ -224,6 +247,8 @@ export interface Scene {
   readonly tonight: SceneTonight;
   /** The five wandering stars in ring order, always all five (REQ-014). */
   readonly planets: readonly ScenePlanet[];
+  /** The chosen constellation, or null when none is chosen or it is unknown. */
+  readonly constellation: SceneConstellation | null;
   /** The dial in one plain paragraph, for aria-describedby (DEC-029). */
   readonly spoken: string;
 }
@@ -251,6 +276,7 @@ export function scene(request: SceneRequest): Scene {
     readouts: sceneReadouts(input),
     tonight: sceneTonight(input),
     planets: scenePlanets(input),
+    constellation: sceneConstellation(input),
     spoken: sceneSpoken(input),
   };
 }

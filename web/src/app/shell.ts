@@ -72,6 +72,19 @@ export const IDS = {
   focusStation: "focus-station",
   focusClock: "focus-clock",
   focusZone: "focus-zone",
+  /* The Constellations view (REQ-015): the chart, its words, the two lists. */
+  chartStage: "chart-stage",
+  chart: "chart",
+  chartTitle: "chart-title",
+  chartStatus: "chart-status",
+  chartTracked: "chart-tracked",
+  chartWhere: "chart-where",
+  chartVis: "chart-vis",
+  chartNote: "chart-note",
+  chartLoad: "chart-load",
+  skyNote: "sky-note",
+  skyUp: "sky-up",
+  skyRising: "sky-rising",
 } as const;
 
 /** What the shell can tell the app about. */
@@ -88,6 +101,8 @@ export interface ShellHandlers {
   readonly onResize: () => void;
   /** The viewer chose a view: Day 4, Constellations or Planets. */
   readonly onMode: (mode: Mode) => void;
+  /** The viewer chose a constellation to chart. */
+  readonly onChart: (name: string) => void;
 }
 
 /** The canvases, sized, with the geometry the painters need. */
@@ -100,6 +115,9 @@ export interface Stage {
   readonly R: number;
   readonly dpr: number;
   readonly viewport: { readonly width: number; readonly height: number };
+  /** The constellation chart canvas, and its device pixels across; 0 until first shown. */
+  readonly chart: CanvasRenderingContext2D | null;
+  readonly chartW: number;
 }
 
 export interface Shell {
@@ -115,6 +133,8 @@ export interface Shell {
   stationStatus(text: string): void;
   /** Show one view and mark its tab; the others are hidden, not removed. */
   showMode(mode: Mode): void;
+  /** A one-line note under the chart's words ("loading chart…"); "" clears it. */
+  chartStatus(text: string): void;
 }
 
 type Role = keyof typeof IDS;
@@ -165,10 +185,13 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   const ctx = dial?.getContext("2d") ?? null;
   const firm = asCanvas(els.firmament);
   const fctx = firm?.getContext("2d") ?? null;
+  const chartCanvas = asCanvas(els.chart);
+  const chartCtx = chartCanvas?.getContext("2d") ?? null;
 
   let W = 0;
   let R = 0;
   let DPR = 1;
+  let chartW = 0;
   let lastScene: Scene | null = null;
 
   const setText = (role: Role, text: string): void => {
@@ -177,31 +200,39 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   };
 
   /* ————— fit ————— */
-  const fit = (): Stage => {
-    const parent = dial?.parentElement ?? null;
+  /** The largest square a stage's CONTENT box holds (a canvas sized to the
+   * border box overflows into whatever sits above and below), applied to the
+   * canvas; 0 while the stage is hidden, so a hidden canvas keeps its size. */
+  const squareFor = (canvas: HTMLCanvasElement | null): number => {
+    const parent = canvas?.parentElement ?? null;
     const box = parent?.getBoundingClientRect() ?? null;
+    if (canvas === null || parent === null || box === null || box.width <= 0) return 0;
+    const pad = win.getComputedStyle(parent);
+    const innerW = box.width - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight);
+    const innerH = box.height - parseFloat(pad.paddingTop) - parseFloat(pad.paddingBottom);
+    const portrait = win.matchMedia("(max-width: 720px)").matches;
+    const size = Math.max(120, Math.floor(portrait
+      ? Math.min(innerW, win.innerHeight * 0.52)
+      : Math.min(innerW, innerH)));
+    DPR = Math.min(win.devicePixelRatio || 1, 2);
+    canvas.width = size * DPR;
+    canvas.height = size * DPR;
+    canvas.style.width = `${size}px`;
+    canvas.style.height = `${size}px`;
+    return size * DPR;
+  };
+  const fit = (): Stage => {
+    const dialPx = squareFor(dial);
     // A hidden stage (another view is showing) keeps its last size; it is
     // refitted the moment Day 4 returns.
-    if (dial !== null && parent !== null && box !== null && box.width > 0) {
-      // The stage's CONTENT box: a dial sized to the border box overflows
-      // into whatever sits above and below.
-      const pad = win.getComputedStyle(parent);
-      const innerW = box.width - parseFloat(pad.paddingLeft) - parseFloat(pad.paddingRight);
-      const innerH = box.height - parseFloat(pad.paddingTop) - parseFloat(pad.paddingBottom);
-      const portrait = win.matchMedia("(max-width: 720px)").matches;
-      const size = Math.max(120, Math.floor(portrait
-        ? Math.min(innerW, win.innerHeight * 0.52)
-        : Math.min(innerW, innerH)));
-      DPR = Math.min(win.devicePixelRatio || 1, 2);
-      dial.width = size * DPR;
-      dial.height = size * DPR;
-      dial.style.width = `${size}px`;
-      dial.style.height = `${size}px`;
-      W = size * DPR;
+    if (dial !== null && dialPx > 0) {
+      W = dialPx;
       // The rete rides outside the band, so the band yields the rim to it.
       R = (W * 0.5 * FACE.dialOuter) / FACE.reteOuter;
       if (ctx !== null) buildGrain(ctx);
     }
+    const chartPx = squareFor(chartCanvas);
+    if (chartPx > 0) chartW = chartPx;
     if (firm !== null && fctx !== null) {
       const d = Math.min(win.devicePixelRatio || 1, 1.5);
       firm.width = Math.floor(win.innerWidth * d);
@@ -215,6 +246,8 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       R,
       dpr: DPR,
       viewport: { width: win.innerWidth, height: win.innerHeight },
+      chart: chartCtx,
+      chartW,
     };
   };
 
@@ -391,12 +424,42 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     paintPlanets(scene.planets);
     setText("planetsNote", scene.tonight.note);
 
+    // The chosen constellation, and the two lists to choose from.
+    const c = scene.constellation;
+    setText("chartTitle", c === null ? "Choose a constellation" : `${c.starred ? "★ " : ""}${c.name}`);
+    setText("chartStatus", c?.status ?? "");
+    setText("chartTracked", c?.tracked ?? "");
+    setText("chartWhere", c?.where ?? "");
+    setText("chartVis", c?.visibility ?? "");
+    setText("chartNote", c?.note ?? "");
+    setText("skyNote", scene.tonight.note);
+    paintSky(scene.tonight.programme);
+
     // The focused views stand on the same station and clock as Day 4.
     setText("focusStation", r.station);
     setText("focusClock", r.clock);
     setText("focusZone", r.zone);
     els.focusClock?.classList.toggle("shifted", scene.marks.travelled);
   };
+
+  /* ————— the Constellations view: two lists, rebuilt only when their words change ————— */
+  let skyKey = "";
+  const paintSky = (programme: readonly SceneMovement[]): void => {
+    const hostUp = els.skyUp;
+    const hostRising = els.skyRising;
+    if (hostUp === undefined || hostRising === undefined) return;
+    const up = programme[1]?.rows ?? [];
+    const rising = programme[2]?.rows ?? [];
+    const key = [...up, ...rising].map((r) => `${r.name}${r.line}${r.lit ? "*" : ""}${r.up ? "^" : ""}`).join("|");
+    if (key === skyKey) return;
+    skyKey = key;
+    for (const [host, rows] of [[hostUp, up], [hostRising, rising]] as const) {
+      const frag = doc.createDocumentFragment();
+      for (const row of rows) frag.append(skyButton(doc, row, handlers.onChart));
+      host.replaceChildren(frag);
+    }
+  };
+  const chartStatus = (text: string): void => setText("chartLoad", text);
 
   /* ————— the modes: one row of tabs, one panel each (DEC-038) ————— */
   const views: Readonly<Record<Mode, HTMLElement | undefined>> = {
@@ -446,6 +509,8 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     if (els.focusContext !== undefined) els.focusContext.hidden = mode === "day4";
     // The dial is shared by Day 4 and Planets; Constellations has its own view.
     if (els.stage !== undefined) els.stage.hidden = mode === "constellations";
+    // The page's own layout rules may differ by view (the Constellations lists scroll).
+    doc.documentElement.dataset["mode"] = mode;
   };
 
   /* ————— the rail: steppers and NOW ————— */
@@ -564,7 +629,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }).observe(stage);
   }
 
-  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode };
+  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, chartStatus };
 }
 
 /* ————— element lookup and row builders ————— */
@@ -681,6 +746,30 @@ function planetRow(doc: Document, name: string): PlanetSlot {
     root, button: b.button, swatch: b.swatch, label: b.label, line: b.line,
     detail, rise, peak, set, where, visibility, arcNote,
   };
+}
+
+/** A constellation row in the Constellations view: a real button that opens its chart. */
+function skyButton(doc: Document, row: SceneRow, onChart: (name: string) => void): HTMLElement {
+  const b = doc.createElement("button");
+  b.type = "button";
+  b.className = `crow${row.up ? " is-up" : ""}${row.lit ? " chosen" : ""}`;
+  b.setAttribute("aria-pressed", String(row.lit));
+  b.dataset["constellation"] = row.name;
+  const name = doc.createElement("span");
+  name.className = "n";
+  name.textContent = row.name;
+  if (row.starred) {
+    const mz = doc.createElement("i");
+    mz.className = "mz";
+    mz.textContent = "★";
+    name.append(mz);
+  }
+  const line = doc.createElement("span");
+  line.className = "d";
+  line.textContent = row.line;
+  b.append(name, line);
+  b.addEventListener("click", () => onChart(row.name));
+  return b;
 }
 
 /** A constellation row in the columns, starred when Mazzaroth. */

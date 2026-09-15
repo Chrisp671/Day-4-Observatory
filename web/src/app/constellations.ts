@@ -200,6 +200,27 @@ export function skyEntry(
   };
 }
 
+/** Where a fixed star stands: altitude above the horizon and compass
+ * azimuth (0 = north, 90 = east), from its address, the local sidereal
+ * time and the station's latitude. Pure spherical trigonometry. */
+export function altAz(
+  raHours: number,
+  decDeg: number,
+  lstHours: number,
+  latitudeDeg: number,
+): { readonly altitudeDeg: number; readonly azimuthDeg: number } {
+  const H = rad(wrapHours12(lstHours - raHours) * 15);
+  const dec = rad(decDeg);
+  const lat = rad(latitudeDeg);
+  const sinAlt = Math.sin(dec) * Math.sin(lat) + Math.cos(dec) * Math.cos(lat) * Math.cos(H);
+  const alt = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+  // Azimuth measured from north through east.
+  const y = -Math.sin(H) * Math.cos(dec);
+  const x = Math.sin(dec) * Math.cos(lat) - Math.cos(dec) * Math.sin(lat) * Math.cos(H);
+  const az = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+  return { altitudeDeg: (alt * 180) / Math.PI, azimuthDeg: az };
+}
+
 /** Below this solar altitude the sky is dark enough for constellations. */
 export const DARK_ENOUGH_ALTITUDE_DEG = -6;
 

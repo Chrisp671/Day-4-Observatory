@@ -12,6 +12,8 @@ import { scene, type Scene } from "./app/scene";
 import { bind, type Stage } from "./app/shell";
 import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
+import { chartLoader, type Chart } from "./app/charts";
+import { drawChart } from "./ui/chart";
 import { stepTime, type StepUnit } from "./app/timecontrol";
 import { drawDial } from "./ui/dial";
 import { drawEarth } from "./ui/earth";
@@ -43,6 +45,13 @@ let lit: string | null = (() => {
 /** Which view is showing: Day 4 on a first visit, then whatever was chosen
  * last. The station and the travel offset are shared by every view. */
 let mode: Mode = loadMode();
+
+/** The constellation chosen in the Constellations view; the first one up
+ * when the view is first opened. Its chart is fetched only then. */
+let chart: string | null = null;
+const charts = chartLoader("charts/");
+let chartData: Chart | null = null;
+let chartDataFor: string | null = null;
 
 /* ————— the shell ————— */
 const shell = bind(document, {
@@ -101,9 +110,34 @@ const shell = bind(document, {
     shell.showMode(mode);
     // Day 4's stage may have just come back into the layout: refit before painting.
     stage = shell.fit();
+    if (mode === "constellations" && chart === null) {
+      // Open on something: the first constellation that is up right now.
+      const up = currentScene().tonight.programme[1]?.rows[0];
+      if (up !== undefined) chooseChart(up.name);
+    }
+    tick();
+  },
+  onChart: (name: string) => {
+    chooseChart(name);
     tick();
   },
 });
+
+/** Choose a constellation and fetch its chart if it is not already here. */
+function chooseChart(name: string): void {
+  chart = name;
+  if (chartDataFor === name) return;
+  chartData = null;
+  chartDataFor = null;
+  shell.chartStatus("loading chart…");
+  void charts.load(name).then((data) => {
+    if (chart !== name) return; // the viewer has moved on
+    chartData = data;
+    chartDataFor = name;
+    shell.chartStatus(data === null ? "no chart for this one" : "");
+    tick();
+  });
+}
 
 shell.showMode(mode);
 let stage: Stage = shell.fit();
@@ -139,16 +173,32 @@ function paint(s: Scene): void {
   drawFiducial(ctx, R, dpr, s.marks);
 }
 
-/* ————— one tick: compute, paint, bind ————— */
-function tick(): void {
+/** The constellation chart, when one is chosen and loaded. */
+function paintChart(): void {
+  const { chart: cctx, chartW, dpr } = stage;
+  if (cctx === null || chartW === 0) return;
+  cctx.setTransform(1, 0, 0, 1, 0, 0);
+  cctx.clearRect(0, 0, chartW, chartW);
+  if (chartData !== null && chartDataFor === chart) drawChart(cctx, chartW, dpr, chartData);
+}
+
+/** The Scene for the displayed instant; memoised inside, so cheap to ask twice. */
+function currentScene(): Scene {
   const now = Date.now();
-  const s = scene({
+  return scene({
     displayedUnixMillis: now + offsetMillis,
     nowUnixMillis: now,
     station,
     lit,
+    chart,
   });
+}
+
+/* ————— one tick: compute, paint, bind ————— */
+function tick(): void {
+  const s = currentScene();
   paint(s);
+  paintChart();
   shell.paint(s);
 }
 

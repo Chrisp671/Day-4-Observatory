@@ -5,9 +5,11 @@ import re
 import struct
 import zipfile
 
-# Day 4's four states, then the two other views of the same instrument
-# (DEC-038): the Planets ledger with a row chosen, and a constellation chart.
-STATES = ('loaded', 'month', 'tonight', 'second-row', 'planets', 'constellations')
+# Day 4's three states, then the two other views of the same instrument
+# (DEC-038): the Planets ledger with its second row chosen (which lights the
+# ring on the shared dial, as Day 4's own second row did), and a
+# constellation chart. Ten images: twelve exceeded the provider's request size.
+STATES = ('loaded', 'month', 'tonight', 'planets', 'constellations')
 IMAGES = {f'{device}-{state}.png': size for device, size in
           [('phone', (390, 844)), ('tablet', (820, 1180))] for state in STATES}
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}
@@ -173,6 +175,28 @@ def plan_entries(plan, body):
             selected[match[1]] = '\n'.join(f'{i + 1}: {lines[i]}' for i in range(index, end)).strip()
     require(wanted <= set(selected), 'One or more cited/standing PLAN.md entries are missing.')
     return selected
+
+
+GENERATED_PREFIXES = ('web/public/',)
+
+
+def is_generated(path):
+    """Generated assets (chart data, PWA manifest, icons) are reviewed through
+    their generator and tests, never as source or diff text."""
+    return path.startswith(GENERATED_PREFIXES)
+
+
+def strip_generated(diff):
+    """Drop every file section of a unified diff whose path is generated. The
+    sections keep their order; nothing else in the diff is touched."""
+    sections = []
+    for index, section in enumerate(diff.split('\ndiff --git ')):
+        head = section if index == 0 else 'diff --git ' + section
+        first = head.split('\n', 1)[0]
+        path = first.removeprefix('diff --git a/').split(' b/', 1)[0] if first.startswith('diff --git a/') else ''
+        if not is_generated(path):
+            sections.append(head)
+    return '\n'.join(sections)
 
 
 def relevant(path):

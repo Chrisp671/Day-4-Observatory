@@ -9,7 +9,7 @@ import sys
 from urllib.parse import quote
 
 from api import GitHub, model_request
-from contract import (IMAGES, SCHEMA, Incomplete, plan_entries, provider_config,
+from contract import (is_generated, strip_generated, IMAGES, SCHEMA, Incomplete, plan_entries, provider_config,
                       read_artifact, relevant, require, safe_text, strict_json, validate_review)
 
 MARKER = '<!-- day4-web-review -->'
@@ -53,7 +53,7 @@ def source_context(github, pr, changed):
     # through their generator and tests, not as source; they stay in the diff.
     paths = {f['filename'] for f in changed if f['status'] != 'removed'
              and f['filename'].endswith(text_extensions) and not f['filename'].endswith('package-lock.json')
-             and not f['filename'].startswith('web/public/')}
+             and not is_generated(f['filename'])}
     entries = {item['path']: item for item in tree['tree']}
     require(len(paths) <= 120, 'Too many context files; split the PR.')
     sources = {}
@@ -194,6 +194,8 @@ def run_review(github, event):
             baseline = github.file('PLAN.md', pr['base']['sha'])
             diff = github.call(f'/pulls/{pr["number"]}', accept='application/vnd.github.diff', limit=600_000)
             require(diff.strip(), 'PR diff is empty.')
+            diff = strip_generated(diff)
+            require(diff.strip(), 'PR diff holds only generated assets; nothing to review.')
             evidence = json.dumps({'head': run['head_sha'], 'base': pr['base']['sha'], 'builder_family': builder,
                 'pr_body': body, 'diff': diff, 'plan_entries': plan_entries(plan, body),
                 'base_design_canon': plan_entries(baseline, 'DEC-026'), 'capture': manifest,

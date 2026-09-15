@@ -17,9 +17,10 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 MAX_TEXT_BYTES = 600_000
-# Twelve 1x PNGs (six states at two sizes) base64-encode to about 8 MB with
-# the Day 4 firmament's grain; the bound leaves headroom for text.
-MAX_REQUEST_BYTES = 12 * 1024 * 1024
+# The provider rejected a 12-image request of about 8.5 MB with HTTP 400;
+# 8 MiB is the bound every accepted request has fitted. Ten 1x PNGs of this
+# app base64-encode to about 6.5 MB, leaving room for the text.
+MAX_REQUEST_BYTES = 8 * 1024 * 1024
 
 
 def provider_error_excerpt(raw, headers):
@@ -159,7 +160,7 @@ def model_request(provider, model, key, instructions, evidence, images):
                                      'responseJsonSchema': SCHEMA}}
     headers['Content-Type'] = 'application/json'
     require(len(json.dumps(body).encode()) <= MAX_REQUEST_BYTES,
-            'Serialized review request exceeds 8 MiB; split the PR or reduce image byte size.')
+            f'Serialized review request exceeds {MAX_REQUEST_BYTES // (1024 * 1024)} MiB; split the PR or reduce image byte size.')
     response = strict_json(request(url, headers, body, timeout=240, limit=200_000, provider_error=True))
     if provider == 'openai':
         require(response.get('status') == 'completed', 'OpenAI response was incomplete or refused.')

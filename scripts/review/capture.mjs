@@ -8,9 +8,10 @@ export const VIEWPORTS = [
   { name: 'phone', width: 390, height: 844 },
   { name: 'tablet', width: 820, height: 1180 },
 ];
-// Day 4's four states, then the two other views (DEC-038): the Planets
-// ledger with its second row chosen, and the Constellations chart as opened.
-export const STATES = ['loaded', 'month', 'tonight', 'second-row', 'planets', 'constellations'];
+// Day 4's three states, then the two other views (DEC-038): the Planets
+// ledger with its second row chosen (lighting the ring on the shared dial,
+// as Day 4's second-row state did), and the Constellations chart as opened.
+export const STATES = ['loaded', 'month', 'tonight', 'planets', 'constellations'];
 export const FIXED_TIME = '2026-09-02T23:00:00.000Z';
 
 export async function settle(page) {

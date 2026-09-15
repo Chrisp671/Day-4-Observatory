@@ -7,7 +7,7 @@ Read-only replay of PR #3's exact head and screenshot artifact reproduced HTTP
 `x-opencode-session` routing header; the response did not report a size limit.
 
 Rafter LLM/CWE review: `api.py` bounds text at 600,000 UTF-8 bytes and complete
-request JSON at 12 MiB before HTTP (eight to twelve captures, 2026-09-14). Only model requests opt into error excerpts;
+request JSON at 8 MiB before HTTP (ten captures since 2026-09-14). Only model requests opt into error excerpts;
 8192 bytes are read, credential header values/URLs/image data are redacted, then
 at most 500 characters pass to the existing Markdown-escaped comment sink.
 No API key enters prompts or the stable session digest. The digest is routing

@@ -4,9 +4,12 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 
+// The phone carries every state; the tablet carries the three views only,
+// because the provider refuses requests near 6 MB and the tablet's Day 4
+// captures are the heaviest images (contract.py DEVICES must agree).
 export const VIEWPORTS = [
-  { name: 'phone', width: 390, height: 844 },
-  { name: 'tablet', width: 820, height: 1180 },
+  { name: 'phone', width: 390, height: 844, states: ['loaded', 'month', 'tonight', 'planets', 'constellations'] },
+  { name: 'tablet', width: 820, height: 1180, states: ['loaded', 'planets', 'constellations'] },
 ];
 // Day 4's three states, then the two other views (DEC-038): the Planets
 // ledger with its second row chosen (lighting the ring on the shared dial,
@@ -31,7 +34,7 @@ export async function capture(url, output) {
     station: { lat: 40, lon: -74 }, scale: 'css', screenshots: [] };
   try {
     for (const viewport of VIEWPORTS) {
-      for (const state of STATES) {
+      for (const state of viewport.states) {
         // Every state starts from first-visit storage, not the previous screenshot.
         const context = await browser.newContext({
           viewport: { width: viewport.width, height: viewport.height },

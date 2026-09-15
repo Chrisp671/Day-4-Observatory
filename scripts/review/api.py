@@ -51,7 +51,8 @@ def request(url, headers=None, data=None, method=None, limit=2_000_000, timeout=
             return error.headers['Location']
         if provider_error:
             excerpt = provider_error_excerpt(error.read(8192), headers)
-            raise Incomplete(f'Provider request failed (HTTP {error.code}): {excerpt}') from None
+            kind = ''.join(c if c.isprintable() else ' ' for c in str(error.headers.get('content-type', '')))[:60]
+            raise Incomplete(f'Provider request failed (HTTP {error.code}, {kind or "no content-type"}): {excerpt}') from None
         raise Incomplete(f'API request failed (HTTP {error.code}); inspect repository configuration and provider account.') from None
     except (urllib.error.URLError, TimeoutError) as error:
         raise Incomplete('API request timed out or could not connect.') from error
@@ -159,9 +160,16 @@ def model_request(provider, model, key, instructions, evidence, images):
                 'generationConfig': {'maxOutputTokens': 12000, 'responseMimeType': 'application/json',
                                      'responseJsonSchema': SCHEMA}}
     headers['Content-Type'] = 'application/json'
-    require(len(json.dumps(body).encode()) <= MAX_REQUEST_BYTES,
+    request_bytes = len(json.dumps(body).encode())
+    require(request_bytes <= MAX_REQUEST_BYTES,
             f'Serialized review request exceeds {MAX_REQUEST_BYTES // (1024 * 1024)} MiB; split the PR or reduce image byte size.')
-    response = strict_json(request(url, headers, body, timeout=240, limit=200_000, provider_error=True))
+    # The shape of a refused request is safe to publish and is what a replay
+    # needs first: how big it was, how many images, how much text.
+    shape = f'request {request_bytes:,} bytes, {len(encoded)} images, {text_bytes:,} text bytes'
+    try:
+        response = strict_json(request(url, headers, body, timeout=240, limit=200_000, provider_error=True))
+    except Incomplete as failure:
+        raise Incomplete(f'{failure} [{shape}]') from None
     if provider == 'openai':
         require(response.get('status') == 'completed', 'OpenAI response was incomplete or refused.')
         text = ''.join(c.get('text', '') for item in response.get('output', [])

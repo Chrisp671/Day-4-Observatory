@@ -5,10 +5,15 @@
  * field stars on a real magnitude law (many faint, few bright), the
  * brightest drawn as chart-star glyphs — all multiplied by the living-sky
  * star visibility, plus a warm horizon glow that rises from the bottom of
- * the page at dawn and dusk. Deterministic; redrawn only when the light
- * changes, never animated. "The heavens declare" — so the page holds them.
+ * the page at dawn and dusk. Deterministic; never animated. "The heavens
+ * declare" — so the page holds them.
+ *
+ * Paints SceneLight.stars and SceneLight.horizonGlow over a viewport of
+ * w × h. When to redraw is the shell's call, keyed on SceneLight.key; this
+ * file knows no altitude and keeps nothing between calls.
  */
 import { THEME } from "./theme";
+import type { SceneLight } from "../app/scene";
 
 const TAU = Math.PI * 2;
 
@@ -26,9 +31,10 @@ export function drawFirmament(
   ctx: CanvasRenderingContext2D,
   w: number,
   h: number,
-  starVisibility: number,
-  horizonGlow: number,
+  light: SceneLight,
 ): void {
+  const starVisibility = light.stars;
+  const horizonGlow = light.horizonGlow;
   ctx.clearRect(0, 0, w, h);
 
   // Dawn/dusk: warm light rising from the horizon at the base of the page.

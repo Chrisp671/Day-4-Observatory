@@ -8,35 +8,23 @@
  * It is a gnomon, not a cross. The cross belongs to the axis and to the sixth
  * hour (DEC-022); an index that says "you are here at 7pm" is a pointer, and
  * a pointer is all it should look like.
+ *
+ * Paints SceneMarks: the present hour and whether the viewer has travelled.
+ * Deciding "travelled" belongs to the Scene; travelHours and isAtPresent stay
+ * exported as the pure rule it applies, pinned by test.
  */
 import { FACE, hourToAngle, pointOnCircle } from "./clockface";
 import { THEME } from "./theme";
+import type { SceneMarks } from "../app/scene";
 
-/** Hours of travel between the displayed time and the present, in [-12, 12). */
-export function travelHours(displayedHours: number, nowHours: number): number {
-  return ((((displayedHours - nowHours) % 24) + 36) % 24) - 12;
-}
-
-/** Below a minute apart the cross and the sun are the same moment. */
-export const AT_PRESENT_HOURS = 1 / 60;
-
-export const isAtPresent = (displayedHours: number, nowHours: number): boolean =>
-  Math.abs(travelHours(displayedHours, nowHours)) < AT_PRESENT_HOURS;
-
-/**
- * Draw the cross at `nowHours` on the dial band. When the instrument is live
- * the sun already sits here, so the mark stays quiet; once time has been
- * scrubbed it brightens — it is the way home.
- */
 export function drawFiducial(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  nowHours: number,
-  displayedHours: number,
+  marks: SceneMarks,
 ): void {
-  const travelled = !isAtPresent(displayedHours, nowHours);
-  const a = hourToAngle(nowHours);
+  const { travelled } = marks;
+  const a = hourToAngle(marks.nowHours);
   const rOut = R * FACE.dialOuter;
   const rIn = R * FACE.dialInner;
   // The mark rides just outside the rim: live, the sun sits under it rather

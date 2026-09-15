@@ -34,11 +34,13 @@ export const SEASON_HORIZON_DAYS = 120;
 const MIN_UP_HOURS = 4;
 const HOUR_MS = 3600_000;
 
-function bodyFor(name: string): Body {
+/** The body for a planet name, or null: an unknown name has no season. */
+function bodyFor(name: string): Body | null {
   const hit = PLANETS.find(([n]) => n === name);
-  if (hit === undefined) throw new Error(`Unknown planet: ${name}`);
-  return hit[1];
+  return hit === undefined ? null : hit[1];
 }
+
+const NO_SEASON: Season = { fromUnixMillis: null, nowInSeason: false };
 
 /** Does calendar day (y, m, d) — local — qualify for this body? */
 function qualifies(body: Body, observer: Observer, y: number, m: number, d: number): boolean {
@@ -60,8 +62,8 @@ function qualifies(body: Body, observer: Observer, y: number, m: number, d: numb
 
 /**
  * The first calendar day, from the asked day forward up to horizonDays, on
- * which the named planet rises in the evening window. Throws on an unknown
- * planet name.
+ * which the named planet rises in the evening window. An unknown planet
+ * name has no season: null, never an error.
  */
 export function planetSeason(
   name: string,
@@ -71,6 +73,7 @@ export function planetSeason(
   horizonDays: number = SEASON_HORIZON_DAYS,
 ): Season {
   const body = bodyFor(name);
+  if (body === null) return NO_SEASON;
   const observer = new Observer(latitudeDeg, longitudeDeg, 0);
   const asked = new Date(unixMillis);
   const y = asked.getFullYear();

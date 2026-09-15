@@ -7,9 +7,15 @@
  * gold at both bounds, because the darkness was real and it ended.
  *
  * Neither is a pointer. "Now" is marked elsewhere, by a plain gnomon.
+ *
+ * drawPassionHours paints SceneBand (the passion span and solar noon);
+ * drawAxis paints SceneLight (its luminosity). Which hours are the sixth and
+ * ninth for this station and date is the Scene's reckoning (DEC-024), not
+ * this file's; a null passion means the sky gives no such hours here.
  */
 import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
 import { goldLeaf } from "./theme";
+import type { SceneBand, SceneLight } from "../app/scene";
 
 /** Midpoint of an arc that may cross midnight, in hours-of-day. */
 export function midHours(fromHours: number, toHours: number): number {
@@ -22,8 +28,9 @@ export function drawAxis(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  strength = 1,
+  light: SceneLight,
 ): void {
+  const strength = light.axis;
   ctx.save();
   ctx.lineCap = "butt";
   ctx.shadowColor = `rgba(247,222,147,${0.8 * strength})`;
@@ -49,9 +56,10 @@ export function drawPassionHours(
   ctx: CanvasRenderingContext2D,
   R: number,
   dpr: number,
-  fromHours: number,
-  toHours: number,
+  band: SceneBand,
 ): void {
+  if (band.passion === null) return;
+  const { fromHours, toHours } = band.passion;
   const rOut = R * FACE.dialOuter;
   const rIn = R * FACE.dialInner;
 
@@ -93,19 +101,22 @@ export function drawPassionHours(
 
   // Solar noon (REQ-010): a small gold sun-diamond on the rim at the sixth
   // hour — which IS solar midday; the solar-telescope users plan around it.
-  const noon = pointOnCircle(hourToAngle(fromHours), rOut + R * 0.028);
-  ctx.save();
-  ctx.translate(noon.x, noon.y);
-  ctx.rotate(hourToAngle(fromHours) + Math.PI / 2);
-  ctx.fillStyle = goldLeaf(ctx, -R * 0.018, R * 0.018);
-  ctx.beginPath();
-  ctx.moveTo(0, -R * 0.018);
-  ctx.lineTo(R * 0.012, 0);
-  ctx.lineTo(0, R * 0.018);
-  ctx.lineTo(-R * 0.012, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  if (band.noonHours !== null) {
+    const noonAngle = hourToAngle(band.noonHours);
+    const noon = pointOnCircle(noonAngle, rOut + R * 0.028);
+    ctx.save();
+    ctx.translate(noon.x, noon.y);
+    ctx.rotate(noonAngle + Math.PI / 2);
+    ctx.fillStyle = goldLeaf(ctx, -R * 0.018, R * 0.018);
+    ctx.beginPath();
+    ctx.moveTo(0, -R * 0.018);
+    ctx.lineTo(R * 0.012, 0);
+    ctx.lineTo(0, R * 0.018);
+    ctx.lineTo(-R * 0.012, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
 
   // The cross, standing over the hours it remembers.
   const arm = R * 0.052;

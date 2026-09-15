@@ -560,9 +560,12 @@ export function sceneConstellation(input: PlinthInput): SceneConstellation | nul
         : alt < 10
           ? `Up now, low in the ${dir}: it needs a clear horizon.`
           : `Up now and the sky is dark: look ${dir}, ${alt}° above the horizon.`;
-    } else if (up) {
+    } else if (e.status === "circumpolar") {
       // Circumpolar, but grazing the horizon at this moment.
       visibility = `Up now, but right on the ${dir} horizon; it climbs later in the night.`;
+    } else if (up) {
+      // Up by the catalogue but at the horizon: it is setting as you look.
+      visibility = `Setting now, right on the ${dir} horizon; it returns tomorrow.`;
     } else {
       visibility = `Below the horizon; rises in the ${dir} in ${formatCountdown(e.untilMillis ?? 0)}.`;
     }

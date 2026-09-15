@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { frame } from "../engine/frame";
+import { CONSTELLATIONS, skyEntry } from "./constellations";
 import { RING_ORDER } from "../ui/clockface";
 import { type PlinthInput, sceneConstellation, scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
 import type { SceneRequest } from "./scene";
@@ -228,6 +229,25 @@ describe("sceneConstellation (REQ-015)", () => {
     expect(down?.note).toContain("Mazzaroth");
     expect(down?.where).toBe("");
     expect(down?.visibility).toMatch(/^Below the horizon; rises in the [a-z]+ in \d/);
+  });
+
+  it("says a constellation on the horizon is setting, not climbing, unless it is circumpolar", () => {
+    // Stand half a minute before each up constellation's setting moment: its
+    // altitude rounds to 0, so there is nowhere to point, and the sentence
+    // must say it is setting — never the circumpolar "climbs later" line.
+    const lst = frame(NIGHT, NYC.lat, NYC.lon).siderealHours + NYC.lon / 15;
+    let seen = 0;
+    for (const c of CONSTELLATIONS) {
+      const e = skyEntry(c, lst, NYC.lat);
+      if (e.status !== "up" || e.untilMillis === null) continue;
+      const out = sceneConstellation(withChart(NIGHT + e.untilMillis - 30_000, c.name));
+      if (out === null || out.where !== "") continue;
+      seen++;
+      expect(out.status, c.name).toMatch(/^Up now · sets in 0m$/);
+      expect(out.visibility, c.name).toMatch(/^Setting now, right on the [a-z]+ horizon/);
+    }
+    expect(seen).toBeGreaterThan(3);
+    expect(sceneConstellation(withChart(NIGHT, "Cassiopeia"))?.status).toBe("Up all night");
   });
 
   it("does not promise stars before dark", () => {

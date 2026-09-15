@@ -19,7 +19,7 @@ modified by the reviewer.
    The owner's selected reviewer is `REVIEW_PROVIDER=opencode-go` and
    `REVIEW_MODEL=qwen3.7-plus`, using the existing Go account. Qwen is Alibaba's
    family; the account's text-only MiMo Pro reviewer cannot inspect screenshots.
-3. Open a small web PR with the metadata below. Verify ten screenshots, a single
+3. Open a small web PR with the metadata below. Verify eight screenshots, a single
    comment, and the **Web review** check. Re-run **Web review evidence** to retry a
    failed model call or to review after changing the variables/key. Editing the PR
    body also triggers the pipeline. Re-running only the reporting workflow is
@@ -59,10 +59,11 @@ without an API call. Changes to PLAN.md or the pipeline also require review.
 
 The gate runs `npm ci`, `npm test`, `npx --no-install tsc --noEmit` and
 `npm run build` in `web/`, sequentially. Chromium captures the resulting Vite
-preview at 390×844 and 820×1180 for loaded, month-forward, expanded TONIGHT,
-the Planets view with its second row chosen (which lights that ring on the
-shared dial, as the former Day 4 second-row state did), and the
-Constellations view as it opens (its chart loaded). Each state starts with clean storage, station 40°N/74°W,
+preview at 390×844 for loaded, month-forward, expanded TONIGHT, the Planets
+view with its second row chosen (which lights that ring on the shared dial,
+as the former Day 4 second-row state did), and the Constellations view as it
+opens (its chart loaded); and at 820×1180 for loaded, Planets and
+Constellations only. Each state starts with clean storage, station 40°N/74°W,
 America/New_York time, en-US locale and 2026-09-02 23:00 UTC. Screenshots are CSS
 pixels with no zoom. Month/ring actions must change the dial; expansion must open
 the programme. Browser errors fail capture. A manifest records the fixture,
@@ -73,12 +74,12 @@ and each view replaces the last. The Planets and Constellations states must
 change the rendered canvases (a lit ring; a drawn chart).
 The month button is selected by its accessible name. The second compact row must
 actually be a planet. Each image starts at scroll position zero. A long expanded
-programme can extend below the viewport: these ten captures assess the visible
+programme can extend below the viewport: these eight captures assess the visible
 viewport, not every offscreen row. Owner phone observations remain authoritative.
 
 The model receives the PR diff, cited PLAN entries, baseline design canon,
 trusted rubric, complete changed text files (excluding lockfile context),
-unchanged web source context, and ten images. It has no tools. Findings need a
+unchanged web source context, and eight images. It has no tools. Findings need a
 valid file/line, category, consequence and one-sentence fix. Every image needs a
 rendered-size judgement. Text and links in model output are escaped before being
 published. Policy changes in a PR do not override the trusted rubric.
@@ -112,16 +113,18 @@ Package dependencies and computed imports are not expanded. Existing hidden-file
 regular-file, 120-file and 500,000-source-character guards remain in force.
 
 Instructions plus serialized evidence must fit **600,000 UTF-8 bytes**. The entire
-serialized model request, including base64 images, must fit **8 MiB**. Both checks
+serialized model request, including base64 images, must fit **6,000,000 bytes**. Both checks
 run before HTTP; nothing is silently truncated. These byte limits are conservative
 local bounds, not a claim about a provider's tokenizer or context allowance.
 
 Screenshots are already compressed PNG at **1x CSS pixels**: 390x844 and 820x1180,
-five states each. The trusted reporter rejects other dimensions. Keep the native
-pixels for legibility review; further downscaling or lossy JPEG is unnecessary.
-PR #3's eight PNGs totalled 4,269,438 bytes. A twelve-image request of about
-8.5 MB was rejected by the provider with HTTP 400, so the capture holds five
-states (ten images, about 4.9 MB of PNG) inside the proven 8 MiB bound.
+five states on the phone and three on the tablet. The trusted reporter rejects
+other dimensions. Keep the native pixels for legibility review; further
+downscaling or lossy JPEG is unnecessary. The provider (OpenCode Go) answered
+HTTP 400 with `{"model":"qwen3.7-plus"}` to a 6,994,978-byte request (ten
+images, 510,275 text bytes) and to an 8.5 MB one, while every request under
+about 6.0 MB has been accepted — the shape of a 6 MB gateway payload limit.
+Eight PNGs of the three-mode app measure about 3.6 MB (4.8 MB base64).
 
 Generated assets under `web/public/` (the constellation chart data, the PWA
 manifest) are excluded from both the source context and the diff sent to the

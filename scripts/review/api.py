@@ -17,10 +17,11 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 MAX_TEXT_BYTES = 600_000
-# The provider rejected a 12-image request of about 8.5 MB with HTTP 400;
-# 8 MiB is the bound every accepted request has fitted. Ten 1x PNGs of this
-# app base64-encode to about 6.5 MB, leaving room for the text.
-MAX_REQUEST_BYTES = 8 * 1024 * 1024
+# The provider answers HTTP 400 to requests of 6,994,978 bytes and above and
+# has accepted every request under about 6.0 MB — the shape of a 6 MB
+# gateway payload limit. Eight 1x PNGs of this app base64-encode to about
+# 4.8 MB, leaving room for 600,000 bytes of text.
+MAX_REQUEST_BYTES = 6_000_000
 
 
 def provider_error_excerpt(raw, headers):
@@ -162,7 +163,7 @@ def model_request(provider, model, key, instructions, evidence, images):
     headers['Content-Type'] = 'application/json'
     request_bytes = len(json.dumps(body).encode())
     require(request_bytes <= MAX_REQUEST_BYTES,
-            f'Serialized review request exceeds {MAX_REQUEST_BYTES // (1024 * 1024)} MiB; split the PR or reduce image byte size.')
+            f'Serialized review request exceeds {MAX_REQUEST_BYTES:,} bytes; split the PR or reduce image byte size.')
     # The shape of a refused request is safe to publish and is what a replay
     # needs first: how big it was, how many images, how much text.
     shape = f'request {request_bytes:,} bytes, {len(encoded)} images, {text_bytes:,} text bytes'

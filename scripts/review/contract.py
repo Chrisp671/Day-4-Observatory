@@ -8,10 +8,12 @@ import zipfile
 # Day 4's three states, then the two other views of the same instrument
 # (DEC-038): the Planets ledger with its second row chosen (which lights the
 # ring on the shared dial, as Day 4's own second row did), and a
-# constellation chart. Ten images: twelve exceeded the provider's request size.
+# constellation chart. The phone carries every state; the tablet carries the
+# three views only, because the provider refuses requests near 6 MB and the
+# tablet's Day 4 captures are the heaviest images.
 STATES = ('loaded', 'month', 'tonight', 'planets', 'constellations')
-IMAGES = {f'{device}-{state}.png': size for device, size in
-          [('phone', (390, 844)), ('tablet', (820, 1180))] for state in STATES}
+DEVICES = {'phone': ((390, 844), STATES), 'tablet': ((820, 1180), ('loaded', 'planets', 'constellations'))}
+IMAGES = {f'{device}-{state}.png': size for device, (size, states) in DEVICES.items() for state in states}
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}
 OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
 

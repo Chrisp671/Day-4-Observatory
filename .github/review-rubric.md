@@ -48,6 +48,15 @@ rendered size; enlarged or high-DPI images do not establish phone legibility.
   buttons with rise, peak, set, direction, altitude, visibility and an explanation
   whenever a ring is absent. Constellations shows one chart at a time in its own
   view, with direction, altitude and honest visibility for the shared place and time.
+- DEC-039: the Planets detail panel carries a vendored NASA reference photograph
+  as a companion to the dial. The band takes the row's theme token — one token
+  for ring, swatch and band, never a second map. Caption and alt text must say
+  the picture is not live ("not how it looks tonight"); the credit links to
+  NASA's own page in a new tab with `rel="noopener noreferrer"`. The photo table
+  is presentation data beside the theme; the Scene is untouched (DEC-037) and no
+  word reaches the dial (DEC-038). Five naked-eye planets ship now; Sun, Moon,
+  Uranus and Neptune wait for their own tickets. Judged for legibility like any
+  detail content, not forbidden by the canvas rule.
 - Canvas rule: words, planet names and descriptive labels drawn on the clock dial
   canvas (manifest entries prefixed `sky:`) are BLOCKING at phone size. Existing
   hour numerals are the narrow exception explicitly preserved by DEC-036,

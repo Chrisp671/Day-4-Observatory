@@ -95,6 +95,20 @@ export async function capture(url, output) {
           await row.click();
           assert.equal(await page.evaluate(() => localStorage.getItem('day4.lit')), planet);
           await page.waitForFunction(() => document.querySelector('#planets-list button[aria-pressed="true"] + *:not([hidden])') !== null);
+          // WI-033: when the open row ships a reference photo it must actually
+          // be loaded and honestly captioned before the judgement is taken.
+          // Heads without photos (pre-WI-033) skip this by the img === null clause.
+          await page.waitForFunction(() => {
+            const img = document.querySelector('#planets-list .pdetail:not([hidden]) img.pimg');
+            return img === null || (img.hasAttribute('src') && img.complete && img.naturalWidth > 0);
+          });
+          assert(await page.evaluate(() => {
+            const open = document.querySelector('#planets-list .pdetail:not([hidden])');
+            const notice = open?.querySelector('.pnotice');
+            const credit = open?.querySelector('a.pcredit');
+            return notice === null || (notice.textContent.includes('not live') && credit !== null
+              && (credit.rel || '').includes('noopener') && credit.target === '_blank');
+          }), 'Reference photo caption or NASA credit missing or dishonest');
         } else if (state === 'constellations') {
           await page.getByRole('tab', { name: 'Constellations', exact: true }).click();
           await page.locator('#view-constellations').waitFor({ state: 'visible' });

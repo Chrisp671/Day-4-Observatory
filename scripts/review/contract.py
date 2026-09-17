@@ -156,8 +156,8 @@ def provider_config(provider, model, body):
     declarations = re.findall(r'^Builder-Model-Family:[ \t]*([^\r\n]*)\r?$', body, re.M | re.I)
     require(len(declarations) == 1, 'PR body must contain exactly one Builder-Model-Family line.')
     builder = declarations[0].strip().lower()
-    require(builder in ('openai', 'anthropic', 'google', 'qwen'),
-            'Builder-Model-Family must be openai, anthropic, google or qwen (not a proxy provider).')
+    require(builder in ('openai', 'anthropic', 'google', 'qwen', 'glm'),
+            'Builder-Model-Family must be openai, anthropic, google, qwen or glm (not a proxy provider).')
     require(builder != family, 'Reviewer and builder must use different model families.')
     return builder
 

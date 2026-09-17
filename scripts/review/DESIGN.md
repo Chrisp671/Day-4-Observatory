@@ -135,3 +135,8 @@ null` clause, so the same script serves pre-WI-033 heads. Archive contents are
 unchanged (eight images plus manifest), so `contract.py` needs no change and the
 6 MB request bound is unaffected. Rubric: DEC-039 governs photo honesty and
 legibility; the dial canvas rule is untouched.
+
+The reviewer must keep every string field at most 1000 characters. The schema
+declares maxLength but the provider does not enforce it, so the instruction says
+so in prose: validation stays strict and a review that still runs long fails
+rather than being truncated or retried.

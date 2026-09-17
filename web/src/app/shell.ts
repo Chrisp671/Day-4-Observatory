@@ -26,6 +26,7 @@ import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
 import { FACE } from "../ui/clockface";
 import { buildGrain } from "../ui/grain";
+import { PHOTO_NOTICE, photoAlt, photoFor } from "../ui/photos";
 
 /** Every element the page addresses, by role. Values are the ids in index.html. */
 export const IDS = {
@@ -171,6 +172,9 @@ interface PlanetSlot {
   readonly where: HTMLElement;
   readonly visibility: HTMLElement;
   readonly arcNote: HTMLElement;
+  /** The reference photo (WI-033): absent for a planet without one. Its
+   * colour band takes the row's colour; its `src` is set on first opening. */
+  readonly photo: { readonly figure: HTMLElement; readonly band: HTMLElement; readonly img: HTMLImageElement } | null;
 }
 
 /**
@@ -342,6 +346,18 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       slot.where.textContent = p.where;
       slot.visibility.textContent = p.visibility;
       slot.arcNote.textContent = p.arcNote;
+      if (slot.photo !== null) {
+        // The band is the same colour as the swatch and the ring: one token, never two.
+        slot.photo.band.style.background = p.color;
+        slot.photo.figure.style.borderColor = p.color;
+        // Fetch the picture only once the open row is actually on screen: the
+        // Planets view is painted every tick even while hidden, and Day 4's
+        // ring taps must never ask for a photo.
+        const shown = els.viewPlanets !== undefined && !els.viewPlanets.hidden;
+        if (p.lit && shown && !slot.photo.img.hasAttribute("src")) {
+          slot.photo.img.src = slot.photo.img.dataset["src"] ?? "";
+        }
+      }
     }
   };
 
@@ -741,11 +757,56 @@ function planetRow(doc: Document, name: string): PlanetSlot {
   const arcNote = doc.createElement("p");
   arcNote.className = "parc";
   detail.append(times, where, visibility, arcNote);
+  const photo = planetPhoto(doc, name);
+  if (photo !== null) detail.append(photo.figure);
   root.append(b.button, detail);
   return {
     root, button: b.button, swatch: b.swatch, label: b.label, line: b.line,
-    detail, rise, peak, set, where, visibility, arcNote,
+    detail, rise, peak, set, where, visibility, arcNote, photo,
   };
+}
+
+/**
+ * The reference photo under a planet's details (WI-033): a colour band in
+ * the planet's own token, the picture, then one caption line that says it is
+ * a NASA reference photo and not the sky tonight, with the credit linking to
+ * NASA's page in a new tab. Text reaches the DOM through `textContent` only.
+ */
+function planetPhoto(
+  doc: Document, name: string,
+): { figure: HTMLElement; band: HTMLElement; img: HTMLImageElement } | null {
+  const photo = photoFor(name);
+  if (photo === null) return null;
+  const figure = doc.createElement("figure");
+  figure.className = "pphoto";
+  const band = doc.createElement("span");
+  band.className = "pband";
+  band.setAttribute("aria-hidden", "true");
+  const img = doc.createElement("img");
+  img.className = "pimg";
+  img.dataset["src"] = photo.src; // moved to `src` the first time the row opens
+  img.width = photo.width;
+  img.height = photo.height;
+  img.alt = photoAlt(photo);
+  img.decoding = "async";
+  const caption = doc.createElement("figcaption");
+  caption.className = "pcap";
+  const notice = doc.createElement("span");
+  notice.className = "pnotice";
+  notice.textContent = `${PHOTO_NOTICE}.`;
+  const title = doc.createElement("span");
+  title.className = "ptitle";
+  title.textContent = `${photo.title} · `;
+  const credit = doc.createElement("a");
+  credit.className = "pcredit";
+  credit.href = photo.creditUrl;
+  credit.target = "_blank";
+  credit.rel = "noopener noreferrer";
+  credit.textContent = photo.credit;
+  title.append(credit);
+  caption.append(notice, title);
+  figure.append(band, img, caption);
+  return { figure, band, img };
 }
 
 /** A constellation row in the Constellations view: a real button that opens its chart. */

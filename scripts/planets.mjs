@@ -56,6 +56,27 @@ const detail = (page, name) => page.locator(`#planet-detail-${name.toLowerCase()
   visibility: d.querySelector(".pvis").textContent,
   arcNote: d.querySelector(".parc").textContent,
 }));
+// The reference photo under the details (WI-033): what the DOM says about it.
+const photo = (page, name) => page.locator(`#planet-detail-${name.toLowerCase()} .pphoto`).evaluate((f) => {
+  const img = f.querySelector("img");
+  const a = f.querySelector("a.pcredit");
+  const row = f.closest(".prow");
+  return {
+    visible: f.getClientRects().length > 0,
+    src: img.getAttribute("src"),
+    alt: img.alt,
+    loaded: img.complete && img.naturalWidth > 0,
+    naturalWidth: img.naturalWidth,
+    renderedWidth: img.getBoundingClientRect().width,
+    notice: f.querySelector(".pnotice").textContent,
+    credit: a.textContent,
+    href: a.href,
+    target: a.target,
+    rel: a.rel,
+    band: getComputedStyle(f.querySelector(".pband")).backgroundColor,
+    swatch: getComputedStyle(row.querySelector(".pbtn .sw")).backgroundColor,
+  };
+});
 
 await mkdir(out, { recursive: true });
 const browser = await chromium.launch();
@@ -70,6 +91,14 @@ try {
     const errors = [];
     page.on("pageerror", (e) => errors.push(String(e)));
     page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
+    // Every request for a planet photo, with its size: Day 4 must make none,
+    // and the Planets view fetches each picture once, only when its row opens.
+    const photoRequests = [];
+    page.on("response", async (r) => {
+      if (new URL(r.url()).pathname.startsWith("/planets/")) {
+        photoRequests.push({ path: new URL(r.url()).pathname, status: r.status(), bytes: (await r.body()).length });
+      }
+    });
     await page.clock.setFixedTime(new Date(FIXED_TIME));
     await page.addInitScript(() => {
       if (!sessionStorage.getItem("planets-check-seeded")) {
@@ -116,11 +145,17 @@ try {
     await page.locator("#tonight-toggle").click();
 
     /* ————— Planets view ————— */
+    assert.deepEqual(photoRequests, [], "Day 4 never asks for a planet photo");
     await page.getByRole("tab", { name: "Planets", exact: true }).click();
     await page.locator("#view-planets").waitFor({ state: "visible" });
     assert.equal(await page.locator("#stage").isVisible(), true, "the dial stays with the Planets view");
     const names = await page.locator("#planets-list .prow button").evaluateAll((bs) => bs.map((b) => b.dataset.planet));
     assert.deepEqual(names, RING_ORDER, "five rows, ring order");
+    // The lit ring was released above, so no row is open: entering the view
+    // asks for nothing. Each photo is fetched the first time its row opens.
+    await settle(page);
+    assert.deepEqual(photoRequests, [], "entering the view with no row open fetches no photo");
+    assert.equal(await page.locator("#planets-list .pimg[src]").count(), 0, "no picture has a src until its row opens");
 
     for (const name of RING_ORDER) {
       const before = await dial(page);
@@ -138,8 +173,30 @@ try {
       if (d.where === "") assert.match(d.visibility, /^Below the horizon/, `${name} down: honest`);
       else assert.match(d.visibility, /^Up now/, `${name} up: honest`);
       console.log(`${vp.name} ${name}: ${d.rise} ${d.peak} ${d.set} | ${d.where} | ${d.visibility}${d.arcNote ? " | " + d.arcNote : ""}`);
+      // The reference photo (WI-033): present, loaded, honest, credited, banded in the row's colour.
+      const img = page.locator(`#planet-detail-${name.toLowerCase()} .pimg`);
+      await img.waitFor({ state: "visible" });
+      await page.waitForFunction((el) => el.complete && el.naturalWidth > 0, await img.elementHandle());
+      await settle(page);
+      const ph = await photo(page, name);
+      assert(ph.visible && ph.loaded, `${name}: the photo is visible and decoded`);
+      assert.equal(ph.src, `/planets/${name.toLowerCase()}.jpg`, `${name}: same-origin picture`);
+      assert.equal(ph.naturalWidth, 1024, `${name}: 1024 px longest edge shipped`);
+      assert(ph.renderedWidth >= 240, `${name}: photo at least 240 CSS px wide (got ${ph.renderedWidth})`);
+      assert.match(ph.alt, /^.+\. NASA reference photo — not live, not how it looks tonight\.$/, `${name}: alt says it is not live`);
+      assert.match(ph.notice, /^NASA reference photo — not live/, `${name}: the notice is in the caption`);
+      assert.match(ph.credit, /^NASA\b/, `${name}: credited to NASA`);
+      assert.match(ph.href, /^https:\/\/images\.nasa\.gov\/details\/PIA\d+$/, `${name}: credit links to NASA`);
+      assert.equal(ph.target, "_blank", `${name}: credit opens in a new tab`);
+      assert(ph.rel.includes("noopener") && ph.rel.includes("noreferrer"), `${name}: rel="noopener noreferrer"`);
+      assert.equal(ph.band, ph.swatch, `${name}: the band is the swatch's colour (one theme token)`);
+      const req = photoRequests.filter((r) => r.path === ph.src);
+      assert.equal(req.length, 1, `${name}: its photo was fetched exactly once`);
+      assert.equal(req[0].status, 200);
+      assert(req[0].bytes < 200 * 1024, `${name}: photo under 200 KB (got ${req[0].bytes})`);
       await shot(page, `${vp.name}-planets-${name.toLowerCase()}.png`);
     }
+    assert.equal(photoRequests.length, 5, "five photos fetched, one per row, none twice");
 
     // Keyboard: Enter releases the pressed row, Space presses it again.
     await rowButton(page, "Saturn").focus();

@@ -5,7 +5,8 @@
  * `PLANET_COLORS`. The Scene knows nothing of it (DEC-037) — the shell looks
  * a planet up here when it builds the row. Every image is NASA public-domain
  * work vendored under `web/public/planets/` and attributed in
- * `web/public/ATTRIBUTION.md`; the app makes no request outside its own origin.
+ * `web/public/ATTRIBUTION.md`; the photos add no request outside the app's own
+ * origin (the page's only third-party requests remain its web fonts).
  *
  * The honesty rule these carry: a photograph is what a spacecraft once saw,
  * not the sky tonight. Alt text and the caption both say so.
@@ -31,7 +32,7 @@ export const PLANET_PHOTOS: Readonly<Record<string, PlanetPhoto>> = {
   Mercury: {
     src: "/planets/mercury.jpg", width: 1024, height: 576,
     title: "Mercury from MESSENGER, in enhanced colour",
-    credit: "NASA/JHU APL/Carnegie Institution of Washington",
+    credit: "NASA/Johns Hopkins University Applied Physics Laboratory/Carnegie Institution of Washington",
     creditUrl: "https://images.nasa.gov/details/PIA16853",
   },
   Venus: {

@@ -28,7 +28,9 @@ export interface PlanetPhoto {
 /** The sentence every photo carries, in the caption and in its alt text. */
 export const PHOTO_NOTICE = "NASA reference photo — not live, not how it looks tonight";
 
-export const PLANET_PHOTOS: Readonly<Record<string, PlanetPhoto>> = {
+/** One photo per ring, keyed by the planet's name. A Map, as the chart index
+ * is (WI-032), so a name like `constructor` finds nothing by construction. */
+export const PLANET_PHOTOS: ReadonlyMap<string, PlanetPhoto> = new Map(Object.entries({
   Mercury: {
     src: "/planets/mercury.jpg", width: 1024, height: 576,
     title: "Mercury from MESSENGER, in enhanced colour",
@@ -59,14 +61,19 @@ export const PLANET_PHOTOS: Readonly<Record<string, PlanetPhoto>> = {
     credit: "NASA/JPL/Space Science Institute",
     creditUrl: "https://images.nasa.gov/details/PIA11141",
   },
-};
+} satisfies Record<string, PlanetPhoto>));
 
 /** The photo for a planet, or null for a body we do not ship a picture of. */
 export function photoFor(name: string): PlanetPhoto | null {
-  return Object.prototype.hasOwnProperty.call(PLANET_PHOTOS, name) ? PLANET_PHOTOS[name] ?? null : null;
+  return PLANET_PHOTOS.get(name) ?? null;
 }
 
 /** Alt text that names the picture and states plainly that it is not live. */
 export function photoAlt(photo: PlanetPhoto): string {
   return `${photo.title}. ${PHOTO_NOTICE}.`;
+}
+
+/** The caption's two lines: the notice, then the title leading into the credit. */
+export function photoCaption(photo: PlanetPhoto): { notice: string; title: string } {
+  return { notice: `${PHOTO_NOTICE}.`, title: `${photo.title} · ` };
 }

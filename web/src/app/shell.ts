@@ -26,7 +26,7 @@ import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
 import { FACE } from "../ui/clockface";
 import { buildGrain } from "../ui/grain";
-import { PHOTO_NOTICE, photoAlt, photoFor } from "../ui/photos";
+import { photoAlt, photoCaption, photoFor } from "../ui/photos";
 
 /** Every element the page addresses, by role. Values are the ids in index.html. */
 export const IDS = {
@@ -172,9 +172,17 @@ interface PlanetSlot {
   readonly where: HTMLElement;
   readonly visibility: HTMLElement;
   readonly arcNote: HTMLElement;
-  /** The reference photo (WI-033): absent for a planet without one. Its
-   * colour band takes the row's colour; its `src` is set on first opening. */
-  readonly photo: { readonly figure: HTMLElement; readonly band: HTMLElement; readonly img: HTMLImageElement } | null;
+  /** The reference photo (WI-033): absent for a planet without one. */
+  readonly photo: PhotoSlot | null;
+}
+
+/** A planet's reference photo: the band takes the row's colour, and `src`
+ * moves onto the image the first time the row is open on screen. */
+interface PhotoSlot {
+  readonly figure: HTMLElement;
+  readonly band: HTMLElement;
+  readonly img: HTMLImageElement;
+  readonly src: string;
 }
 
 /**
@@ -355,7 +363,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
         // ring taps must never ask for a photo.
         const shown = els.viewPlanets !== undefined && !els.viewPlanets.hidden;
         if (p.lit && shown && !slot.photo.img.hasAttribute("src")) {
-          slot.photo.img.src = slot.photo.img.dataset["src"] ?? "";
+          slot.photo.img.src = slot.photo.src;
         }
       }
     }
@@ -772,11 +780,10 @@ function planetRow(doc: Document, name: string): PlanetSlot {
  * a NASA reference photo and not the sky tonight, with the credit linking to
  * NASA's page in a new tab. Text reaches the DOM through `textContent` only.
  */
-function planetPhoto(
-  doc: Document, name: string,
-): { figure: HTMLElement; band: HTMLElement; img: HTMLImageElement } | null {
+function planetPhoto(doc: Document, name: string): PhotoSlot | null {
   const photo = photoFor(name);
   if (photo === null) return null;
+  const words = photoCaption(photo);
   const figure = doc.createElement("figure");
   figure.className = "pphoto";
   const band = doc.createElement("span");
@@ -784,8 +791,7 @@ function planetPhoto(
   band.setAttribute("aria-hidden", "true");
   const img = doc.createElement("img");
   img.className = "pimg";
-  img.dataset["src"] = photo.src; // moved to `src` the first time the row opens
-  img.width = photo.width;
+  img.width = photo.width; // no `src` yet: it is set the first time the row opens on screen
   img.height = photo.height;
   img.alt = photoAlt(photo);
   img.decoding = "async";
@@ -793,10 +799,10 @@ function planetPhoto(
   caption.className = "pcap";
   const notice = doc.createElement("span");
   notice.className = "pnotice";
-  notice.textContent = `${PHOTO_NOTICE}.`;
+  notice.textContent = words.notice;
   const title = doc.createElement("span");
   title.className = "ptitle";
-  title.textContent = `${photo.title} · `;
+  title.textContent = words.title;
   const credit = doc.createElement("a");
   credit.className = "pcredit";
   credit.href = photo.creditUrl;
@@ -806,7 +812,7 @@ function planetPhoto(
   title.append(credit);
   caption.append(notice, title);
   figure.append(band, img, caption);
-  return { figure, band, img };
+  return { figure, band, img, src: photo.src };
 }
 
 /** A constellation row in the Constellations view: a real button that opens its chart. */

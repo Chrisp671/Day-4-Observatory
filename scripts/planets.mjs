@@ -212,6 +212,10 @@ try {
       await page.keyboard.press("Tab");
       assert.equal(await page.evaluate(() => document.activeElement?.dataset.planet), expected, `Tab reaches ${expected}`);
     }
+    // The open row's credit link is the one new tab stop (WI-033): it follows its own row.
+    await page.keyboard.press("Tab");
+    assert.equal(await page.evaluate(() => document.activeElement?.className), "pcredit", "Tab from the open row reaches its credit link");
+    assert.equal(await page.evaluate(() => document.activeElement?.closest(".pdetail")?.id), "planet-detail-saturn");
 
     /* ————— A polar station: rows survive missing rings ————— */
     await page.getByRole("tab", { name: "Day 4", exact: true }).click();

@@ -4,41 +4,41 @@
  * that links to NASA, and colour that comes from the theme, not from here.
  */
 import { describe, expect, it } from "vitest";
-import { PHOTO_NOTICE, PLANET_PHOTOS, photoAlt, photoFor, type PlanetPhoto } from "./photos";
+import { RING_ORDER } from "./clockface";
+import { PHOTO_NOTICE, PLANET_PHOTOS, photoAlt, photoCaption, photoFor, type PlanetPhoto } from "./photos";
 import { PLANET_COLORS } from "./theme";
 
-const RING_ORDER = ["Mercury", "Venus", "Mars", "Jupiter", "Saturn"];
 /** The files actually shipped under `web/public/planets/`, by their public path. */
 const SHIPPED = new Set(
   Object.keys(import.meta.glob("../../public/planets/*.jpg")).map((k) => k.replace("../../public", "")),
 );
+const names = [...PLANET_PHOTOS.keys()];
+const photos = [...PLANET_PHOTOS.entries()];
 
 describe("the planet photos", () => {
-  it("cover exactly the planets that have a colour, and nothing else", () => {
-    expect(Object.keys(PLANET_PHOTOS).sort()).toEqual(Object.keys(PLANET_COLORS).sort());
-    expect(Object.keys(PLANET_PHOTOS).sort()).toEqual([...RING_ORDER].sort());
+  it("cover exactly the rings, which are exactly the planets that have a colour", () => {
+    expect([...names].sort()).toEqual(Object.keys(PLANET_COLORS).sort());
+    expect([...names].sort()).toEqual([...RING_ORDER].sort());
     expect(photoFor("Pluto")).toBeNull();
     expect(photoFor("constructor")).toBeNull();
     expect(photoFor("__proto__")).toBeNull();
   });
 
   it("carry no colour of their own (the band is the theme token, DEC-039)", () => {
-    for (const photo of Object.values(PLANET_PHOTOS)) {
-      expect(Object.keys(photo)).not.toContain("color");
-    }
+    for (const [, photo] of photos) expect(Object.keys(photo)).not.toContain("color");
   });
 
   it("point at shipped same-origin files at a 1024 px longest edge, and every shipped file is used", () => {
-    for (const [name, photo] of Object.entries(PLANET_PHOTOS)) {
+    for (const [name, photo] of photos) {
       expect(photo.src, name).toMatch(/^\/planets\/[a-z]+\.jpg$/);
       expect(SHIPPED.has(photo.src), `${name}: ${photo.src} is shipped`).toBe(true);
       expect(Math.max(photo.width, photo.height), name).toBe(1024);
     }
-    expect([...SHIPPED].sort()).toEqual(Object.values(PLANET_PHOTOS).map((p) => p.src).sort());
+    expect([...SHIPPED].sort()).toEqual(photos.map(([, p]) => p.src).sort());
   });
 
   it("credit NASA and link to NASA over https, with a notice that it is not live", () => {
-    for (const [name, photo] of Object.entries(PLANET_PHOTOS)) {
+    for (const [name, photo] of photos) {
       expect(photo.credit, name).toMatch(/^NASA\b/);
       expect(photo.creditUrl, name).toMatch(/^https:\/\/images\.nasa\.gov\/details\/PIA\d+$/);
       expect(photo.title.length, name).toBeGreaterThan(0);
@@ -47,8 +47,9 @@ describe("the planet photos", () => {
     expect(PHOTO_NOTICE).toMatch(/not live/);
   });
 
-  it("alt text names the picture and repeats the notice", () => {
+  it("alt text and caption name the picture and repeat the notice", () => {
     const mars = photoFor("Mars") as PlanetPhoto;
     expect(photoAlt(mars)).toBe(`Mars from the Viking orbiters. ${PHOTO_NOTICE}.`);
+    expect(photoCaption(mars)).toEqual({ notice: `${PHOTO_NOTICE}.`, title: "Mars from the Viking orbiters · " });
   });
 });

@@ -265,6 +265,20 @@
     .parc{font-family:var(--serif);font-weight:500;font-size:13.5px;line-height:1.45;
       color:var(--gold-soft);margin-top:5px;max-width:52ch;text-wrap:pretty}
     .parc:empty,.pwhere:empty{display:none}
+    /* The reference photo (WI-033): band in the planet's token, the picture
+       on the print's own dark field, one honest caption with the NASA credit. */
+    .pphoto{margin:12px 0 0;max-width:52ch;border:1px solid;border-color:var(--hair);
+      border-radius:3px;overflow:hidden;background:var(--print-0)}
+    .pband{display:block;height:3px}
+    .pimg{display:block;width:100%;height:auto;aspect-ratio:16/9;object-fit:contain;
+      background:#000}
+    .pcap{padding:7px 9px 8px;font-family:var(--serif);font-size:12.5px;line-height:1.45;
+      color:var(--ink-mid);text-wrap:pretty}
+    .pnotice{display:block;font-style:italic;font-weight:600;color:var(--scripture)}
+    .ptitle{display:block;margin-top:2px}
+    .pcredit{color:var(--gold-soft);text-decoration:underline;text-underline-offset:2px;
+      text-decoration-color:rgba(231,190,90,.5)}
+    .pcredit:hover,.pcredit:focus-visible{color:var(--sunlight);outline-offset:2px}
     .stage[hidden]{display:none!important}
 
     /* ————— the Constellations view: one chart, then the sky to choose from (REQ-015) —————

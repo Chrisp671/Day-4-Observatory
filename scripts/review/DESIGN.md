@@ -123,3 +123,20 @@ this system does not replace those controls. Real phone observations outrank
 model judgements. A post-deploy failure reports a bad release but does not roll it
 back automatically. Repository settings and the full owner profile remain owner
 configuration, not inferred secrets or fabricated policy.
+
+## Planet photo state (WI-033, DEC-039)
+
+The Planets capture state stays one state per viewport: the open row's detail now
+must show its reference photo fully loaded before the judgement is taken. The
+capture waits for `img.pimg` in the open detail to have `src` and decode, and
+asserts the caption's "not live" notice plus the NASA credit link opening in a
+new tab with `noopener noreferrer`. Heads without photos skip by the `img ===
+null` clause, so the same script serves pre-WI-033 heads. Archive contents are
+unchanged (eight images plus manifest), so `contract.py` needs no change and the
+6 MB request bound is unaffected. Rubric: DEC-039 governs photo honesty and
+legibility; the dial canvas rule is untouched.
+
+The reviewer must keep every string field at most 1000 characters. The schema
+declares maxLength but the provider does not enforce it, so the instruction says
+so in prose: validation stays strict and a review that still runs long fails
+rather than being truncated or retried.

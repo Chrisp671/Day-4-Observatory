@@ -795,6 +795,9 @@ function planetPhoto(doc: Document, name: string): PhotoSlot | null {
   img.height = photo.height;
   img.alt = photoAlt(photo);
   img.decoding = "async";
+  // A photo that cannot load leaves no broken-image box: the figure steps aside
+  // and the row keeps its times and words. The drivers assert it did load.
+  img.addEventListener("error", () => { figure.hidden = true; });
   const caption = doc.createElement("figcaption");
   caption.className = "pcap";
   const notice = doc.createElement("span");

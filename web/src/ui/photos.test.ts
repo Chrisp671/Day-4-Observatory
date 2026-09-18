@@ -10,7 +10,7 @@ import { PLANET_COLORS } from "./theme";
 
 /** The files actually shipped under `web/public/planets/`, by their public path. */
 const SHIPPED = new Set(
-  Object.keys(import.meta.glob("../../public/planets/*.jpg")).map((k) => k.replace("../../public", "")),
+  Object.keys(import.meta.glob("../../public/planets/*.jpg")).map((k) => k.replace("../../public/", "")),
 );
 const names = [...PLANET_PHOTOS.keys()];
 const photos = [...PLANET_PHOTOS.entries()];
@@ -28,9 +28,10 @@ describe("the planet photos", () => {
     for (const [, photo] of photos) expect(Object.keys(photo)).not.toContain("color");
   });
 
-  it("point at shipped same-origin files at a 1024 px longest edge, and every shipped file is used", () => {
+  it("point at shipped files by a deploy-relative path (GitHub Pages mounts the site under /<repo>/), 1024 px longest edge, every shipped file used", () => {
     for (const [name, photo] of photos) {
-      expect(photo.src, name).toMatch(/^\/planets\/[a-z]+\.jpg$/);
+      // No leading slash: a root-relative path 404s under a project-site mount (WI-033 acceptance CR-1).
+      expect(photo.src, name).toMatch(/^planets\/[a-z]+\.jpg$/);
       expect(SHIPPED.has(photo.src), `${name}: ${photo.src} is shipped`).toBe(true);
       expect(Math.max(photo.width, photo.height), name).toBe(1024);
     }

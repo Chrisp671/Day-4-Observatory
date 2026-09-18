@@ -12,7 +12,8 @@
  * not the sky tonight. Alt text and the caption both say so.
  */
 export interface PlanetPhoto {
-  /** Same-origin path under `web/public/`. */
+  /** Deploy-relative path under `web/public/` — no leading slash, like the chart
+   * loader's `charts/`, so the site works under GitHub Pages' `/<repo>/` mount. */
   readonly src: string;
   /** Pixel size of the shipped file, so the box is reserved before it loads. */
   readonly width: number;
@@ -32,31 +33,31 @@ export const PHOTO_NOTICE = "NASA reference photo — not live, not how it looks
  * is (WI-032), so a name like `constructor` finds nothing by construction. */
 export const PLANET_PHOTOS: ReadonlyMap<string, PlanetPhoto> = new Map(Object.entries({
   Mercury: {
-    src: "/planets/mercury.jpg", width: 1024, height: 576,
+    src: "planets/mercury.jpg", width: 1024, height: 576,
     title: "Mercury from MESSENGER, in enhanced colour",
     credit: "NASA/Johns Hopkins University Applied Physics Laboratory/Carnegie Institution of Washington",
     creditUrl: "https://images.nasa.gov/details/PIA16853",
   },
   Venus: {
-    src: "/planets/venus.jpg", width: 1024, height: 1000,
+    src: "planets/venus.jpg", width: 1024, height: 1000,
     title: "Venus from Mariner 10",
     credit: "NASA/JPL-Caltech",
     creditUrl: "https://images.nasa.gov/details/PIA23791",
   },
   Mars: {
-    src: "/planets/mars.jpg", width: 1024, height: 1024,
+    src: "planets/mars.jpg", width: 1024, height: 1024,
     title: "Mars from the Viking orbiters",
     credit: "NASA/JPL/USGS",
     creditUrl: "https://images.nasa.gov/details/PIA00407",
   },
   Jupiter: {
-    src: "/planets/jupiter.jpg", width: 1024, height: 576,
+    src: "planets/jupiter.jpg", width: 1024, height: 576,
     title: "Jupiter from Cassini",
     credit: "NASA/JPL/University of Arizona",
     creditUrl: "https://images.nasa.gov/details/PIA02873",
   },
   Saturn: {
-    src: "/planets/saturn.jpg", width: 1024, height: 496,
+    src: "planets/saturn.jpg", width: 1024, height: 496,
     title: "Saturn from Cassini",
     credit: "NASA/JPL/Space Science Institute",
     creditUrl: "https://images.nasa.gov/details/PIA11141",

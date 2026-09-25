@@ -41,10 +41,11 @@ rendered size; enlarged or high-DPI images do not establish phone legibility.
   ring leads; tapping again releases it; Saturn is the first-visit default and
   selection persists. TONIGHT is the legend in ring order. Preserve clear space
   for fiducials and legible plinth type, with the firmament subdued beneath it.
-- DEC-038: one app, three views — Day 4 · Constellations · Planets — chosen by a
+- DEC-038: one app, three views — Stargazer · Constellations · Planets (the
+  first tab was labelled Day 4 until DEC-040) — chosen by a
   tab row under the hero, the choice remembered, the station and displayed time
-  shared by every view. Day 4 is the completed instrument and must not be
-  redesigned. Planets shares Day 4's dial and lists all five planets as real
+  shared by every view. Stargazer is the completed instrument and must not be
+  redesigned. Planets shares Stargazer's dial and lists all five planets as real
   buttons with rise, peak, set, direction, altitude, visibility and an explanation
   whenever a ring is absent. Constellations shows one chart at a time in its own
   view, with direction, altitude and honest visibility for the shared place and time.

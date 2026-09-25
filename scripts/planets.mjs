@@ -64,6 +64,7 @@ const photo = (page, name) => page.locator(`#planet-detail-${name.toLowerCase()}
   return {
     visible: f.getClientRects().length > 0,
     src: img.getAttribute("src"),
+    resolved: img.currentSrc,
     alt: img.alt,
     loaded: img.complete && img.naturalWidth > 0,
     naturalWidth: img.naturalWidth,
@@ -94,9 +95,17 @@ try {
     // Every request for a planet photo, with its size: Day 4 must make none,
     // and the Planets view fetches each picture once, only when its row opens.
     const photoRequests = [];
+    // Anchored to the page's own directory, so the check reads the same at any
+    // mount and a request for /planets/… at the origin root (the CR-1 bug) or
+    // under any other path is never mistaken for a photo beside the page.
+    const pageDir = new URL(".", target).pathname;
     page.on("response", async (r) => {
-      if (new URL(r.url()).pathname.startsWith("/planets/")) {
-        photoRequests.push({ path: new URL(r.url()).pathname, status: r.status(), bytes: (await r.body()).length });
+      const path = new URL(r.url()).pathname;
+      const rel = path.startsWith(pageDir) ? path.slice(pageDir.length) : null;
+      if (rel !== null && rel.startsWith("planets/")) {
+        photoRequests.push({ path: rel, status: r.status(), bytes: (await r.body()).length });
+      } else if (/\/planets\/[^/]+\.jpg$/.test(path)) {
+        photoRequests.push({ path, status: r.status(), bytes: 0, misplaced: true });
       }
     });
     await page.clock.setFixedTime(new Date(FIXED_TIME));
@@ -180,7 +189,10 @@ try {
       await settle(page);
       const ph = await photo(page, name);
       assert(ph.visible && ph.loaded, `${name}: the photo is visible and decoded`);
-      assert.equal(ph.src, `/planets/${name.toLowerCase()}.jpg`, `${name}: same-origin picture`);
+      // Deploy-relative, so it resolves under any mount (GitHub Pages serves the
+      // site under /<repo>/; a leading slash 404'd there — WI-033 acceptance CR-1).
+      assert.equal(ph.src, `planets/${name.toLowerCase()}.jpg`, `${name}: deploy-relative same-origin picture`);
+      assert.equal(ph.resolved, new URL(`planets/${name.toLowerCase()}.jpg`, url).href, `${name}: resolves beside the page`);
       assert.equal(ph.naturalWidth, 1024, `${name}: 1024 px longest edge shipped`);
       assert(ph.renderedWidth >= 240, `${name}: photo at least 240 CSS px wide (got ${ph.renderedWidth})`);
       assert.match(ph.alt, /^.+\. NASA reference photo — not live, not how it looks tonight\.$/, `${name}: alt says it is not live`);

@@ -1,164 +1,148 @@
-# CLAUDE.md - Emerald Observatory
+# CLAUDE.md - Day4 Observatory
 
-## Project Overview
+## What this repository is
 
-Emerald Observatory is an iOS/iPad astronomical application (v1.5.5) that displays real-time celestial information including planetary positions, solar/lunar eclipses, Earth views, and alarm-based astronomical events. Originally built by Emerald Sequoia LLC, licensed under MIT.
+Two things live here, and only one of them is being built.
 
-## Project History & Status
+- **`web/` is the product.** Day4 Observatory is a public web app: a live
+  astronomical instrument under the Day4 Astronomy brand. It ships to GitHub
+  Pages at <https://chrisp671.github.io/Day-4-Observatory/>.
+- **`Classes/`, `EC/`, `Resources*/` are the parked original.** ~8.7 KSLOC of
+  Objective-C++ from Emerald Observatory (MIT, a community fork of
+  github.com/EmeraldSequoia, upstream last commit 2023-11-09). It is kept as the
+  **behavioural spec** while porting — read it to learn what a view is supposed
+  to do — not as code to build. It has never been built from this repo: it needs
+  four sibling libraries (`esutil`, `estime`, `eslocation`, `esastro`) at
+  unpinned HEAD that are not on disk, and it has no test target.
 
-**This is a community fork** of the original Emerald Observatory, intended to revive and continue development of the app.
+An earlier version of this file described reviving the iOS app for the App Store
+with an AI roadmap. **That is not the project's direction.** iOS work, App Store
+publishing and AI features are v1 non-goals (PLAN.md DEC-006, section 4) and
+are not to be started without a new DEC from the owner. `RSK-002` (unpinned
+archived dependencies) is the one thing that must be fixed before any iOS build
+resumes.
 
-Emerald Sequoia LLC was a two-person company that created acclaimed astronomical apps for iOS over 15 years. In late 2022, they announced the company would shut down at the end of 2023, citing:
+**PLAN.md is the plan of record.** Decisions are DEC-xxx, requirements REQ-xxx,
+checks CHK-xxx, work items WI-xxx, open questions QST-xxx. Read it before
+changing anything; do not change intent without a DEC.
 
-- **Unsustainable revenue** — app income no longer covered overhead costs
-- **Maintenance burden** — keeping up with new hardware and OS releases lost the fun of the original development
-- **Tiny team** — only two people maintaining everything
+## Naming, current as of 2026-09-25
 
-The apps were removed from the App Store on November 1, 2023. Before shutting down, Emerald Sequoia open-sourced all their code across 10 GitHub repositories at [github.com/EmeraldSequoia](https://github.com/EmeraldSequoia). The last upstream commit was November 9, 2023.
+The app has **three views** in one shell, switched by a tab row:
 
-Observatory requires only 5 of the 10 repos (this repo + 4 libraries + buildscripts). The others are separate apps (Chronometer, Timestamp) and supporting resources (docs, website).
+| Visible label | Internal mode id | What it is |
+|---|---|---|
+| **Stargazer** | `day4` | The original instrument: clock face, sun/moon rings, phase, Earth, time travel, TONIGHT board. |
+| **Constellations** | `constellations` | Up Now / Rising Later list plus a star-pattern chart. |
+| **Planets** | `planets` | The five naked-eye planets with rise/peak/set, where to look, and a NASA reference photo. |
 
-### Goals of This Fork
+The first view was called **Day 4** until DEC-040 (2026-09-25), which renamed
+only the visible label. Its internal id is still `day4`, so stored keys, element
+ids and a visitor's remembered selection are unaffected. Historical documents
+keep the name they were written with — do not rewrite DEC-038 or older entries.
 
-This fork aims to bring Emerald Observatory back to life — updating it for modern iOS, fixing issues, and potentially republishing to the App Store.
+The **brand is unchanged**: the app is Day4 Observatory under Day4 Astronomy
+(day4.org), and the header logo, verse and gold are as they are. "Stargazer"
+names a view inside the app; it does not rename the product.
 
-### Known Issues Inherited from Upstream
+## Build, test, and verification
 
-- Help file links point to the now-defunct emeraldsequoia.com website — these need to be redirected to GitHub or removed
-- The codebase predates ARC and uses manual retain/release throughout
-- No automated tests exist
+Node 22, all commands from `web/`:
 
-## Tech Stack
-
-- **Language:** Objective-C++ (`.mm` files), Objective-C (`.m` files), C++ (external libraries)
-- **Platform:** iOS (iPad), minimum deployment target iOS 15.0
-- **Build System:** Xcode 12.0+ (no CocoaPods, SPM, or Carthage)
-- **Memory Management:** Manual Retain/Release (pre-ARC codebase)
-- **UI:** XIB/NIB Interface Builder files + programmatic Core Graphics rendering
-- **Architecture:** MVC pattern
-
-## Directory Structure
-
+```shell
+npm ci
+npm test                # vitest run — 207 tests
+npx tsc --noEmit        # strict; also runs as part of npm run build
+npm run build           # tsc --noEmit && vite build  (relative base, for the Pages mount)
+npm run dev
 ```
-Classes/              # Main source files (~49 Objective-C++ files)
-EC/                   # External Emerald Chronometer audio module
-Observatory/          # Image assets (xcassets)
-Observatory.xcodeproj/# Xcode project configuration
-Resources/            # XIB files, images, audio, help text, Earth textures
-Resources-iPad/       # iPad-specific XIB layouts
-{lang}.lproj/         # Localization (de, en, es, fr, it, ja, nl, zh-Hans)
-scripts/              # Perl build/utility scripts
+
+Everything must be green before a PR. CI runs `npm test` then `npm run build` on
+every push to `main` that touches `web/`, and a model **Web review** on every PR
+(`review-web.yml`) — that is the one required check on `main`, which is protected
+(strict, admins enforced). **Never bypass branch protection without the owner's
+explicit OK.**
+
+Browser drivers, for anything touching layout, keyboard or rendering. Serve
+first, then drive:
+
+```shell
+npx vite preview --port 4173 --strictPort --host 127.0.0.1
+node scripts/modes.mjs            http://127.0.0.1:4173/
+node scripts/planets.mjs         http://127.0.0.1:4173/
+node scripts/constellations.mjs  http://127.0.0.1:4173/
 ```
 
-## Key Files
+Asset paths break under the `/Day-4-Observatory/` Pages mount if you resolve them
+from the origin root (this bit us once — CR-1, PR #18). To reproduce the real
+mount locally: `node scripts/serve-mounted.mjs Day-4-Observatory 4174`, then
+drive `http://127.0.0.1:4174/`. For pixel work: `node scripts/review/capture.mjs`
+then `node scripts/compare-shots.mjs before after [allowedState…]`, which fails
+if any capture outside the allowed states differs.
 
-| File | Purpose |
-|------|---------|
-| `main.mm` | Application entry point |
-| `Classes/OrreryAppDelegate.mm` | App lifecycle, creates main window and EOClock |
-| `Classes/EOClock.mm` | Core astronomical engine (~120KB, largest file) |
-| `Classes/EOBaseView.mm` | Main rendering surface (UIView subclass) |
-| `Classes/MainViewController.mm` | Primary UI controller |
-| `Classes/FlipsideViewController.mm` | Settings/configuration UI |
-| `Classes/Constants.h` | Compile-time configuration switches (~80+ defines) |
-| `Observatory-Info.plist` | App bundle configuration |
-| `Observatory_Prefix.pch` | Precompiled header |
+`gh` always needs `-R Chrisp671/Day-4-Observatory`; bare `gh` hits the upstream
+fork. PR bodies carry exactly one `Builder-Model-Family:` line naming your own
+model family, and cite plain three-digit IDs (`DEC-040`, `CHK-005`).
 
 ## Architecture
 
 ```
-Presentation:  MainViewController → EOBaseView → EO*View subviews
-Logic:         EOClock (orchestrator, timer-driven updates)
-Computation:   External C++ static libraries (libesastro, libESTime, etc.)
-System:        CoreLocation, CoreGraphics, QuartzCore, AVFoundation
+index.html ─ main.ts ─ app/shell.ts ─ app/scene.ts ─ engine/frame.ts ─ astronomy-engine
+                             │             │
+                             │             └── app/scene-core.ts, app/scene-plinth.ts
+                             └── ui/*.ts   (pure painters, one Scene slice each)
 ```
 
-### Class Naming Conventions
+Three seams, and the code is organised so that nothing crosses them:
 
-- `EO*` — Observatory-specific classes (EOClock, EOBaseView, EOMoonView, EOEarthView, etc.)
-- `EC*` — Emerald Chronometer base classes (ECTrace, ECErrorReporter, ECAudio)
-- `ES*` — External library types (ESWatchTime, ESTimeLocAstroEnvironment)
+- **SEAM-001 `frame(unixMillis, lat, lon) → FrameState`** (`engine/frame.ts`) is
+  the only place astronomy is computed from a timestamp and a station. Views
+  never call an astronomy API. This is the Rust/WASM swap contract (DEC-002) and
+  the primary test seam.
+- **SEAM-003 `scene(request) → Scene`** (`app/scene.ts`) is the page seam
+  (DEC-037): everything the page shows, in dial units and final strings, from one
+  call per tick. It never throws and memoises internally. The shell and the
+  painters know no astronomy, no milliseconds and no caching.
+- **SEAM-002** every painter under `ui/` is a pure function of one Scene slice,
+  so it is testable headlessly.
 
-### View Hierarchy
+`app/shell.ts` is the only file that knows an element id (one `IDS` table),
+binds each input once, and paints a Scene idempotently. `main.ts` is ~210 lines
+and holds only what a viewer can change.
 
-EOBaseView contains specialized subviews: EORingView, EOMoonView, EOEarthView, EOHandView, EOShuffleView, and others — each rendering a specific astronomical element using Core Graphics.
+## House rules, learned the hard way
 
-## External Dependencies
+- **Contract before bodies.** DEC-037 worked because the types and comments were
+  written and locked first, then built against as a read-only spec. Follow it.
+- **Deep modules, no information leakage, no temporal decomposition** (the
+  owner's standing architecture bar, DEC-037).
+- **Test the convention, not just the number.** A pure-math module with a
+  convention test (noon-top, clockwise, north-up) is the port pattern; the thin
+  draw module on top stays dumb. This is how RSK-001 is mitigated.
+- **Never trust a 2× screenshot over a real phone.** DEC-036: a rendered
+  screenshot passed a design that one phone photo rejected.
+- **Subtraction is the next level** (DEC-026). Adding a band below the dial
+  requires something else to leave. New widgets require a DEC.
+- **Colour only where the sky provides it** (DEC-009/010), driven by real solar
+  altitude; the page follows the light.
+- **All user-visible text reaches the DOM via `textContent`**, never `innerHTML`.
+- **A picture is fetched only when its row is on screen**, and vendored assets are
+  same-origin. The page's only third-party requests are its own web fonts.
+- Attributions are load-bearing: `web/public/ATTRIBUTION.md` (NASA photos, with
+  source SHA-256) and `web/public/charts/` (d3-celestial, BSD-3-Clause, pinned
+  commit). Read them before adding or regenerating assets; the licence terms and
+  the credit links are tested.
+- Tabs are accessible: `role=tablist`/`tab`/`tabpanel`, arrow/Home/End keys, one
+  tab stop. Planet rows are real `<button>`s with `aria-pressed` and
+  `aria-expanded`. The dial carries a spoken transcript via `aria-describedby`.
+- `prefers-reduced-motion` drops the tick cadence to once a minute.
 
-These libraries must be cloned at the **same directory level** as this repository:
+## Parked original, if you must read it
 
-```shell
-git clone git@github.com:EmeraldSequoia/buildscripts.git
-git clone git@github.com:EmeraldSequoia/esutil.git      # → libesutil.a
-git clone git@github.com:EmeraldSequoia/estime.git       # → libESTime.a
-git clone git@github.com:EmeraldSequoia/eslocation.git   # → libeslocation.a
-git clone git@github.com:EmeraldSequoia/esastro.git      # → libesastro.a
-```
-
-### iOS Framework Dependencies
-
-Foundation, UIKit, CoreGraphics, QuartzCore, CoreLocation, AVFoundation, AudioToolbox, CFNetwork, SystemConfiguration, ExternalAccessory
-
-## Building
-
-1. Open `Observatory.xcodeproj` in Xcode
-2. Select a simulator or device target
-3. Product → Run (Cmd+R)
-
-Build configurations: Debug, Release, Distribution.
-
-## Testing
-
-No automated test suite exists. The Xcode scheme has an empty test action. All testing is manual.
-
-## Localization
-
-8 languages supported: English, German, Spanish, French, Italian, Japanese, Dutch, Chinese (Simplified). Localized strings are in `{lang}.lproj/` directories.
-
-## Scripts
-
-Perl utility scripts in `scripts/`:
-- `dumpDefaults.pl` — Dump NSUserDefaults for debugging
-- `copyHelpFile.pl` — Copy help resources
-- `checkForNSCalendar.pl` — Validate calendar API usage (run as build phase)
-- `resetSimulatorLastVersionRun.pl` — Simulator cleanup
-
-## Code Conventions
-
-- Files use `.mm` extension for Objective-C++ (C++ interop is pervasive)
-- Manual retain/release memory management — no ARC
-- Heavy use of Interface Builder (XIB) for UI layout
-- Constants defined as preprocessor macros in `Constants.h`
-- NSTimer-driven update loop in EOClock for real-time display updates
-- Copyright headers at top of every source file
-
-## AI Integration Roadmap
-
-### Phase 1 — On-Device (Free, No Network Required)
-- **Apple Vision framework** — sky/star identification via camera, built into iOS
-- **Core ML** — run open models (Gemma 2B, Phi-3 mini) on-device for natural language Q&A about what's on screen
-- **Create ML** — train a custom star/constellation classifier
-
-### Phase 2 — Free API Tiers (Network Required)
-- **Google Gemini Flash** — free tier (15 RPM), good for complex astronomical queries
-- **Groq** — free tier with fast inference on open models
-- **Hugging Face Inference API** — free tier for many open models
-
-### Planned AI Features
-1. **Sky object identification** — point camera, identify constellations/planets/deep-sky objects
-2. **Natural language queries** — "When's the next lunar eclipse from my location?"
-3. **Smart notifications** — AI-curated alerts for interesting events based on location and weather
-4. **Observation planner** — "What's worth looking at tonight?" with light pollution and weather awareness
-5. **Educational companion** — conversational explanations of on-screen astronomical data
-
-### Branding Note
-The MIT license covers the code but not the "Emerald Observatory" name or original artwork/logos. A rebrand (new name, icon, App Store listing) is needed before republishing.
-
-## Important Notes for AI Assistants
-
-- **Do not add ARC annotations** (`strong`, `weak`) — this codebase uses manual retain/release
-- **Respect the `.mm` extension** — most files need C++ interop with the external astronomy libraries
-- **EOClock.mm is the core** — changes here affect all astronomical calculations and display updates
-- **External libraries are not in this repo** — `ES*` prefixed types come from sibling repositories
-- **No package manager** — dependencies are managed via Xcode project settings and sibling directory structure
-- **iPad-only UI** — all XIB layouts target iPad form factor
+`Classes/EOClock.mm` (~120 KB) is the astronomical orchestrator and the source of
+truth for behaviour — REQ-005's stepping rules live at `EOClock.mm:440-493` and
+`680-758`, and the layout table was transcribed from `EOClock.mm:1520-1729` into
+`analysis/observatory/layout-table.md`. Class prefixes: `EO*` this app, `EC*`
+Emerald Chronometer audio, `ES*` the external libraries. If you ever do resume
+iOS work: manual retain/release (no ARC annotations), `.mm` where C++ interop is
+used, tabs, macros in `Constants.h`, and 8 localisations in `*.lproj/`.

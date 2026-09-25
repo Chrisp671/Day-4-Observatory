@@ -16,25 +16,40 @@
  *   `CENTER='500@399'` is geocentric. The moon's horizontal parallax is nearly
  *   a degree, so RA/Dec are compared only through `CENTER='coord@399'`.
  * - `MoonPhase` and `Illumination` take no observer, so they are GEOCENTRIC.
- *   JPL's `S-T-O` and `MN_Illu%` are topocentric when the centre is a site, and
- *   for the moon that parallax is worth several degrees near new moon. Both
- *   frames are therefore pinned: topocentric for the positions the engine
- *   computes topocentrically, geocentric for the phase it computes
- *   geocentrically.
- * - Horizons' `S-T-O` is the Sun-Target-Observer angle, and `MN_Illu%` follows
- *   it as `(1 + cos i) / 2`. astronomy-engine's `MoonPhase` is the same angle
- *   measured from the anti-solar point, with `(1 - cos p) / 2` illuminated. So
- *   `p_engine + i_jpl = 180` exactly, up to the two theories' difference.
+ *   JPL's ecliptic longitudes and `MN_Illu%` are topocentric when the centre is
+ *   a site, and for the moon that parallax is worth about a degree. Both frames
+ *   are therefore pinned: topocentric for the positions the engine computes
+ *   topocentrically, geocentric for the phase it computes geocentrically.
+ * - astronomy-engine's `MoonPhase` is a SIGNED longitude difference: the moon's
+ *   geocentric ecliptic-of-date longitude minus the sun's, 0..360, so 0 is new,
+ *   90 first quarter, 180 full, 270 last quarter. The app's waxing/waning flag,
+ *   phase name, moon age and the lit side of the disc all hang on that sign.
+ *   Horizons' `ObsEcLon` (quantity 31) is the same longitude, so both bodies'
+ *   are pinned geocentrically and the difference is compared signed. JPL's
+ *   value is apparent (light-time and stellar aberration applied) and the
+ *   engine's is not. That shows only for the sun: for the moon, light-time
+ *   and aberration cancel to an arcsecond because it shares the Earth's
+ *   heliocentric velocity, so the engine's phase sits a systematic 20 arcsec
+ *   (0.0057 deg, 40 s of lunation) below JPL's, measured per body with
+ *   `--measure`. The test's tolerance carries that. The unsigned
+ *   `S-T-O` phase angle is NOT used: folding the engine's phase into an
+ *   unsigned elongation would hide a wrong sign, and S-T-O also differs from a
+ *   longitude difference by the moon's ecliptic latitude (up to 5 deg near
+ *   syzygy) and by the sun-side angle of the triangle (up to 0.15 deg).
  * - Horizons' `Elevation_(a-app)` is AIRLESS; the engine's `Horizon(...,
- *   "normal")` is refraction-corrected. The difference is the refraction lift,
- *   bounded by 34' and largest near the horizon.
+ *   "normal")` adds `Refraction("normal", airless)` to it (that is exactly what
+ *   `Horizon` does internally). The test applies the same declared model to
+ *   JPL's airless value and compares altitude directly.
  * - `SearchRiseSet` fires when the body's UPPER LIMB crosses the horizon, i.e.
- *   the centre is at `-(34' refraction) - semidiameter`. Horizons reports the
- *   airless centre elevation and the angular diameter, so the target altitude
+ *   the centre is at `-(34' refraction) - semidiameter`, with the semidiameter
+ *   from the topocentric distance. Horizons reports the airless centre
+ *   elevation and the topocentric angular diameter, so the target altitude
  *   follows from JPL's own numbers.
  *
- * astronomy-engine is used here only to choose WHICH instants to probe. Nothing
- * it returns is written into the fixture.
+ * astronomy-engine is used here only to choose WHICH instants to probe. The one
+ * engine value written into the fixture is `events[].engineUtc`, recorded as
+ * provenance (which JPL rows were read, and where the window was centred); the
+ * test never treats it as an oracle. Every asserted-against number is JPL's.
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
@@ -47,6 +62,7 @@ import {
   Illumination,
   MoonPhase,
   Observer,
+  Refraction,
   SearchRiseSet,
   SiderealTime,
 } from "../web/node_modules/astronomy-engine/esm/astronomy.js";
@@ -79,9 +95,10 @@ const COMMAND = { sun: "10", moon: "301" };
 const GEOCENTRIC = "500@399";
 const TOPOCENTRIC = "coord@399";
 // q1 astrometric RA/Dec, q2 apparent RA/Dec, q4 az/el, q13 angular diameter,
-// q20 Target-Observer-Moon angle, q24 Sun-Target-Observer (phase) angle,
-// q25 moon illuminated percent. Horizons names the q24 column "S-T-O".
-const Q_POSITION = "1,2,4,13,20,24,25";
+// q25 Target-Observer-Moon angle and moon illuminated percent ("MN_Illu%"),
+// q31 observer-centred ecliptic-of-date longitude and latitude ("ObsEcLon",
+// "ObsEcLat"). Az/el print as "n.a." for a geocentric centre.
+const Q_POSITION = "1,2,4,13,25,31";
 
 // ------------------------------------------------------------ Horizons access
 
@@ -153,6 +170,7 @@ async function observer({ command, center, siteCoord, quantities, start, stop, s
 function column(table, name) {
   const index = table.names.indexOf(name);
   if (index < 0) throw new Error(`Horizons table has no column ${name}; has ${table.names.join(" | ")}`);
+  if (table.rows.length === 0) throw new Error(`Horizons table has no rows to read ${name} from`);
   const raw = table.rows[0].split(",")[index]?.trim() ?? "";
   if (raw === "" || raw.toLowerCase() === "n.a.") return null;
   const value = Number(raw);
@@ -172,6 +190,11 @@ const parseTime = (text) => {
 const D2R = Math.PI / 180;
 const R2D = 180 / Math.PI;
 const wrap180 = (d) => ((((d + 180) % 360) + 360) % 360) - 180;
+const wrap360 = (d) => ((d % 360) + 360) % 360;
+const circularDiff = (a, b) => {
+  const d = Math.abs(a - b) % 360;
+  return Math.min(d, 360 - d);
+};
 const round = (v, digits = 6) => {
   const f = 10 ** digits;
   return Math.round(v * f) / f;
@@ -327,15 +350,19 @@ async function buildCase(location, dateCase) {
   const sunTable = await position("sun");
   const moonTable = await position("moon");
   // Phase and illumination are geocentric in the engine, so ask JPL in that
-  // frame too rather than inheriting the site's parallax.
-  const moonGeoTable = await observer({
-    command: COMMAND.moon,
-    center: GEOCENTRIC,
-    quantities: Q_POSITION,
-    start: refMillis,
-    stop: refMillis + 60000,
-    step: "1 m",
-  });
+  // frame too rather than inheriting the site's parallax. Both bodies, because
+  // the phase is the difference of their ecliptic longitudes.
+  const geocentric = async (body) =>
+    observer({
+      command: COMMAND[body],
+      center: GEOCENTRIC,
+      quantities: Q_POSITION,
+      start: refMillis,
+      stop: refMillis + 60000,
+      step: "1 m",
+    });
+  const sunGeoTable = await geocentric("sun");
+  const moonGeoTable = await geocentric("moon");
   const sunAltDeg = column(sunTable, "Elevation_(a-app)");
   const sunAzDeg = column(sunTable, "Azimuth_(a-app)");
   const probe = engineProbe(refMillis, latDeg, lonDeg);
@@ -356,11 +383,13 @@ async function buildCase(location, dateCase) {
       apparentDecDeg: round(column(sunTable, "DEC___(a-app)")),
       topocentricAltDeg: round(sunAltDeg),
       topocentricAzDeg: round(sunAzDeg),
+      geocentricEclipticLonDeg: round(column(sunGeoTable, "ObsEcLon")),
     },
     moon: {
       apparentRaDeg: round(column(moonTable, "R.A.__(a-app)")),
       apparentDecDeg: round(column(moonTable, "DEC___(a-app)")),
-      geocentricPhaseAngleDeg: round(column(moonGeoTable, "S-T-O")),
+      geocentricEclipticLonDeg: round(column(moonGeoTable, "ObsEcLon")),
+      geocentricEclipticLatDeg: round(column(moonGeoTable, "ObsEcLat")),
       geocentricIlluminatedFraction: round(column(moonGeoTable, "MN_Illu%") / 100),
       topocentricAltDeg: round(column(moonTable, "Elevation_(a-app)")),
       topocentricAzDeg: round(column(moonTable, "Azimuth_(a-app)")),
@@ -371,10 +400,13 @@ async function buildCase(location, dateCase) {
 
   if (MEASURE) {
     const gap = (a, b) => Math.abs(a - b);
+    // The same model the engine's Horizon() applies, on JPL's airless value.
+    const refracted = (airless) => airless + Refraction("normal", airless);
+    const jplPhase = wrap360(c.moon.geocentricEclipticLonDeg - c.sun.geocentricEclipticLonDeg);
     const lines = [
-      `sun  Ra ${gap(probe.sunRaDeg, c.sun.apparentRaDeg).toFixed(5)}  Dec ${gap(probe.sunDecDeg, c.sun.apparentDecDeg).toFixed(5)}  Az ${gap(probe.sunAzDeg, c.sun.topocentricAzDeg).toFixed(5)}  Alt(raw) ${(probe.sunAltDeg - c.sun.topocentricAltDeg).toFixed(5)}`,
-      `moon Ra ${gap(probe.moonRaDeg, c.moon.apparentRaDeg).toFixed(5)}  Dec ${gap(probe.moonDecDeg, c.moon.apparentDecDeg).toFixed(5)}  Az ${gap(probe.moonAzDeg, c.moon.topocentricAzDeg).toFixed(5)}  Alt(raw) ${(probe.moonAltDeg - c.moon.topocentricAltDeg).toFixed(5)}`,
-      `moon phase ${gap(c.moon.geocentricPhaseAngleDeg, wrap180(180 - probe.phaseAngleDeg)).toFixed(4)}  illum ${gap(probe.illuminatedFraction, c.moon.geocentricIlluminatedFraction).toFixed(6)}`,
+      `sun  Ra ${gap(probe.sunRaDeg, c.sun.apparentRaDeg).toFixed(5)}  Dec ${gap(probe.sunDecDeg, c.sun.apparentDecDeg).toFixed(5)}  Az ${gap(probe.sunAzDeg, c.sun.topocentricAzDeg).toFixed(5)}  Alt(vs refracted JPL) ${gap(probe.sunAltDeg, refracted(c.sun.topocentricAltDeg)).toFixed(5)}  lift ${(probe.sunAltDeg - c.sun.topocentricAltDeg).toFixed(4)}`,
+      `moon Ra ${gap(probe.moonRaDeg, c.moon.apparentRaDeg).toFixed(5)}  Dec ${gap(probe.moonDecDeg, c.moon.apparentDecDeg).toFixed(5)}  Az ${gap(probe.moonAzDeg, c.moon.topocentricAzDeg).toFixed(5)}  Alt(vs refracted JPL) ${gap(probe.moonAltDeg, refracted(c.moon.topocentricAltDeg)).toFixed(5)}  lift ${(probe.moonAltDeg - c.moon.topocentricAltDeg).toFixed(4)}`,
+      `moon phase(signed) ${circularDiff(probe.phaseAngleDeg, jplPhase).toFixed(5)}  engine ${probe.phaseAngleDeg.toFixed(4)} jpl ${jplPhase.toFixed(4)}  eclLat ${c.moon.geocentricEclipticLatDeg.toFixed(4)}  illum ${gap(probe.illuminatedFraction, c.moon.geocentricIlluminatedFraction).toFixed(6)}`,
       `subsolar lat ${gap(probe.subsolarLatDeg, c.subsolar.latDeg).toFixed(5)}  lon ${gap(probe.subsolarLonDeg, c.subsolar.lonDeg).toFixed(5)}`,
     ];
     for (const e of events) {
@@ -418,11 +450,13 @@ function render(cases) {
       apparentDecDeg: ${c.sun.apparentDecDeg},
       topocentricAltDeg: ${c.sun.topocentricAltDeg},
       topocentricAzDeg: ${c.sun.topocentricAzDeg},
+      geocentricEclipticLonDeg: ${c.sun.geocentricEclipticLonDeg},
     },
     moon: {
       apparentRaDeg: ${c.moon.apparentRaDeg},
       apparentDecDeg: ${c.moon.apparentDecDeg},
-      geocentricPhaseAngleDeg: ${c.moon.geocentricPhaseAngleDeg},
+      geocentricEclipticLonDeg: ${c.moon.geocentricEclipticLonDeg},
+      geocentricEclipticLatDeg: ${c.moon.geocentricEclipticLatDeg},
       geocentricIlluminatedFraction: ${c.moon.geocentricIlluminatedFraction},
       topocentricAltDeg: ${c.moon.topocentricAltDeg},
       topocentricAzDeg: ${c.moon.topocentricAzDeg},
@@ -445,19 +479,23 @@ ${events}
  * Source: Horizons API, \`ssd.jpl.nasa.gov/api/horizons.api\`, DE441 ephemerides,
  * target radii 695700 km (Sun) and 1737.4 km (Moon). Positions and altitudes are
  * topocentric — \`CENTER='coord@399'\` with the site's own coordinates —
- * because that is what the engine computes; the phase and illuminated fraction
- * are geocentric, because \`MoonPhase\` and \`Illumination\` take no observer.
- * Columns are apparent RA/Dec of date, airless topocentric altitude and
- * azimuth, the Sun-Target-Observer phase angle, the moon's illuminated percent,
- * the angular diameter, and the altitude at and either side of each rise/set
- * the engine reports.
+ * because that is what the engine computes; the ecliptic longitudes and the
+ * illuminated fraction are geocentric, because \`MoonPhase\` and
+ * \`Illumination\` take no observer. Columns are apparent RA/Dec of date,
+ * airless topocentric altitude and azimuth, geocentric ecliptic-of-date
+ * longitude (both bodies) and latitude (moon), the moon's illuminated percent,
+ * the angular diameter, and the altitude at each rise/set the engine reports.
  *
  * \`events[].jplCrossingUtc\` is JPL's own crossing of \`limbHorizonDeg\` on a
  * one-minute grid, found by linear interpolation. That altitude is
  * \`-(34' refraction) - semidiameter\`: the rule astronomy-engine's
  * \`SearchRiseSet\` implements, expressed with JPL's own angular diameter.
- * \`engineUtc\` is where the engine actually put the event, so
- * \`engineUtc - jplCrossingUtc\` is the time error this check measures.
+ * \`engineUtc\` is where the engine put the event WHEN THE FIXTURE WAS BUILT.
+ * It is provenance — it says which JPL rows were read — and the test never
+ * asserts against it; the engine's live value is compared to
+ * \`jplCrossingUtc\`. \`jplElevationAtEngineDeg\` is JPL's altitude at that
+ * recorded instant, so \`jplElevationAtEngineDeg - limbHorizonDeg\` is a
+ * fixture self-consistency check, not a live engine check.
  *
  * The generator pins \`process.env.TZ = 'UTC'\`, because the moon's day-anchored
  * rise and set are sought from local midnight. The test pins itself the same
@@ -485,15 +523,24 @@ export interface HorizonCase {
   readonly sun: {
     readonly apparentRaDeg: number;
     readonly apparentDecDeg: number;
+    /** Airless. The engine's altitude is this plus \`Refraction("normal", this)\`. */
     readonly topocentricAltDeg: number;
     readonly topocentricAzDeg: number;
+    /** Geocentric apparent ecliptic-of-date longitude, degrees. */
+    readonly geocentricEclipticLonDeg: number;
   };
   readonly moon: {
     readonly apparentRaDeg: number;
     readonly apparentDecDeg: number;
-    /** Sun-Moon-Earth angle, geocentric: what MoonPhase measures. */
-    readonly geocentricPhaseAngleDeg: number;
+    /**
+     * Geocentric apparent ecliptic-of-date longitude, degrees. The engine's
+     * signed phase angle is \`moon.lon - sun.lon\` (mod 360): 0 new, 180 full.
+     */
+    readonly geocentricEclipticLonDeg: number;
+    /** Geocentric ecliptic latitude, degrees; near zero at an eclipse. */
+    readonly geocentricEclipticLatDeg: number;
     readonly geocentricIlluminatedFraction: number;
+    /** Airless, as for the sun. */
     readonly topocentricAltDeg: number;
     readonly topocentricAzDeg: number;
   };

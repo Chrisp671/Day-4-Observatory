@@ -3,39 +3,45 @@
  *
  * 3 locations x 4 dates, pinned in `horizons-reference.ts` by
  * `scripts/build-horizons-fixture.mjs`. Regenerate that file to move the
- * reference; regenerate the tolerances only on evidence, and say why in the
- * comment beside them. Each figure in brackets is the worst residual actually
- * measured across all twelve cases when the fixture was built, so the margins
- * below are known rather than hopeful.
+ * reference; change a tolerance only on evidence, and say why in the comment
+ * beside it. Each figure in brackets is the worst residual actually measured
+ * across all twelve cases when the fixture was built (`--measure`), so the
+ * margins below are known rather than hopeful.
  *
  * What is compared, and why the comparison is shaped the way it is:
  *
  * - RA/Dec, azimuth: the engine's positions against JPL's topocentric apparent
- *   values. Azimuth is unaffected by refraction, so it is a near-direct test.
- * - Altitude: NOT compared for equality. Horizons reports airless elevation and
- *   the engine reports refraction-corrected altitude, so the difference is the
- *   refraction lift — zero above the horizon's saturation, up to a little over
- *   34' at low altitude. The assertion is that the lift is non-negative and
- *   physically bounded, which catches a real error while accepting the model
- *   difference that is not an error at all.
- * - Moon elongation: JPL's Sun-Moon-Earth angle and astronomy-engine's
- *   `MoonPhase` measure the same thing from opposite ends, so the engine's phase
- *   is folded into an unsigned elongation and JPL's is unfolded out of one.
- *   Folding matters: at the eclipse date the moon is 2.4' from the sun, where
- *   the phase angle is a small difference of two nearly-parallel directions and
- *   a naive signed comparison reads 353' of error where the real error is 0.2'.
- * - Illuminated fraction: compared directly. It is what the disc is drawn from,
- *   and it is well conditioned even at conjunction, where the phase angle is not.
+ *   values. Azimuth is unaffected by refraction, so it is a direct test.
+ * - Altitude: Horizons reports AIRLESS elevation; the engine's `Horizon(...,
+ *   "normal")` returns airless plus `Refraction("normal", airless)`, and that
+ *   function is exported. So the test applies the engine's declared refraction
+ *   model to JPL's airless value and compares altitude directly, to the same
+ *   0.01 deg as everything else. JPL validates the geometry; the refraction
+ *   model is a documented choice JPL cannot validate, and it is applied to
+ *   JPL's number, never to the engine's.
+ * - Moon phase: SIGNED. `MoonPhase` is the moon's geocentric ecliptic-of-date
+ *   longitude minus the sun's, and JPL's `ObsEcLon` is that longitude for each
+ *   body, so the difference is compared as-is, modulo 360. The sign matters:
+ *   `waxing`, the phase name, the moon's age and the lit side of the disc all
+ *   hang on it, and an unsigned comparison (against the S-T-O phase angle, say)
+ *   would pass a flipped sign. The waxing flag is asserted from JPL's sign too.
+ * - Illuminated fraction: compared directly. It is what the disc is drawn
+ *   from, and it is well conditioned at conjunction, where the angle is not.
  * - Subsolar point: the fixture derives it from JPL's own sun azimuth and
  *   altitude with no Earth-rotation value involved, so this tests the engine's
- *   GAST arithmetic rather than restating it.
- * - Rise and set: the engine's reported instant, against JPL's own crossing of
- *   the upper-limb horizon interpolated from a one-minute JPL grid. The
- *   altitude residual and the time residual are both asserted, so a failure
- *   says which went wrong.
+ *   GAST arithmetic rather than restating it. (The RA tests below recover RA
+ *   from the hour angle using the engine's own sidereal time, so GAST cancels
+ *   there; this is the test that pins it.)
+ * - Rise and set: the engine's reported instant against JPL's own crossing of
+ *   the upper-limb horizon, interpolated from a one-minute JPL grid. The
+ *   fixture also carries JPL's altitude at the instant the engine reported
+ *   when the fixture was built; that is a self-consistency check on the
+ *   fixture (see the reference-data block), not a live check on the engine,
+ *   because the engine's instant is not re-queried at test time.
  */
 
 import { describe, expect, it } from "vitest";
+import { Refraction } from "astronomy-engine";
 import { frame } from "./frame";
 import { moonDay } from "./planets";
 import { HORIZONS_REFERENCE, type HorizonEvent } from "./horizons-reference";
@@ -49,26 +55,35 @@ if (!nodeProcess) throw new Error("no process.env in this runtime; TZ cannot be 
 nodeProcess.env.TZ = "UTC";
 
 /** Angles, degrees. Worst measured residual in brackets. */
-const RA_TOL = 0.01; //           [0.0011]
-const DEC_TOL = 0.01; //          [0.0007]
-const AZIMUTH_TOL = 0.01; //      [0.0014]
-const REFRACTION_MAX = 0.7; //    [0.639] the lift, from 0 up
-const ELONGATION_TOL = 0.5; //    [0.34]
-const ILLUMINATION_TOL = 0.002; // [0.0000438]
-const SUBSOLAR_TOL = 0.01; //     [0.0005]
-/** Rise/set: JPL's altitude at the engine's instant, against the limb rule. */
-const LIMB_TOL = 0.02; //         [0.0034]
-/** Rise/set: the time itself, in minutes. */
-const EVENT_MINUTES = 1; //       [0.012] — under a second
+const RA_TOL = 0.01; //            [0.0012]
+const DEC_TOL = 0.01; //           [0.0007]
+const AZIMUTH_TOL = 0.01; //       [0.0014]
+const ALTITUDE_TOL = 0.01; //      [0.0014] against JPL airless + Refraction("normal")
+/**
+ * Signed, modulo 360. 0.0057 of the residual is the sun's annual aberration
+ * (20.5 arcsec), which JPL's apparent longitude includes and `MoonPhase` does
+ * not; for the moon, light-time and aberration cancel to an arcsecond because
+ * it shares the Earth's heliocentric velocity, so only the sun's shows. That is
+ * 40 seconds of lunation, and the rest is arcseconds of lunar theory.
+ */
+const PHASE_TOL = 0.02; //         [0.0055]
+const ILLUMINATION_TOL = 0.0005; // [0.000044]
+const SUBSOLAR_TOL = 0.01; //      [0.0006]
+/** Rise/set: the time itself, in minutes. A quarter of the display resolution. */
+const EVENT_MINUTES = 0.25; //     [0.012] — under a second
+/**
+ * Fixture self-consistency: JPL's altitude at the instant recorded when the
+ * fixture was built, against the limb rule from JPL's own angular diameter.
+ * Both numbers are in the fixture; this does not exercise the engine.
+ */
+const LIMB_TOL = 0.02; //          [0.0034]
 
 const circularDiff = (a: number, b: number): number => {
   const d = Math.abs(a - b) % 360;
   return Math.min(d, 360 - d);
 };
 
-/** Unsigned Sun-Moon elongation, 0..180, from either a phase or an S-T-O angle. */
-const elongation = (phaseLike: number): number =>
-  phaseLike <= 180 ? phaseLike : 360 - phaseLike;
+const wrap360 = (deg: number): number => ((deg % 360) + 360) % 360;
 
 /** Right ascension in degrees, recovered from an hour angle: RA = LST - HA. */
 const recoveredRaDeg = (gastHours: number, lonDeg: number, hourAngleHours: number): number => {
@@ -76,11 +91,18 @@ const recoveredRaDeg = (gastHours: number, lonDeg: number, hourAngleHours: numbe
   return (((lst - hourAngleHours) % 24) + 24) % 24 * 15;
 };
 
-const refMillis = (c: (typeof HORIZONS_REFERENCE)[number]): number =>
-  Date.parse(c.date.refInstantUtc);
+/** The engine's declared refraction model, applied to JPL's airless altitude. */
+const refracted = (airlessDeg: number): number => airlessDeg + Refraction("normal", airlessDeg);
+
+type Case = (typeof HORIZONS_REFERENCE)[number];
+
+const refMillis = (c: Case): number => Date.parse(c.date.refInstantUtc);
+
+/** JPL's signed phase angle: moon longitude minus sun longitude, 0..360. */
+const jplPhaseDeg = (c: Case): number =>
+  wrap360(c.moon.geocentricEclipticLonDeg - c.sun.geocentricEclipticLonDeg);
 
 const engineEvent = (
-  c: (typeof HORIZONS_REFERENCE)[number],
   kind: HorizonEvent["kind"],
   state: ReturnType<typeof frame>,
   moon: ReturnType<typeof moonDay>,
@@ -107,10 +129,43 @@ describe("CHK-001 reference data", () => {
     expect(HORIZONS_REFERENCE.some((c) => c.date.label.includes("eclipse"))).toBe(true);
     expect(HORIZONS_REFERENCE.some((c) => c.moon.geocentricIlluminatedFraction < 0.01)).toBe(true);
     expect(HORIZONS_REFERENCE.some((c) => c.moon.geocentricIlluminatedFraction > 0.9)).toBe(true);
+    // Both sides of the sign are exercised: a waxing case and a waning one.
+    expect(HORIZONS_REFERENCE.some((c) => jplPhaseDeg(c) < 180)).toBe(true);
+    expect(HORIZONS_REFERENCE.some((c) => jplPhaseDeg(c) > 180)).toBe(true);
   });
 
   it("was generated with local midnight pinned to UTC, as this file is", () => {
+    // If the TZ pin above did not take, this fails by the local offset (hours,
+    // in milliseconds) rather than letting the moon tests below compare the
+    // engine's day-anchored events against the wrong calendar day.
     expect(new Date(2026, 5, 21, 0, 0, 0, 0).getTime()).toBe(Date.UTC(2026, 5, 21));
+  });
+
+  it("pins exactly one absent event, and it is the four-day Reykjavik moon", () => {
+    // Reykjavik, December solstice: the moon rises on the 21st with its
+    // declination climbing past the circumpolar limit for 64 N, and JPL's own
+    // elevation stays above the limb horizon for four days. moonDay() looks two
+    // days ahead for the set that follows a rise, so it reports none; the app
+    // shows a rise with no set. Pin that it is the only absence in the matrix.
+    const absent = HORIZONS_REFERENCE.flatMap((c) =>
+      c.events.filter((e) => e.engineUtc === null).map((e) => `${c.id} ${e.kind}`),
+    );
+    expect(absent).toEqual(["reykjavik@2026-12-21 moonset"]);
+  });
+
+  it("carries self-consistent rise/set rows: JPL's altitude at each recorded instant sits on the limb", () => {
+    for (const c of HORIZONS_REFERENCE) {
+      for (const e of c.events) {
+        if (e.engineUtc === null) continue;
+        if (e.jplElevationAtEngineDeg === null || e.jplCrossingUtc === null || e.limbHorizonDeg === null) {
+          throw new Error(`${c.id} ${e.kind} has an engine instant but no JPL row to compare it with`);
+        }
+        expect(
+          Math.abs(e.jplElevationAtEngineDeg - e.limbHorizonDeg),
+          `${c.id} ${e.kind}`,
+        ).toBeLessThanOrEqual(LIMB_TOL);
+      }
+    }
   });
 });
 
@@ -123,15 +178,13 @@ describe.each(HORIZONS_REFERENCE.map((c) => [c.id, c] as const))("CHK-001 %s", (
     expect(Math.abs(state().sun.declinationDeg - c.sun.apparentDecDeg)).toBeLessThanOrEqual(DEC_TOL);
   });
 
-  it("puts the sun's azimuth and refraction-corrected altitude where JPL does", () => {
+  it("puts the sun's azimuth and altitude where JPL does", () => {
     const s = state();
     expect(circularDiff(s.sun.azimuthDeg, c.sun.topocentricAzDeg)).toBeLessThanOrEqual(AZIMUTH_TOL);
-    const lift = s.sun.altitudeDeg - c.sun.topocentricAltDeg;
-    expect(lift).toBeGreaterThanOrEqual(0);
-    expect(lift).toBeLessThanOrEqual(REFRACTION_MAX);
+    expect(Math.abs(s.sun.altitudeDeg - refracted(c.sun.topocentricAltDeg))).toBeLessThanOrEqual(ALTITUDE_TOL);
   });
 
-  it("puts the sun on the meridian JPL's own geometry implies", () => {
+  it("puts the sun's right ascension where JPL puts it", () => {
     // frame() exposes a body's RA only inside its hour angle, so recover it:
     // hourAngle = LST - RA, and LST = GAST + longitude/15.
     const s = state();
@@ -140,14 +193,12 @@ describe.each(HORIZONS_REFERENCE.map((c) => [c.id, c] as const))("CHK-001 %s", (
     ).toBeLessThanOrEqual(RA_TOL);
   });
 
-  it("puts the moon where JPL puts it", () => {
+  it("puts the moon's right ascension where JPL puts it", () => {
     const s = state();
     // The moon's declination is not on FrameState, so it is not asserted
-    // directly. It does not need to be: altitude, azimuth and hour angle
-    // between them determine the moon's position uniquely, and all three are
-    // asserted here to within a few arcseconds — the right ascension from the
-    // hour angle below, the azimuth and the refraction-bounded altitude in the
-    // next test.
+    // directly. It does not need to be: right ascension, azimuth and altitude
+    // between them fix the moon's position, and all three are asserted to
+    // 0.01 deg — the right ascension here, the other two in the next test.
     expect(
       circularDiff(recoveredRaDeg(s.siderealHours, lonDeg, s.moon.hourAngleHours), c.moon.apparentRaDeg),
     ).toBeLessThanOrEqual(RA_TOL);
@@ -156,19 +207,18 @@ describe.each(HORIZONS_REFERENCE.map((c) => [c.id, c] as const))("CHK-001 %s", (
   it("agrees with JPL on the moon's azimuth, altitude and illumination", () => {
     const s = state();
     expect(circularDiff(s.moon.azimuthDeg, c.moon.topocentricAzDeg)).toBeLessThanOrEqual(AZIMUTH_TOL);
-    const lift = s.moon.altitudeDeg - c.moon.topocentricAltDeg;
-    expect(lift).toBeGreaterThanOrEqual(0);
-    expect(lift).toBeLessThanOrEqual(REFRACTION_MAX);
+    expect(Math.abs(s.moon.altitudeDeg - refracted(c.moon.topocentricAltDeg))).toBeLessThanOrEqual(ALTITUDE_TOL);
     expect(
       Math.abs(s.moon.illuminatedFraction - c.moon.geocentricIlluminatedFraction),
     ).toBeLessThanOrEqual(ILLUMINATION_TOL);
   });
 
-  it("agrees with JPL on how far the moon is from the sun", () => {
+  it("agrees with JPL on the moon's signed phase angle, and so on which way it is going", () => {
     const s = state();
-    const engineElongation = elongation(s.moon.phaseAngleDeg);
-    const jplElongation = elongation(180 - c.moon.geocentricPhaseAngleDeg);
-    expect(Math.abs(engineElongation - jplElongation)).toBeLessThanOrEqual(ELONGATION_TOL);
+    const jpl = jplPhaseDeg(c);
+    expect(circularDiff(s.moon.phaseAngleDeg, jpl), `engine ${s.moon.phaseAngleDeg} vs JPL ${jpl}`)
+      .toBeLessThanOrEqual(PHASE_TOL);
+    expect(s.moon.waxing).toBe(jpl < 180);
   });
 
   it("puts the sun's shadow where JPL's own azimuth and altitude put it", () => {
@@ -182,26 +232,19 @@ describe.each(HORIZONS_REFERENCE.map((c) => [c.id, c] as const))("CHK-001 %s", (
     (kind) => {
       const pinned = c.events.find((e) => e.kind === kind);
       if (!pinned) throw new Error(`no pinned ${kind} for ${c.id}`);
-      const reported = engineEvent(c, kind, state(), moon());
-      const { engineUtc, jplElevationAtEngineDeg, jplCrossingUtc, limbHorizonDeg } = pinned;
+      const reported = engineEvent(kind, state(), moon());
 
-      if (engineUtc === null) {
-        // A real absence, not a missing measurement: at Reykjavik on the winter
-        // solstice the moon is still up two days after its rise, so the search
-        // finds no set. The app shows a rise with no set; pin that.
+      if (pinned.engineUtc === null) {
+        // A real absence, pinned as such (see the reference-data block).
         expect(reported, `${c.id} ${kind} should have no event`).toBeNull();
         return;
       }
-      if (jplElevationAtEngineDeg === null || jplCrossingUtc === null || limbHorizonDeg === null) {
-        throw new Error(`${c.id} ${kind} has an engine instant but no JPL row to compare it with`);
+      if (pinned.jplCrossingUtc === null) {
+        throw new Error(`${c.id} ${kind} has an engine instant but no JPL crossing to compare it with`);
       }
-
       expect(reported, `${c.id} ${kind} should be an event`).not.toBeNull();
-      // JPL's airless centre altitude where the engine says the limb event is,
-      // against the limb horizon derived from JPL's own angular diameter.
-      expect(Math.abs(jplElevationAtEngineDeg - limbHorizonDeg)).toBeLessThanOrEqual(LIMB_TOL);
-      // And the event itself, against JPL's crossing of that same altitude.
-      const minutes = Math.abs((Date.parse(jplCrossingUtc) - (reported as number)) / 60000);
+      // The engine's live instant against JPL's crossing of the limb horizon.
+      const minutes = Math.abs((Date.parse(pinned.jplCrossingUtc) - (reported as number)) / 60000);
       expect(minutes, `${c.id} ${kind} was ${minutes.toFixed(3)} min out`).toBeLessThanOrEqual(EVENT_MINUTES);
     },
   );

@@ -8,19 +8,23 @@
  * Source: Horizons API, `ssd.jpl.nasa.gov/api/horizons.api`, DE441 ephemerides,
  * target radii 695700 km (Sun) and 1737.4 km (Moon). Positions and altitudes are
  * topocentric — `CENTER='coord@399'` with the site's own coordinates —
- * because that is what the engine computes; the phase and illuminated fraction
- * are geocentric, because `MoonPhase` and `Illumination` take no observer.
- * Columns are apparent RA/Dec of date, airless topocentric altitude and
- * azimuth, the Sun-Target-Observer phase angle, the moon's illuminated percent,
- * the angular diameter, and the altitude at and either side of each rise/set
- * the engine reports.
+ * because that is what the engine computes; the ecliptic longitudes and the
+ * illuminated fraction are geocentric, because `MoonPhase` and
+ * `Illumination` take no observer. Columns are apparent RA/Dec of date,
+ * airless topocentric altitude and azimuth, geocentric ecliptic-of-date
+ * longitude (both bodies) and latitude (moon), the moon's illuminated percent,
+ * the angular diameter, and the altitude at each rise/set the engine reports.
  *
  * `events[].jplCrossingUtc` is JPL's own crossing of `limbHorizonDeg` on a
  * one-minute grid, found by linear interpolation. That altitude is
  * `-(34' refraction) - semidiameter`: the rule astronomy-engine's
  * `SearchRiseSet` implements, expressed with JPL's own angular diameter.
- * `engineUtc` is where the engine actually put the event, so
- * `engineUtc - jplCrossingUtc` is the time error this check measures.
+ * `engineUtc` is where the engine put the event WHEN THE FIXTURE WAS BUILT.
+ * It is provenance — it says which JPL rows were read — and the test never
+ * asserts against it; the engine's live value is compared to
+ * `jplCrossingUtc`. `jplElevationAtEngineDeg` is JPL's altitude at that
+ * recorded instant, so `jplElevationAtEngineDeg - limbHorizonDeg` is a
+ * fixture self-consistency check, not a live engine check.
  *
  * The generator pins `process.env.TZ = 'UTC'`, because the moon's day-anchored
  * rise and set are sought from local midnight. The test pins itself the same
@@ -48,15 +52,24 @@ export interface HorizonCase {
   readonly sun: {
     readonly apparentRaDeg: number;
     readonly apparentDecDeg: number;
+    /** Airless. The engine's altitude is this plus `Refraction("normal", this)`. */
     readonly topocentricAltDeg: number;
     readonly topocentricAzDeg: number;
+    /** Geocentric apparent ecliptic-of-date longitude, degrees. */
+    readonly geocentricEclipticLonDeg: number;
   };
   readonly moon: {
     readonly apparentRaDeg: number;
     readonly apparentDecDeg: number;
-    /** Sun-Moon-Earth angle, geocentric: what MoonPhase measures. */
-    readonly geocentricPhaseAngleDeg: number;
+    /**
+     * Geocentric apparent ecliptic-of-date longitude, degrees. The engine's
+     * signed phase angle is `moon.lon - sun.lon` (mod 360): 0 new, 180 full.
+     */
+    readonly geocentricEclipticLonDeg: number;
+    /** Geocentric ecliptic latitude, degrees; near zero at an eclipse. */
+    readonly geocentricEclipticLatDeg: number;
     readonly geocentricIlluminatedFraction: number;
+    /** Airless, as for the sun. */
     readonly topocentricAltDeg: number;
     readonly topocentricAzDeg: number;
   };
@@ -76,11 +89,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: -0.04708,
       topocentricAltDeg: 10.634824,
       topocentricAzDeg: 99.362904,
+      geocentricEclipticLonDeg: 359.885427,
     },
     moon: {
       apparentRaDeg: 16.869006,
       apparentDecDeg: 9.865329,
-      geocentricPhaseAngleDeg: 160.6888,
+      geocentricEclipticLonDeg: 18.863988,
+      geocentricEclipticLatDeg: 3.369138,
       geocentricIlluminatedFraction: 0.028147,
       topocentricAltDeg: 4.287825,
       topocentricAzDeg: 80.668202,
@@ -102,11 +117,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: 23.436589,
       topocentricAltDeg: 26.469614,
       topocentricAzDeg: 80.926666,
+      geocentricEclipticLonDeg: 90.142812,
     },
     moon: {
       apparentRaDeg: 175.063461,
       apparentDecDeg: -0.558479,
-      geocentricPhaseAngleDeg: 94.7778,
+      geocentricEclipticLonDeg: 175.217,
+      geocentricEclipticLatDeg: -2.016746,
       geocentricIlluminatedFraction: 0.458358,
       topocentricAltDeg: -45.700425,
       topocentricAzDeg: 30.298005,
@@ -128,11 +145,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: 14.872487,
       topocentricAltDeg: 20.711127,
       topocentricAzDeg: 87.899236,
+      geocentricEclipticLonDeg: 139.808346,
     },
     moon: {
       apparentRaDeg: 140.241377,
       apparentDecDeg: 16.432892,
-      geocentricPhaseAngleDeg: 176.6137,
+      geocentricEclipticLonDeg: 136.651203,
+      geocentricEclipticLatDeg: 1.201874,
       geocentricIlluminatedFraction: 0.00087,
       topocentricAltDeg: 23.174904,
       topocentricAzDeg: 87.845292,
@@ -154,11 +173,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: -23.438554,
       topocentricAltDeg: -3.567138,
       topocentricAzDeg: 118.173221,
+      geocentricEclipticLonDeg: 269.625145,
     },
     moon: {
       apparentRaDeg: 49.33115,
       apparentDecDeg: 22.756372,
-      geocentricPhaseAngleDeg: 36.2923,
+      geocentricEclipticLonDeg: 53.559885,
+      geocentricEclipticLatDeg: 5.106907,
       geocentricIlluminatedFraction: 0.90298,
       topocentricAltDeg: -19.400156,
       topocentricAzDeg: 327.573055,
@@ -180,11 +201,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: -0.044128,
       topocentricAltDeg: -45.553201,
       topocentricAzDeg: 226.71765,
+      geocentricEclipticLonDeg: 359.885427,
     },
     moon: {
       apparentRaDeg: 15.500496,
       apparentDecDeg: 10.935403,
-      geocentricPhaseAngleDeg: 160.6888,
+      geocentricEclipticLonDeg: 18.863988,
+      geocentricEclipticLatDeg: 3.369138,
       geocentricIlluminatedFraction: 0.028147,
       topocentricAltDeg: -42.021915,
       topocentricAzDeg: 252.707043,
@@ -206,11 +229,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: 23.438394,
       topocentricAltDeg: -62.42216,
       topocentricAzDeg: 255.505128,
+      geocentricEclipticLonDeg: 90.142812,
     },
     moon: {
       apparentRaDeg: 174.087077,
       apparentDecDeg: 0.576798,
-      geocentricPhaseAngleDeg: 94.7778,
+      geocentricEclipticLonDeg: 175.217,
+      geocentricEclipticLatDeg: -2.016746,
       geocentricIlluminatedFraction: 0.458358,
       topocentricAltDeg: 18.73275,
       topocentricAzDeg: 283.910891,
@@ -232,11 +257,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: 14.874751,
       topocentricAltDeg: -56.893618,
       topocentricAzDeg: 242.399645,
+      geocentricEclipticLonDeg: 139.808346,
     },
     moon: {
       apparentRaDeg: 139.090012,
       apparentDecDeg: 17.299351,
-      geocentricPhaseAngleDeg: 176.6137,
+      geocentricEclipticLonDeg: 136.651203,
+      geocentricEclipticLatDeg: 1.201874,
       geocentricIlluminatedFraction: 0.00087,
       topocentricAltDeg: -60.755091,
       topocentricAzDeg: 242.246551,
@@ -258,11 +285,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: -23.434917,
       topocentricAltDeg: -26.685449,
       topocentricAzDeg: 209.139183,
+      geocentricEclipticLonDeg: 269.625145,
     },
     moon: {
       apparentRaDeg: 49.602771,
       apparentDecDeg: 24.445967,
-      geocentricPhaseAngleDeg: 36.2923,
+      geocentricEclipticLonDeg: 53.559885,
+      geocentricEclipticLatDeg: 5.106907,
       geocentricIlluminatedFraction: 0.90298,
       topocentricAltDeg: 30.63698,
       topocentricAzDeg: 347.630121,
@@ -284,11 +313,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: -0.047687,
       topocentricAltDeg: 23.467696,
       topocentricAzDeg: 153.898356,
+      geocentricEclipticLonDeg: 359.885427,
     },
     moon: {
       apparentRaDeg: 16.390239,
       apparentDecDeg: 9.684565,
-      geocentricPhaseAngleDeg: 160.6888,
+      geocentricEclipticLonDeg: 18.863988,
+      geocentricEclipticLatDeg: 3.369138,
       geocentricIlluminatedFraction: 0.028147,
       topocentricAltDeg: 28.635782,
       topocentricAzDeg: 133.416547,
@@ -310,11 +341,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: 23.436255,
       topocentricAltDeg: 46.705225,
       topocentricAzDeg: 149.349965,
+      geocentricEclipticLonDeg: 90.142812,
     },
     moon: {
       apparentRaDeg: 175.205195,
       apparentDecDeg: -0.797559,
-      geocentricPhaseAngleDeg: 94.7778,
+      geocentricEclipticLonDeg: 175.217,
+      geocentricEclipticLatDeg: -2.016746,
       geocentricIlluminatedFraction: 0.458358,
       topocentricAltDeg: -8.236085,
       topocentricAzDeg: 74.546531,
@@ -336,11 +369,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: 14.872052,
       topocentricAltDeg: 38.194379,
       topocentricAzDeg: 151.012924,
+      geocentricEclipticLonDeg: 139.808346,
     },
     moon: {
       apparentRaDeg: 139.64357,
       apparentDecDeg: 16.246546,
-      geocentricPhaseAngleDeg: 176.6137,
+      geocentricEclipticLonDeg: 136.651203,
+      geocentricEclipticLatDeg: 1.201874,
       geocentricIlluminatedFraction: 0.00087,
       topocentricAltDeg: 40.059179,
       topocentricAzDeg: 153.77085,
@@ -362,11 +397,13 @@ export const HORIZONS_REFERENCE: readonly HorizonCase[] = [
       apparentDecDeg: -23.439327,
       topocentricAltDeg: 0.824269,
       topocentricAzDeg: 160.385556,
+      geocentricEclipticLonDeg: 269.625145,
     },
     moon: {
       apparentRaDeg: 49.936283,
       apparentDecDeg: 22.612043,
-      geocentricPhaseAngleDeg: 36.2923,
+      geocentricEclipticLonDeg: 53.559885,
+      geocentricEclipticLatDeg: 5.106907,
       geocentricIlluminatedFraction: 0.90298,
       topocentricAltDeg: -2.086711,
       topocentricAzDeg: 16.765659,

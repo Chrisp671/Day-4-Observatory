@@ -9,8 +9,8 @@ import sys
 from urllib.parse import quote
 
 from api import GitHub, model_request
-from contract import (is_generated, strip_generated, IMAGES, SCHEMA, Incomplete, plan_entries, provider_config,
-                      read_artifact, relevant, require, safe_text, strict_json, validate_review)
+from contract import (is_generated, strip_generated, IMAGES, ROUTED_UNKNOWN, SCHEMA, Incomplete, plan_entries,
+                      provider_config, read_artifact, relevant, require, safe_text, strict_json, validate_review)
 
 MARKER = '<!-- day4-web-review -->'
 CHECK = 'Web review'
@@ -119,9 +119,13 @@ def source_context(github, pr, changed):
     return sources
 
 
-def render(review, repo, sha, provider, model, run_url, base_sha):
+def render(review, repo, sha, provider, model, run_url, base_sha, builder):
+    # builder is an allowlisted constant from provider_config, never raw PR text.
+    # Naming it keeps a skipped independence check (routed-unknown) visible to readers.
+    independence = 'independence not established' if builder == ROUTED_UNKNOWN else 'independent of the reviewer'
     lines = [MARKER, f'## Web review — `{sha[:12]}`',
              f'Model-generated review: `{provider}/{model}`. Base: `{base_sha[:12]}`.',
+             f'Builder family: `{builder}` ({independence}).',
              f'[Build and screenshots]({run_url})', '', safe_text(review['summary']), '', '### Findings', '']
     for i, finding in enumerate(review['findings'], 1):
         path = quote(finding['file'], safe='/')
@@ -214,7 +218,7 @@ def run_review(github, event):
                 + json.dumps(SCHEMA) + '\nTRUSTED RUBRIC:\n' + rubric)
             require(current(github, run, pr), 'PR changed while gathering evidence; rerun the build.')
             review = validate_review(model_request(provider, model, os.environ['REVIEW_API_KEY'], instructions, evidence, images), sources)
-            message = render(review, github.repo, run['head_sha'], provider, model, run_url, pr['base']['sha'])
+            message = render(review, github.repo, run['head_sha'], provider, model, run_url, pr['base']['sha'], builder)
             conclusion = 'failure' if any(f['severity'] == 'BLOCKING' for f in review['findings']) else 'success'
     except Incomplete as error:
         message = f'{MARKER}\n## Web review incomplete\n\nCommit: `{run["head_sha"]}`\n\n{safe_text(str(error))}\n\n[Build and evidence]({run_url})'

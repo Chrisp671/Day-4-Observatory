@@ -44,6 +44,38 @@ Tool-use and other unexpected blocks are rejected, even with an end-turn marker.
 The HTTP adapter retains no-redirect, size and time bounds. This amendment was
 walked through the Rafter ingestion/deployment and LLM/CWE questions before code.
 
+## Routed builders amendment
+
+The family declaration is the pipeline's input for calibrating trust in a review,
+and it accepted only named model families. A builder served through a gateway
+that hides the underlying model had no truthful value to give, and the gate told
+it to pick a family anyway. A guess there is worse than an admission, because
+downstream nothing can tell a guessed family from a verified one.
+
+`contract.py` therefore accepts one further value, `routed-unknown`, kept apart
+from `BUILDER_FAMILIES` as `ROUTED_UNKNOWN`. It means exactly: the builder ran as
+a routed model and its family cannot be established from inside the session. It
+is matched verbatim, case-sensitive and whole, so trailing text, alternate
+spellings and compounds such as `anthropic/routed-unknown` fail; the named
+families remain case-insensitive. The failure message now names both the
+families and this value.
+
+The cost is deliberate and confined to PRs declaring this value: the
+reviewer/builder independence check does not run for them, because a routed
+model is not guaranteed to differ from the reviewer's family (it may even be the
+reviewer's own). Nothing downstream compensates: the trusted rubric does not
+weight `builder_family`, so the reviewer model treats such a PR like any other.
+What the pipeline does instead is refuse to hide it: `render` prints the builder
+family on the comment header with "independence not established", so a human
+reader can tell an unchecked review from a checked one. Every named family keeps
+the check unchanged; the exactly-one-line rule, the refusal of provider and
+gateway names, and the rejection of near-misses all stay in force. Regression
+tests cover each of those five properties and the header line. Reviewer
+configuration is unaffected: the reviewer must still be a named provider and an
+allowlisted model. A rubric clause weighting `routed-unknown`, or a maintainer
+label required to accept it, is a possible follow-up and is not part of this
+amendment.
+
 ## Contract and ownership
 
 The pipeline owns `.github/workflows/review-web.yml`,

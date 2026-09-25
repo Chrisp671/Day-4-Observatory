@@ -11,9 +11,16 @@ from unittest.mock import patch
 import zipfile
 
 import api
+import contract
 import review
-from contract import (is_generated, strip_generated, CANON, IMAGES, Incomplete, plan_entries, provider_config,
-                      read_artifact, relevant, safe_text, strict_json, validate_review)
+from contract import (is_generated, strip_generated, BUILDER_FAMILIES, CANON, IMAGES, Incomplete, plan_entries,
+                      provider_config, read_artifact, relevant, ROUTED_UNKNOWN, safe_text, strict_json, validate_review)
+
+# One reviewer configuration per real family, so every family can be put on the
+# reviewer's side of the independence check (glm has no live reviewer route and
+# is patched into the Go allowlist for that test only).
+REVIEWERS = {'openai': ('openai', 'gpt-example'), 'anthropic': ('anthropic', 'claude-example'),
+             'google': ('google', 'gemini-example'), 'qwen': ('opencode-go', 'qwen3.7-plus'), 'glm': ('opencode-go', 'glm-example')}
 
 
 def good_review():
@@ -98,6 +105,55 @@ class ContractTests(unittest.TestCase):
                      ('opencode-go', 'gpt-example', 'Builder-Model-Family: openai'),
                      ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: openai\nBuilder-Model-Family: qwen')]:
             with self.assertRaises(Incomplete): provider_config(*args)
+
+    def test_real_families_stay_accepted_case_insensitively_and_exactly(self):
+        for family in BUILDER_FAMILIES:
+            reviewer = REVIEWERS['google' if family != 'google' else 'openai']
+            for spelling in (family, family.upper(), family.title()):
+                with self.subTest(spelling=spelling):
+                    self.assertEqual(provider_config(*reviewer, f'Builder-Model-Family: {spelling}\nCHK-004'), family)
+            for near_miss in (family + '2', family + '-routed', 'x' + family, f'{family} (via gateway)'):
+                with self.subTest(near_miss=near_miss), self.assertRaises(Incomplete):
+                    provider_config(*reviewer, f'Builder-Model-Family: {near_miss}')
+
+    def test_provider_and_gateway_names_are_not_families(self):
+        for vendor in ('opencode-go', 'opencode', 'openrouter', 'bedrock', 'vertex', 'azure', 'groq', 'gateway', 'proxy'):
+            for reviewer in REVIEWERS['google'], REVIEWERS['qwen']:
+                with self.subTest(vendor=vendor, reviewer=reviewer), self.assertRaises(Incomplete):
+                    provider_config(*reviewer, f'Builder-Model-Family: {vendor}')
+
+    def test_routed_unknown_is_accepted_only_verbatim(self):
+        for reviewer in REVIEWERS.values():
+            if reviewer[1] == 'glm-example':
+                continue
+            with self.subTest(reviewer=reviewer):
+                self.assertEqual(provider_config(*reviewer, f'Builder-Model-Family: {ROUTED_UNKNOWN}\nCHK-004'), ROUTED_UNKNOWN)
+        self.assertEqual(provider_config('google', 'gemini-example', f'Builder-Model-Family:\t{ROUTED_UNKNOWN} \r\nDEC-036'), ROUTED_UNKNOWN)
+        for value in (ROUTED_UNKNOWN.upper(), ROUTED_UNKNOWN.title(), 'Routed-unknown', ROUTED_UNKNOWN + '-ish',
+                      ROUTED_UNKNOWN + '2', ROUTED_UNKNOWN + ' (probably anthropic)', 'x' + ROUTED_UNKNOWN,
+                      ROUTED_UNKNOWN.replace('-', '_'), ROUTED_UNKNOWN.replace('-', ' '), 'routed', 'unknown',
+                      f'anthropic/{ROUTED_UNKNOWN}', f'{ROUTED_UNKNOWN}/anthropic', ROUTED_UNKNOWN + '*', '*'):
+            with self.subTest(value=value), self.assertRaises(Incomplete):
+                provider_config('opencode-go', 'qwen3.7-plus', f'Builder-Model-Family: {value}')
+
+    def test_exactly_one_declaration_line_is_still_required(self):
+        for body in ('', 'CHK-004 only', 'builder-model-family anthropic',
+                     'Builder-Model-Family: anthropic\nBuilder-Model-Family: anthropic',
+                     f'Builder-Model-Family: anthropic\nBuilder-Model-Family: {ROUTED_UNKNOWN}',
+                     f'Builder-Model-Family: {ROUTED_UNKNOWN}\nBuilder-Model-Family: {ROUTED_UNKNOWN}',
+                     f'Builder-Model-Family: {ROUTED_UNKNOWN}\r\nbuilder-model-family: google'):
+            with self.subTest(body=body), self.assertRaises(Incomplete):
+                provider_config('google', 'gemini-example', body)
+
+    def test_builder_sharing_the_reviewer_family_is_refused_for_every_real_family(self):
+        with patch.dict(contract.OPENCODE_GO_MODELS, {'glm-example': 'glm'}):
+            for family, reviewer in REVIEWERS.items():
+                self.assertIn(family, BUILDER_FAMILIES)
+                for spelling in (family, family.upper()):
+                    with self.subTest(family=family, spelling=spelling), self.assertRaises(Incomplete):
+                        provider_config(*reviewer, f'Builder-Model-Family: {spelling}\nCHK-004')
+                other = next(f for f in BUILDER_FAMILIES if f != family)
+                self.assertEqual(provider_config(*reviewer, f'Builder-Model-Family: {other}'), other)
 
     def test_context_includes_changed_files_and_only_direct_imports(self):
         files = {

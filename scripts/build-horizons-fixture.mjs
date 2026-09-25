@@ -53,9 +53,13 @@
  */
 
 import { mkdir, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
+
+// astronomy-engine is the web app's dependency, so resolve it from web/ the
+// way the browser drivers reach playwright through scripts/review/package.json.
+const {
   Body,
   Equator,
   Horizon,
@@ -65,7 +69,7 @@ import {
   Refraction,
   SearchRiseSet,
   SiderealTime,
-} from "../web/node_modules/astronomy-engine/esm/astronomy.js";
+} = createRequire(new URL("../web/package.json", import.meta.url))("astronomy-engine");
 
 // The engine's day-anchored helpers use local midnight, so the fixture is
 // generated with the process pinned to UTC and the test pins itself the same

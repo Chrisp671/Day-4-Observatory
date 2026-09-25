@@ -17,6 +17,18 @@ IMAGES = {f'{device}-{state}.png': size for device, (size, states) in DEVICES.it
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}
 OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
 
+# Families a PR may declare as its builder. The first five are model families.
+# 'routed' is not one: it is the honest declaration for a PR whose builder ran
+# as a routed model, where the underlying family is not knowable from inside the
+# session. The alternative was to name a family nobody can verify, in the one
+# field this pipeline uses to calibrate how much to trust the review.
+#
+# What it costs, stated plainly: a 'routed' builder is no longer guaranteed to
+# differ from the reviewer's family, so the anti-self-review property the last
+# line of provider_config() enforces does not hold for those PRs. What it buys
+# is that the field is never a guess. Owner decision, 2026-09-25.
+BUILDER_FAMILIES = ('openai', 'anthropic', 'google', 'qwen', 'glm', 'routed')
+
 
 class Incomplete(Exception):
     """Safe to publish: pipeline diagnostics or bounded, redacted provider error excerpts."""
@@ -156,8 +168,8 @@ def provider_config(provider, model, body):
     declarations = re.findall(r'^Builder-Model-Family:[ \t]*([^\r\n]*)\r?$', body, re.M | re.I)
     require(len(declarations) == 1, 'PR body must contain exactly one Builder-Model-Family line.')
     builder = declarations[0].strip().lower()
-    require(builder in ('openai', 'anthropic', 'google', 'qwen', 'glm'),
-            'Builder-Model-Family must be openai, anthropic, google, qwen or glm (not a proxy provider).')
+    require(builder in BUILDER_FAMILIES,
+            'Builder-Model-Family must be one of ' + ', '.join(BUILDER_FAMILIES) + '.')
     require(builder != family, 'Reviewer and builder must use different model families.')
     return builder
 

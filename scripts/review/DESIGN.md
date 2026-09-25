@@ -36,7 +36,11 @@ images. The new adapter uses only the fixed HTTPS endpoint
 `https://opencode.ai/zen/go/v1/messages`; it does not accept arbitrary
 OpenAI-compatible base URLs. The allowlist initially contains only `qwen3.7-plus`,
 mapped to the underlying `qwen` family. A proxy's provider name is not a
-model family and cannot evade independence checks. Unknown/text-only models fail
+model family and cannot evade independence checks. One exception was admitted
+later: a PR may declare `routed`, meaning its builder ran as a routed model
+whose family cannot be established from inside the session. That trades the
+independence check for a field that is never a guess, and only for PRs that
+declare it (owner decision, 2026-09-25). Unknown/text-only models fail
 before a paid request. Credentials remain step-scoped and no new dependency is
 introduced. Responses must end normally. Only text and reasoning blocks are accepted;
 reasoning is discarded and only final text enters the strict review validator.

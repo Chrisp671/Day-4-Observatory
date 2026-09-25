@@ -38,12 +38,21 @@ Implements DEC-036 and WI-027.
 ```
 
 The family declaration is required, case-insensitive, and must appear exactly once
-on its own line. Accepted families are `openai`, `anthropic`, `google`, and
-`qwen`. Models from the same developer count as one family, conservatively;
+on its own line. Accepted families are `openai`, `anthropic`, `google`, `qwen` and
+`glm`. Models from the same developer count as one family, conservatively;
 using a different API gateway does not establish independence. OpenCode Go is a
 gateway, not a family: its initially allowlisted `qwen3.7-plus` maps to `qwen`.
 Other Go models are rejected until explicitly reviewed and added with their family
-and vision capability. The Messages adapter discards reasoning blocks and validates
+and vision capability.
+
+`routed` is also accepted, and it is the one value here that is not a family. It
+is for a PR whose builder ran as a routed model, where the underlying family
+cannot be established from inside the session. The alternative was to name a
+family nobody can verify, in the one field this pipeline uses to calibrate how
+much to trust the review. The cost is specific and worth stating: for a `routed`
+builder the independence check does not bite, because a routed model is not
+guaranteed to differ from the reviewer's family. Every other accepted value keeps
+that check. Owner decision, 2026-09-25. The Messages adapter discards reasoning blocks and validates
 only the final JSON review; tool-use blocks and truncated answers fail. For multiple builders, use a
 reviewer provider different from all of them and document the contributors; the
 current machine-readable field records the lead builder only. Model provenance

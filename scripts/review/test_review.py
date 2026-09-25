@@ -87,6 +87,16 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(provider_config('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: anthropic'), 'anthropic')
         self.assertEqual(provider_config('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: glm'), 'glm')
         self.assertEqual(provider_config('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: OPENAI\r\nCHK-004'), 'openai')
+
+    def test_routed_builder_is_declared_truthfully(self):
+        # A routed builder cannot name a family it cannot verify, so 'routed' is
+        # accepted for every reviewer provider, including the qwen one.
+        for provider, model in [('google', 'gemini-example'), ('openai', 'gpt-example'),
+                                ('anthropic', 'claude-example'), ('opencode-go', 'qwen3.7-plus')]:
+            self.assertEqual(provider_config(provider, model, 'Builder-Model-Family: routed'), 'routed')
+            self.assertEqual(provider_config(provider, model, 'Builder-Model-Family: ROUTED\r\nDEC-002'), 'routed')
+
+    def test_provider_names_are_not_families(self):
         for args in [('google', 'gemini-example', 'Builder-Model-Family: google'),
                      ('openai', 'claude-example', 'Builder-Model-Family: google'),
                      ('openai', '../evil', 'Builder-Model-Family: google'),
@@ -94,6 +104,7 @@ class ContractTests(unittest.TestCase):
                      ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: qwen'),
                      ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: opencode-go'),
                      ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: GLM\r\nBuilder-Model-Family: glm'),
+                     ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: routed/whatever'),
                      ('opencode-go', 'mimo-v2.5-pro', 'Builder-Model-Family: openai'),
                      ('opencode-go', 'gpt-example', 'Builder-Model-Family: openai'),
                      ('opencode-go', 'qwen3.7-plus', 'Builder-Model-Family: openai\nBuilder-Model-Family: qwen')]:

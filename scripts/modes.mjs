@@ -80,7 +80,7 @@ try {
     await settle(page);
 
     // 1. First visit opens Day 4, and only Day 4 is in the layout.
-    assert.equal(await selectedTab(page), "Day 4", "first visit should open Day 4");
+    assert.equal(await selectedTab(page), "Stargazer", "first visit should open Stargazer");
     assert.deepEqual(await visibleViews(page), ["view-day4"]);
     assert.equal(await page.evaluate(() => localStorage.getItem("day4.mode")), null, "nothing saved until chosen");
     const dialBefore = await dialCssWidth(page);
@@ -119,11 +119,11 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.textContent), "Constellations", "focus follows selection");
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("ArrowRight");
-    assert.equal(await selectedTab(page), "Day 4", "ArrowRight wraps round to Day 4");
+    assert.equal(await selectedTab(page), "Stargazer", "ArrowRight wraps round to Stargazer");
     await page.keyboard.press("End");
     assert.equal(await selectedTab(page), "Planets", "End jumps to the last view");
     await page.keyboard.press("Home");
-    assert.equal(await selectedTab(page), "Day 4", "Home jumps to Day 4");
+    assert.equal(await selectedTab(page), "Stargazer", "Home jumps to Stargazer");
     const tabStops = await page.locator('[role="tab"]').evaluateAll((ts) => ts.map((t) => t.tabIndex));
     assert.deepEqual(tabStops, [0, -1, -1], "one tab stop: the selected tab");
 
@@ -142,7 +142,7 @@ try {
     assert.equal(await page.locator("#focus-clock").evaluate((e) => e.classList.contains("shifted")), true,
       "the shared clock is marked as travelled, like Day 4's");
     await shot(page, `${vp.name}-planets-travelled.png`);
-    await tab(page, "Day 4").click();
+    await tab(page, "Stargazer").click();
     assert.equal(await page.locator("#travelled").textContent(), (await page.locator("#travelled").textContent()));
     assert(/October/.test(await page.locator("#travelled").textContent()), "Day 4 keeps the travelled date after a round trip");
 

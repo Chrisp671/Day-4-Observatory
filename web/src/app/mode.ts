@@ -1,9 +1,10 @@
 /**
  * THE MODES — one instrument, three views (DEC-038, REQ-013).
  *
- *   Day 4 · Constellations · Planets
+ *   Stargazer · Constellations · Planets
  *
- * Day 4 is the completed experience (the Parker walkthrough, DEC-031..036),
+ * Stargazer (labelled "Day 4" until DEC-040; its id stays `day4` so a
+ * remembered choice survives the rename) is the completed experience (the Parker walkthrough, DEC-031..036),
  * kept exactly as it is. Constellations and Planets are focused views that
  * share its station and its displayed time; switching changes what is shown,
  * never where or when.
@@ -25,9 +26,9 @@ export interface ModeInfo {
   readonly label: string;
 }
 
-/** In selector order; Day 4 first because it is the instrument itself. */
+/** In selector order; Stargazer first because it is the instrument itself. */
 export const MODES: readonly ModeInfo[] = [
-  { mode: "day4", label: "Day 4" },
+  { mode: "day4", label: "Stargazer" },
   { mode: "constellations", label: "Constellations" },
   { mode: "planets", label: "Planets" },
 ];

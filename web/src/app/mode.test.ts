@@ -18,9 +18,9 @@ function fakeStore(initial: Record<string, string> = {}): ModeStore & { map: Map
 }
 
 describe("the three modes", () => {
-  it("are Day 4, Constellations and Planets, in that order, Day 4 first", () => {
+  it("are Stargazer, Constellations and Planets, in that order, Stargazer first (id day4, DEC-040)", () => {
     expect(MODES.map((m) => m.mode)).toEqual(["day4", "constellations", "planets"]);
-    expect(MODES.map((m) => m.label)).toEqual(["Day 4", "Constellations", "Planets"]);
+    expect(MODES.map((m) => m.label)).toEqual(["Stargazer", "Constellations", "Planets"]);
     expect(DEFAULT_MODE).toBe("day4");
   });
 

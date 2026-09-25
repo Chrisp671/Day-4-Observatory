@@ -230,7 +230,7 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.closest(".pdetail")?.id), "planet-detail-saturn");
 
     /* ————— A polar station: rows survive missing rings ————— */
-    await page.getByRole("tab", { name: "Day 4", exact: true }).click();
+    await page.getByRole("tab", { name: "Stargazer", exact: true }).click();
     await page.locator("#station").click();
     await page.locator("#lat-in").fill("85");
     await page.locator("#lon-in").fill("-74");

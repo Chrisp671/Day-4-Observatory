@@ -95,11 +95,17 @@ try {
     // Every request for a planet photo, with its size: Day 4 must make none,
     // and the Planets view fetches each picture once, only when its row opens.
     const photoRequests = [];
+    // Anchored to the page's own directory, so the check reads the same at any
+    // mount and a request for /planets/… at the origin root (the CR-1 bug) or
+    // under any other path is never mistaken for a photo beside the page.
+    const pageDir = new URL(".", target).pathname;
     page.on("response", async (r) => {
       const path = new URL(r.url()).pathname;
-      if (path.includes("/planets/")) {
-        // Recorded relative to the page, so the check reads the same at any mount.
-        photoRequests.push({ path: path.slice(path.indexOf("/planets/") + 1), status: r.status(), bytes: (await r.body()).length });
+      const rel = path.startsWith(pageDir) ? path.slice(pageDir.length) : null;
+      if (rel !== null && rel.startsWith("planets/")) {
+        photoRequests.push({ path: rel, status: r.status(), bytes: (await r.body()).length });
+      } else if (/\/planets\/[^/]+\.jpg$/.test(path)) {
+        photoRequests.push({ path, status: r.status(), bytes: 0, misplaced: true });
       }
     });
     await page.clock.setFixedTime(new Date(FIXED_TIME));

@@ -63,12 +63,18 @@ families and this value.
 The cost is deliberate and confined to PRs declaring this value: the
 reviewer/builder independence check does not run for them, because a routed
 model is not guaranteed to differ from the reviewer's family (it may even be the
-reviewer's own). The review is therefore calibrated as if independence were
-unknown, never as if it were established. Every named family keeps the check
-unchanged; the exactly-one-line rule, the refusal of provider and gateway names,
-and the rejection of near-misses all stay in force. Regression tests cover each
-of those five properties. Reviewer configuration is unaffected: the reviewer must
-still be a named provider and an allowlisted model.
+reviewer's own). Nothing downstream compensates: the trusted rubric does not
+weight `builder_family`, so the reviewer model treats such a PR like any other.
+What the pipeline does instead is refuse to hide it: `render` prints the builder
+family on the comment header with "independence not established", so a human
+reader can tell an unchecked review from a checked one. Every named family keeps
+the check unchanged; the exactly-one-line rule, the refusal of provider and
+gateway names, and the rejection of near-misses all stay in force. Regression
+tests cover each of those five properties and the header line. Reviewer
+configuration is unaffected: the reviewer must still be a named provider and an
+allowlisted model. A rubric clause weighting `routed-unknown`, or a maintainer
+label required to accept it, is a possible follow-up and is not part of this
+amendment.
 
 ## Contract and ownership
 

@@ -155,6 +155,14 @@ class ContractTests(unittest.TestCase):
                 other = next(f for f in BUILDER_FAMILIES if f != family)
                 self.assertEqual(provider_config(*reviewer, f'Builder-Model-Family: {other}'), other)
 
+    def test_rendered_review_names_the_builder_family_and_a_skipped_independence_check(self):
+        args = (good_review(), 'Chrisp671/Day-4-Observatory', 'a' * 40, 'opencode-go', 'qwen3.7-plus', 'https://example.test/run', 'b' * 40)
+        routed = review.render(*args, ROUTED_UNKNOWN)
+        self.assertIn(f'Builder family: `{ROUTED_UNKNOWN}` (independence not established).', routed)
+        checked = review.render(*args, 'anthropic')
+        self.assertIn('Builder family: `anthropic` (independent of the reviewer).', checked)
+        self.assertNotIn('not established', checked)
+
     def test_context_includes_changed_files_and_only_direct_imports(self):
         files = {
             'web/src/main.ts': "import {x} from './dep.js'; export {y} from './barrel'; import('./lazy');",

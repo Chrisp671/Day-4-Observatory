@@ -26,7 +26,8 @@ BUILDER_FAMILIES = ('openai', 'anthropic', 'google', 'qwen', 'glm')
 # above, so it is typed on purpose rather than reached by a near-miss. Cost, for
 # PRs declaring this value only: the reviewer/builder independence check cannot
 # run, because a routed model is not guaranteed to differ from the reviewer's
-# family; the review is calibrated as if independence were unknown.
+# family. Nothing downstream compensates; the published comment names the
+# builder family so the skipped check is visible rather than silent.
 ROUTED_UNKNOWN = 'routed-unknown'
 
 

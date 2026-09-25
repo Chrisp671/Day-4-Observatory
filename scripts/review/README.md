@@ -58,8 +58,9 @@ unknown is not. It is matched verbatim, unlike the families: not
 `Routed-Unknown`, not `routed-unknown-ish`, not `anthropic/routed-unknown`. The
 cost is real and applies only to PRs declaring this value: the reviewer/builder
 independence check cannot run, because a routed model is not guaranteed to differ
-from the reviewer's family, so such a review is calibrated as if independence
-were unknown rather than established. Every named family keeps the check.
+from the reviewer's family. Nothing downstream compensates for that; the review
+comment names the builder family and says "independence not established" so the
+skipped check is visible to readers. Every named family keeps the check.
 
 No model is silently chosen. An invalid family, missing citation/key/variable,
 unsupported model, timeout, oversized evidence, malformed output, incomplete

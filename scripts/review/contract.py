@@ -16,6 +16,19 @@ DEVICES = {'phone': ((390, 844), STATES), 'tablet': ((820, 1180), ('loaded', 'pl
 IMAGES = {f'{device}-{state}.png': size for device, (size, states) in DEVICES.items() for state in states}
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}
 OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
+# Real model families a builder may declare, matched case-insensitively. A
+# proxy or gateway vendor (OpenCode Go, OpenRouter, Bedrock...) is not a family:
+# routing through a different gateway does not establish independence.
+BUILDER_FAMILIES = ('openai', 'anthropic', 'google', 'qwen', 'glm')
+# The one honest declaration for a builder served through a gateway whose
+# underlying model cannot be identified from inside the session. Matched
+# verbatim (case-sensitive, no prefix, suffix or compound), unlike the families
+# above, so it is typed on purpose rather than reached by a near-miss. Cost, for
+# PRs declaring this value only: the reviewer/builder independence check cannot
+# run, because a routed model is not guaranteed to differ from the reviewer's
+# family. Nothing downstream compensates; the published comment names the
+# builder family so the skipped check is visible rather than silent.
+ROUTED_UNKNOWN = 'routed-unknown'
 
 
 class Incomplete(Exception):
@@ -155,9 +168,14 @@ def provider_config(provider, model, body):
         family = provider
     declarations = re.findall(r'^Builder-Model-Family:[ \t]*([^\r\n]*)\r?$', body, re.M | re.I)
     require(len(declarations) == 1, 'PR body must contain exactly one Builder-Model-Family line.')
-    builder = declarations[0].strip().lower()
-    require(builder in ('openai', 'anthropic', 'google', 'qwen', 'glm'),
-            'Builder-Model-Family must be openai, anthropic, google, qwen or glm (not a proxy provider).')
+    declared = declarations[0].strip()
+    if declared == ROUTED_UNKNOWN:
+        # No family to compare against the reviewer's: independence is unknown, not established.
+        return declared
+    builder = declared.lower()
+    require(builder in BUILDER_FAMILIES,
+            f'Builder-Model-Family must be {", ".join(BUILDER_FAMILIES[:-1])} or {BUILDER_FAMILIES[-1]} '
+            f'(not a proxy provider), or exactly {ROUTED_UNKNOWN} when a gateway hides the builder model.')
     require(builder != family, 'Reviewer and builder must use different model families.')
     return builder
 

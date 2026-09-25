@@ -1,27 +1,99 @@
 # Repository Guidelines
 
-## Project Structure & Module Organization
-`Classes/` contains the Objective-C and Objective-C++ app code, including controllers such as `MainViewController.mm`, rendering code in `EOClock.mm`, and shared utilities. `EC/` holds supporting audio code. UI resources live in `Resources/` and `Resources-iPad/` as `.xib`, images, audio, and help files. Localized strings are stored in `*.lproj/Localizable.strings`. The Xcode project is [`Observatory.xcodeproj`](./Observatory.xcodeproj), and maintenance scripts live in `scripts/`.
+## What lives here
 
-## Build, Test, and Development Commands
-Open the app in Xcode with `open Observatory.xcodeproj` and run the `Observatory` scheme on an iPad simulator or device.
+- **`web/` is the product.** Day4 Observatory, a public web app (Vite + strict
+  TypeScript + Canvas 2D) at <https://chrisp671.github.io/Day-4-Observatory/>.
+  It has three views: **Stargazer** (internal id `day4` — the original clock
+  instrument), **Constellations**, and **Planets**. The brand is Day4
+  Observatory under Day4 Astronomy; only the first view's label changed under
+  DEC-040, its internal id did not.
+- **`Classes/`, `EC/`, `Resources*/` are the parked Objective-C++ original**,
+  kept as the behavioural spec for porting. No iOS work, App Store publishing or
+  AI feature work is in scope (PLAN.md DEC-006) without a new DEC.
+- **`PLAN.md` is the plan of record** — DEC-xxx, REQ-xxx, CHK-xxx, WI-xxx,
+  QST-xxx. Read it before changing intent.
 
-Use `xcodebuild -project Observatory.xcodeproj -scheme Observatory -configuration Debug build` to perform a command-line build.
+## Commands
 
-Use `xcodebuild -project Observatory.xcodeproj -scheme Observatory -destination "platform=iOS Simulator,name=iPad (10th generation)" build` for a simulator build check.
+All from `web/`, Node 22:
 
-There is no dedicated test target in this repository today, so verification is primarily build-based plus manual smoke testing.
+```shell
+npm ci
+npm test                # vitest run — 207 tests
+npx tsc --noEmit        # strict
+npm run build           # tsc --noEmit && vite build
+npm run dev
+```
 
-## Coding Style & Naming Conventions
-Match the existing file style: tabs are common in older files, braces stay on the same line, and Objective-C method formatting should remain unchanged within touched files. Preserve the `.m`/`.mm` split: use `.mm` only when C++ interop is required. Class names use the existing prefixes (`EO`, `EC`), constants are uppercase macros in `Constants.h`, and localized keys should stay stable across languages.
+CI runs test and build on every push to `main` and a required **Web review** on
+every PR. `main` is protected (strict, admins enforced) — never bypass it without
+the owner's explicit OK.
 
-## Testing Guidelines
-Before submitting, build the app and manually verify the affected flow in the simulator. For UI changes, check both portrait and landscape layouts, the main observatory screen, and the info/options screen. If you edit localization or help content, confirm the relevant `.strings` file still loads cleanly and that text appears in-app.
+Browser drivers for layout, keyboard and rendering work, after
+`npx vite preview --port 4173 --strictPort --host 127.0.0.1`:
+`node scripts/modes.mjs|planets.mjs|constellations.mjs <url>`. To reproduce the
+GitHub Pages mount (assets resolve wrong at the origin root otherwise):
+`node scripts/serve-mounted.mjs Day-4-Observatory 4174`. Pixel comparison:
+`node scripts/review/capture.mjs` then `node scripts/compare-shots.mjs before
+after [allowedState…]`.
 
-## Commit & Pull Request Guidelines
-Recent commits use short, imperative subjects such as `Update README.md` and `Add .gitignore file`. Follow that pattern: one concise summary line per commit.
+`gh` needs `-R Chrisp671/Day-4-Observatory`; bare `gh` hits the upstream fork.
+PR bodies carry exactly one `Builder-Model-Family:` line naming your own model
+family, and cite plain three-digit IDs.
 
-Pull requests should include a brief problem statement, the user-visible change, manual verification steps, and screenshots for UI or text-layout changes. Note any edited localization files and any external dependency assumptions from the README.
+## Module organization
 
-## Configuration Notes
-This app depends on sibling Emerald Sequoia libraries outside this repo. Read [`README.md`](./README.md) before attempting a full build on a new machine.
+```
+web/src/main.ts            what a viewer can change (~210 lines)
+web/src/app/shell.ts       the only file that knows an element id; binds input, paints a Scene
+web/src/app/scene.ts       SEAM-003: everything the page shows, in dial units and final strings
+web/src/app/scene-*.ts     light/band/sun/moon/earth/marks, rete/readouts/tonight/transcript
+web/src/engine/frame.ts    SEAM-001: frame(unixMillis, lat, lon) -> FrameState (the only astronomy call)
+web/src/ui/*.ts            pure painters, one Scene slice each
+```
+
+Preserve the three seams. Views never call an astronomy API; the shell and
+painters know no astronomy, no milliseconds and no caching. A new UI painter is a
+pure function of a Scene slice — if it needs data the Scene does not carry,
+extend the contract as a reviewed change, not by reaching around it.
+
+## Style
+
+Follow the file you are editing: the codebase is deliberately consistent about
+method shape, no semicolon-free tricks, and unit tests sitting beside the module
+as `<name>.test.ts`. All user-visible text reaches the DOM via `textContent`.
+Maths stays 24-hour inside; display converts at the edge (`app/clock12.ts`).
+Colours come from the theme tokens in `ui/theme.ts` — never a second palette
+(`PLANET_COLORS` is one token shared by ring, swatch and band).
+
+## Testing
+
+Every behavioural change ships with a test. The port pattern is a pure-math
+module plus a **convention** test (noon-top, clockwise, north-up) with a thin
+draw module on top; that is what mitigates RSK-001. For UI, layout, keyboard or
+asset changes, run the matching driver script at both 390×844 and 820×1180 and
+add or update a capture state. `npx tsc --noEmit` clean and `npm test` green are
+required. If you add or regenerate a vendored asset, update
+`web/public/ATTRIBUTION.md` with source and SHA-256 — the attribution tests
+check it.
+
+## Commits and pull requests
+
+One concise imperative subject per commit, in the repo's existing style. A PR
+body states the problem, the user-visible change, how it was verified, and cites
+the PLAN.md IDs it advances. Note any edited localisation or attribution file.
+Screenshots for UI or text-layout changes — and a real phone check when the
+change is visual, since a screenshot loop has passed a design a phone rejected.
+
+## Configuration notes
+
+`web/package.json` has one runtime dependency, `astronomy-engine` (MIT). The
+chart data under `web/public/charts/` comes from d3-celestial (BSD-3-Clause,
+pinned commit) and is regenerated by `scripts/build-charts.py`; the planet photos
+under `web/public/planets/` are vendored NASA public-domain images. All are
+same-origin; the page's only third-party requests are its own web fonts.
+
+The parked iOS app depends on four sibling Emerald Sequoia libraries outside this
+repo at unpinned HEAD (`scripts/bootstrap_dependencies.sh`, RSK-002) — do not run
+it while iOS is parked.

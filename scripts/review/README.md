@@ -37,17 +37,30 @@ Builder-Model-Family: anthropic
 Implements DEC-036 and WI-027.
 ```
 
-The family declaration is required, case-insensitive, and must appear exactly once
-on its own line. Accepted families are `openai`, `anthropic`, `google`, and
-`qwen`. Models from the same developer count as one family, conservatively;
-using a different API gateway does not establish independence. OpenCode Go is a
-gateway, not a family: its initially allowlisted `qwen3.7-plus` maps to `qwen`.
-Other Go models are rejected until explicitly reviewed and added with their family
-and vision capability. The Messages adapter discards reasoning blocks and validates
-only the final JSON review; tool-use blocks and truncated answers fail. For multiple builders, use a
-reviewer provider different from all of them and document the contributors; the
-current machine-readable field records the lead builder only. Model provenance
-is declared, not cryptographically verified.
+The family declaration is required and must appear exactly once on its own line.
+Accepted families are `openai`, `anthropic`, `google`, `qwen` and `glm`, matched
+case-insensitively and exactly (`BUILDER_FAMILIES` in `contract.py`). Models from
+the same developer count as one family, conservatively; using a different API
+gateway does not establish independence. OpenCode Go is a gateway, not a family:
+its initially allowlisted `qwen3.7-plus` maps to `qwen`. Other Go models are
+rejected until explicitly reviewed and added with their family and vision
+capability. The Messages adapter discards reasoning blocks and validates only the
+final JSON review; tool-use blocks and truncated answers fail. For multiple
+builders, use a reviewer provider different from all of them and document the
+contributors; the current machine-readable field records the lead builder only.
+Model provenance is declared, not cryptographically verified.
+
+One more value is accepted, `routed-unknown`, meaning the builder ran as a routed
+model served through a gateway and its underlying model family could not be
+established from inside the session. Use it instead of guessing: a plausible
+family is indistinguishable downstream from a verified one, while an honest
+unknown is not. It is matched verbatim, unlike the families: not
+`Routed-Unknown`, not `routed-unknown-ish`, not `anthropic/routed-unknown`. The
+cost is real and applies only to PRs declaring this value: the reviewer/builder
+independence check cannot run, because a routed model is not guaranteed to differ
+from the reviewer's family. Nothing downstream compensates for that; the review
+comment names the builder family and says "independence not established" so the
+skipped check is visible to readers. Every named family keeps the check.
 
 No model is silently chosen. An invalid family, missing citation/key/variable,
 unsupported model, timeout, oversized evidence, malformed output, incomplete

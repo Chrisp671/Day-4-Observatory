@@ -5,7 +5,41 @@ on:
   push:
     branches:
       - main
+    # The iOS app is parked (PLAN.md DEC-006). It still builds, and that is worth
+    # knowing, but a web-only change should not spend macOS minutes on a
+    # subsystem nobody is working on. It runs when the app's own sources change,
+    # and on demand.
+    paths:
+      - "Classes/**"
+      - "EC/**"
+      - "Resources/**"
+      - "Resources-iPad/**"
+      - "*.lproj/**"
+      - "Observatory.xcodeproj/**"
+      - "main.mm"
+      - "Observatory-Info.plist"
+      - "Observatory_Prefix.pch"
+      - "scripts/bootstrap_dependencies.sh"
+      - "scripts/doctor.sh"
+      - "scripts/build_simulator.sh"
+      - "scripts/checkForNSCalendar.pl"
+      - ".github/workflows/ios-simulator-build.yml"
   pull_request:
+    paths:
+      - "Classes/**"
+      - "EC/**"
+      - "Resources/**"
+      - "Resources-iPad/**"
+      - "*.lproj/**"
+      - "Observatory.xcodeproj/**"
+      - "main.mm"
+      - "Observatory-Info.plist"
+      - "Observatory_Prefix.pch"
+      - "scripts/bootstrap_dependencies.sh"
+      - "scripts/doctor.sh"
+      - "scripts/build_simulator.sh"
+      - "scripts/checkForNSCalendar.pl"
+      - ".github/workflows/ios-simulator-build.yml"
 
 permissions:
   contents: read

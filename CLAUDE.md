@@ -11,16 +11,24 @@ Two things live here, and only one of them is being built.
   Objective-C++ from Emerald Observatory (MIT, a community fork of
   github.com/EmeraldSequoia, upstream last commit 2023-11-09). It is kept as the
   **behavioural spec** while porting — read it to learn what a view is supposed
-  to do — not as code to build. It has never been built from this repo: it needs
-  four sibling libraries (`esutil`, `estime`, `eslocation`, `esastro`) at
-  unpinned HEAD that are not on disk, and it has no test target.
+  to do — not as code to build. It has no test target.
 
 An earlier version of this file described reviving the iOS app for the App Store
 with an AI roadmap. **That is not the project's direction.** iOS work, App Store
 publishing and AI features are v1 non-goals (PLAN.md DEC-006, section 4) and
-are not to be started without a new DEC from the owner. `RSK-002` (unpinned
-archived dependencies) is the one thing that must be fixed before any iOS build
-resumes.
+are not to be started without a new DEC from the owner.
+
+**The parked iOS app does still build, in CI.** `ios-simulator-build.yml` runs
+`scripts/build_simulator.sh` on a macOS runner and uploads the simulator app. It
+is restricted by `paths:` to the app's own sources, so it does not run for
+web-only changes, and it can be run by hand. That matters more than it sounds:
+the build needs four sibling libraries from the third-party EmeraldSequoia org,
+which is **not archived** — `esutil`, `estime`, `eslocation` and `esastro` were
+last pushed 2026-09-16, and this repository has read-only access to them. So
+`scripts/bootstrap_dependencies.sh` fetches each one at a **pinned commit**
+recorded in its own table, not at HEAD. RSK-002 is closed as of 2026-09-25.
+Changing what is trusted means editing that table, in a commit of its own, with
+a green build — never as a side effect of a rebuild.
 
 **PLAN.md is the plan of record.** Decisions are DEC-xxx, requirements REQ-xxx,
 checks CHK-xxx, work items WI-xxx, open questions QST-xxx. Read it before
@@ -51,7 +59,7 @@ Node 22, all commands from `web/`:
 
 ```shell
 npm ci
-npm test                # vitest run — 207 tests
+npm test                # vitest run — 343 tests
 npx tsc --noEmit        # strict; also runs as part of npm run build
 npm run build           # tsc --noEmit && vite build  (relative base, for the Pages mount)
 npm run dev
@@ -81,8 +89,18 @@ then `node scripts/compare-shots.mjs before after [allowedState…]`, which fail
 if any capture outside the allowed states differs.
 
 `gh` always needs `-R Chrisp671/Day-4-Observatory`; bare `gh` hits the upstream
-fork. PR bodies carry exactly one `Builder-Model-Family:` line naming your own
-model family, and cite plain three-digit IDs (`DEC-040`, `CHK-005`).
+fork. PR bodies carry exactly one `Builder-Model-Family:` line, and cite plain
+three-digit IDs (`DEC-040`, `CHK-005`).
+
+Name the family your model actually belongs to — `openai`, `anthropic`, `google`,
+`qwen` or `glm` — and it must not be the reviewer's family, or the gate refuses
+the PR. If you are running as a **routed** model and genuinely cannot tell which
+family that is, declare `routed-unknown` rather than guessing: that value exists
+because a plausible-looking guess in this field is indistinguishable from a
+verified one to everything downstream. It is matched verbatim, so it must be
+typed exactly, and the independence check does not run for it — the published
+review comment says so in a `Builder family:` line. `scripts/review/README.md`
+has the full rules.
 
 ## Architecture
 

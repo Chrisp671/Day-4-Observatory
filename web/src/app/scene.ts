@@ -95,6 +95,10 @@ export interface SceneSun {
 export interface SceneMoon {
   readonly hours: number;
   readonly phaseAngleDeg: number;
+  /** Lit area of the disc, 0..1, straight from the engine. The disc draws this. */
+  readonly illuminatedFraction: number;
+  /** True while the moon is growing; decides which side of the disc is lit. */
+  readonly waxing: boolean;
   /** Orbit radius as a fraction of R. */
   readonly orbit: number;
   /** Today's up-arc, rise to the following set; null on the no-moonrise day. */

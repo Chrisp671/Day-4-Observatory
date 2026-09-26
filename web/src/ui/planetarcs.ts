@@ -30,6 +30,27 @@ const STROKE: Readonly<Record<RingWeight, { readonly width: number; readonly alp
   dim: { width: 2.2, alpha: 0.24 },
 };
 
+/** The weight ladder, dimmest last — "honest by night and day" (DEC-036). */
+export const RING_STROKE = STROKE;
+
+/**
+ * How many hours of the dial one ring spans, from rise to set.
+ *
+ * The scene hands over plain local hours, so a planet that rises at 23:58 and
+ * sets at 14:22 tomorrow arrives with `setHours < riseHours`. **That is correct,
+ * not a bug**: the dial is cyclic and `ctx.arc` sweeps clockwise and wraps at a
+ * full turn, so `arc(a0, a1)` with `a1 < a0` draws the sweep the long way
+ * round — which for a body up across midnight is the right way round. About 46%
+ * of rise/set pairs cross midnight, so this is the common case, not an edge one.
+ *
+ * **Do not "fix" this by normalising the end below the start.** Doing so would
+ * draw a planet that is up 14 hours as a 10-hour arc the wrong side of the dial.
+ * The same reasoning gives `bandArcs` its `+ 24` in dial.ts.
+ */
+export function ringSweepHours(riseHours: number, setHours: number): number {
+  return (((setHours - riseHours) % 24) + 24) % 24;
+}
+
 /** A small radially-aligned diamond, centred on the ring at `angle`. */
 function diamond(
   ctx: CanvasRenderingContext2D,

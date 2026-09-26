@@ -11,6 +11,45 @@ import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
 import { goldLeaf, THEME } from "./theme";
 import type { SceneBand } from "../app/scene";
 
+/** The three tick ranks, longest first. Rank by length and weight, not opacity. */
+export type TickRank = "major" | "hourly" | "minor";
+
+/**
+ * A human clock, not a military one (REQ-012): midnight and noon are both
+ * twelve, and the two sixes carry which half of the day they are. These four
+ * strings are the only words the dial is allowed, per DEC-038's dial-text rule.
+ */
+export function dialNumeral(h: number): string {
+  if (h === 0 || h === 12) return "12";
+  return h === 6 ? "6 AM" : "6 PM";
+}
+
+/** Six-hour majors, then the hours, then the half-hours. */
+export function tickRank(h: number): TickRank {
+  if (h % 6 === 0) return "major";
+  return Number.isInteger(h) ? "hourly" : "minor";
+}
+
+/**
+ * The two band arcs, in dial hours: the lit day from rise to set, and the dark
+ * night from set round to the next rise.
+ *
+ * The night arc ends at `riseHours + 24` on purpose. `ctx.arc` sweeps clockwise
+ * and wraps at a full turn, so a night that begins at 20:00 and ends at 05:00 is
+ * correctly drawn as a sweep from 20:00 all the way to 29:00. **Normalising the
+ * end back below the start would draw the long way round and be wrong** — which
+ * is also why a body's rise and set can legitimately arrive with the set reading
+ * earlier in the day than the rise (see `ringSweepHours` in planetarcs).
+ */
+export function bandArcs(band: {
+  riseHours: number | null;
+  setHours: number | null;
+}): { dayFrom: number; dayTo: number; nightFrom: number; nightTo: number } | null {
+  const { riseHours, setHours } = band;
+  if (riseHours === null || setHours === null) return null;
+  return { dayFrom: riseHours, dayTo: setHours, nightFrom: setHours, nightTo: riseHours + 24 };
+}
+
 export function drawDial(
   ctx: CanvasRenderingContext2D,
   R: number,
@@ -33,8 +72,9 @@ export function drawDial(
   // Night arc as ambience; rise/set encoded by SHAPE — full-band boundary
   // ticks — never by tint alone (DESIGN-CONSOLIDATED #2/#3: gold day-wash
   // deleted; the sun disc itself is the day indicator).
-  if (band.riseHours !== null && band.setHours !== null) {
-    const { riseHours, setHours } = band;
+  const arcs = bandArcs(band);
+  if (arcs !== null) {
+    const { riseHours, setHours } = band as { riseHours: number; setHours: number };
     ctx.lineWidth = rOut - rIn;
     ctx.lineCap = "butt";
     // Night is DARKER than the field, day is LIGHTER: a value ladder, so the
@@ -42,12 +82,12 @@ export function drawDial(
     ctx.strokeStyle = THEME.shadow;
     ctx.globalAlpha = 0.75;
     ctx.beginPath();
-    ctx.arc(0, 0, rMid, hourToAngle(setHours), hourToAngle(riseHours + 24));
+    ctx.arc(0, 0, rMid, hourToAngle(arcs.nightFrom), hourToAngle(arcs.nightTo));
     ctx.stroke();
     ctx.strokeStyle = THEME.inkHi;
     ctx.globalAlpha = 0.08;
     ctx.beginPath();
-    ctx.arc(0, 0, rMid, hourToAngle(riseHours), hourToAngle(setHours));
+    ctx.arc(0, 0, rMid, hourToAngle(arcs.dayFrom), hourToAngle(arcs.dayTo));
     ctx.stroke();
     ctx.globalAlpha = 1;
 
@@ -101,8 +141,9 @@ export function drawDial(
   for (let i = 0; i < 48; i++) {
     const h = i / 2;
     const a = hourToAngle(h);
-    const major = h % 6 === 0;
-    const hourly = Number.isInteger(h);
+    const rank = tickRank(h);
+    const major = rank === "major";
+    const hourly = rank === "hourly";
     const innerR = major ? rIn - R * 0.012 : hourly ? rOut - bandW * 0.5 : rOut - bandW * 0.25;
     const inner = pointOnCircle(a, innerR);
     const outer = pointOnCircle(a, rOut);
@@ -117,11 +158,10 @@ export function drawDial(
       ctx.globalAlpha = 1;
       const p = pointOnCircle(a, rIn - R * 0.062);
       ctx.fillStyle = goldLeaf(ctx, p.y - R * 0.04, p.y + R * 0.04);
-      // A human clock, not a military one (REQ-012): noon and midnight are
-      // both twelve; the sixes carry their half of the day.
-      const label = h === 0 ? "12" : h === 12 ? "12" : h === 6 ? "6 AM" : "6 PM";
-      ctx.fillText(label, p.x, p.y);
+      ctx.fillText(dialNumeral(h), p.x, p.y);
     }
   }
   ctx.globalAlpha = 1;
 }
+
+

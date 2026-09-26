@@ -135,6 +135,13 @@ export function sceneMoon(input: CoreInput): SceneMoon {
   return {
     hours: moonDialHours(sunHoursOf(input), frame.sun.hourAngleHours, frame.moon.hourAngleHours),
     phaseAngleDeg: frame.moon.phaseAngleDeg,
+    // Carried through rather than re-derived by the painter. The engine computes
+    // the illuminated fraction from the real Sun-Moon-Earth geometry and the
+    // phase angle from a cheaper series; the two disagree by about 1e-3, so a
+    // disc derived from one and a readout from the other can never agree
+    // exactly. The disc and the transcript now speak from one number.
+    illuminatedFraction: frame.moon.illuminatedFraction,
+    waxing: frame.moon.waxing,
     orbit: FACE.moonOrbit,
     upArc,
   };

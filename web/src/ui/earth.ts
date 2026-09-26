@@ -15,7 +15,29 @@ import { FACE, hourToAngle, TAU } from "./clockface";
 import { THEME } from "./theme";
 import type { SceneEarth } from "../app/scene";
 
-const TROPIC_SIN = Math.sin((23.44 * Math.PI) / 180); // ≈ 0.398
+/** The obliquity the graticule is drawn at (DESIGN-CONSOLIDATED #7). */
+export const TROPIC_LAT_DEG = 23.44;
+
+/**
+ * A parallel of latitude φ on an orthographic disc is a straight horizontal
+ * chord sitting at y = r·sin(φ) and running to x = ±r·cos(φ) — which is to say
+ * its two ends lie exactly on the limb, because y² + x² = r². The tropics are
+ * the two chords at ±TROPIC_LAT_DEG.
+ */
+export function tropicChord(r: number, south = false): { y: number; halfChord: number } {
+  const lat = (TROPIC_LAT_DEG * Math.PI) / 180;
+  const y = (south ? -1 : 1) * r * Math.sin(lat);
+  return { y, halfChord: r * Math.cos(lat) };
+}
+
+/**
+ * A meridian at longitude λ projects to an ellipse of semi-axes r·sin(λ) across
+ * and r·down, so a family of them at 30° and 60° is 0.5r and 0.866r wide. The
+ * east and west halves of the same meridian are one ellipse, not two.
+ */
+export function meridianHalfWidth(r: number, lonDeg: number): number {
+  return r * Math.sin((lonDeg * Math.PI) / 180);
+}
 
 export function drawEarth(
   ctx: CanvasRenderingContext2D,
@@ -50,24 +72,22 @@ export function drawEarth(
   ctx.lineTo(0, r);
   ctx.stroke();
 
-  // Tropics: straight chords at y = ±r·sin(23.44°) — hairline.
+  // Tropics: straight chords whose ends lie on the limb — hairline.
   ctx.lineWidth = 0.8 * dpr;
   ctx.strokeStyle = THEME.inkMid;
   ctx.globalAlpha = 0.5;
-  for (const s of [-1, 1]) {
-    const y = s * r * TROPIC_SIN;
-    const halfChord = Math.sqrt(Math.max(0, r * r - y * y));
+  for (const south of [false, true]) {
+    const { y, halfChord } = tropicChord(r, south);
     ctx.beginPath();
     ctx.moveTo(-halfChord, y);
     ctx.lineTo(halfChord, y);
     ctx.stroke();
   }
 
-  // Meridians at ±30° and ±60°: half-ellipses rx = r·sin(lon) — hairline.
+  // Meridians at ±30° and ±60°: one half-ellipse each — hairline.
   for (const lonDeg of [30, 60]) {
-    const rx = r * Math.sin((lonDeg * Math.PI) / 180);
     ctx.beginPath();
-    ctx.ellipse(0, 0, rx, r, 0, 0, TAU);
+    ctx.ellipse(0, 0, meridianHalfWidth(r, lonDeg), r, 0, 0, TAU);
     ctx.stroke();
   }
 

@@ -10,8 +10,9 @@
  * a pointer is all it should look like.
  *
  * Paints SceneMarks: the present hour and whether the viewer has travelled.
- * Deciding "travelled" belongs to the Scene; travelHours and isAtPresent stay
- * exported as the pure rule it applies, pinned by test.
+ * Deciding "travelled" belongs to the Scene, and the rule it applies is tested
+ * there — `scene-core.test.ts` pins that the mark is live at the present and
+ * holds when the viewer has travelled an hour away. This file only draws it.
  */
 import { FACE, hourToAngle, pointOnCircle } from "./clockface";
 import { THEME } from "./theme";

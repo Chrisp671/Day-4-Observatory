@@ -33,17 +33,37 @@ export function moonDialHours(
   return wrap24(civilNowHours + (sunHourAngleHours - moonHourAngleHours));
 }
 
+/**
+ * The terminator's semi-axis as a fraction of the disc's radius, from the
+ * Scene's illuminated fraction.
+ *
+ * The disc is a lit semicircle plus a terminator half-ellipse. If `k` is the
+ * cosine of the phase angle then the lit area is `(1 - k) / 2` of the disc, so
+ * the half-ellipse's semi-axis is `|k|·r` and `k` follows from the illuminated
+ * fraction alone: `1 - 2f`. A full moon closes the terminator to nothing; a new
+ * moon opens it to the full radius, leaving no light.
+ *
+ * Taking the fraction rather than the phase angle is deliberate. The engine
+ * computes the illuminated fraction from the real Sun-Moon-Earth geometry and
+ * the phase angle from a cheaper series, and the two disagree by about 1e-3 —
+ * so a disc derived from one and a readout derived from the other can never be
+ * made to agree exactly. The Scene carries both, and this painter paints the
+ * Scene's number (DEC-037) instead of re-deriving it.
+ */
+export function terminatorHalfWidth(illuminatedFraction: number): number {
+  return Math.abs(1 - 2 * illuminatedFraction);
+}
+
 /** Draw the phase-correct moon disc centered at (x, y). */
 export function drawMoonDisc(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   r: number,
-  phaseAngleDeg: number,
+  illuminatedFraction: number,
+  waxing: boolean,
   dpr: number,
 ): void {
-  const phase = phaseAngleDeg / 360;
-
   ctx.save();
   ctx.translate(x, y);
 
@@ -59,14 +79,14 @@ export function drawMoonDisc(
   ctx.fill();
   ctx.globalAlpha = 1;
 
-  // Lit portion: semicircle plus terminator half-ellipse.
-  // k runs +1 (new) → −1 (full) → +1; waxing lights the right side.
-  const k = Math.cos(phase * TAU);
-  const waxing = phase < 0.5;
+  // Lit portion: semicircle plus terminator half-ellipse, both signed by k so
+  // the half-ellipse subtracts toward new and adds toward full. Waxing lights
+  // the right side of the disc.
+  const k = 1 - 2 * illuminatedFraction;
   ctx.fillStyle = THEME.moonlight;
   ctx.beginPath();
   ctx.arc(0, 0, r, -Math.PI / 2, Math.PI / 2, !waxing);
-  ctx.ellipse(0, 0, Math.abs(k) * r, r, 0, Math.PI / 2, -Math.PI / 2, k * (waxing ? 1 : -1) > 0);
+  ctx.ellipse(0, 0, terminatorHalfWidth(illuminatedFraction) * r, r, 0, Math.PI / 2, -Math.PI / 2, k * (waxing ? 1 : -1) > 0);
   ctx.fill();
 
   // No outline (DESIGN-CONSOLIDATED #5): moonlight↔shadow adjacency is
@@ -104,5 +124,5 @@ export function drawMoon(
   }
 
   const pos = pointOnCircle(hourToAngle(moon.hours), orbitR);
-  drawMoonDisc(ctx, pos.x, pos.y, discR, moon.phaseAngleDeg, dpr);
+  drawMoonDisc(ctx, pos.x, pos.y, discR, moon.illuminatedFraction, moon.waxing, dpr);
 }

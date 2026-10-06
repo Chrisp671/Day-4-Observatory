@@ -30,6 +30,51 @@ export function tickRank(h: number): TickRank {
   return Number.isInteger(h) ? "hourly" : "minor";
 }
 
+/** How far in from the band's outer edge each rank starts, as a fraction of the
+ * band's own width. Length is the primary rank signal (DESIGN-CONSOLIDATED #4),
+ * so this table is a contract and not a drawing detail — it is what lets the
+ * faintest ink stay faint without the three ranks becoming one. The majors are
+ * absent because they overshoot the inner edge instead; see `tickGeometry`. */
+const TICK_INSET = {
+  hourly: 0.5,
+  minor: 0.25,
+} as const;
+
+/** Stroke weight per rank, in CSS px before the device ratio. */
+const TICK_WEIGHT: Readonly<Record<TickRank, number>> = {
+  major: 1.4,
+  hourly: 1.0,
+  minor: 0.75,
+};
+
+/** Drawn length and weight of one tick, given the band it hangs on. */
+export function tickGeometry(
+  rank: TickRank,
+  rOut: number,
+  rIn: number,
+  R: number,
+): { length: number; weight: number } {
+  const bandW = rOut - rIn;
+  // The major overshoots the band's inner edge by a fixed fraction of the FACE
+  // rather than of the band, so it reads as crossing the whole band and past it.
+  const innerR = rank === "major" ? rIn - R * 0.012 : rOut - bandW * TICK_INSET[rank];
+  return { length: rOut - innerR, weight: TICK_WEIGHT[rank] };
+}
+
+/** Which ink each rank is drawn in. The ladder's *rank* never depends on it —
+ * see `tickGeometry`, which is the assertion `contrast.test.ts` leans on. */
+export function tickInk(rank: TickRank): "gold" | "ink" | "faint" {
+  if (rank === "major") return "gold";
+  return rank === "hourly" ? "ink" : "faint";
+}
+
+/** Drawn alpha per rank. The faintest ink is drawn *opaquely*: rank is carried
+ * by length and weight, never by how much ink is on the page. */
+export function tickAlpha(rank: TickRank): number {
+  if (rank === "major") return 0.95;
+  return rank === "hourly" ? 0.9 : 1;
+}
+
 /**
  * The two band arcs, in dial hours: the lit day from rise to set, and the dark
  * night from set round to the next rise.
@@ -137,24 +182,25 @@ export function drawDial(
   ctx.font = `600 ${Math.round(R * 0.072)}px ${THEME.fontCaps}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const bandW = rOut - rIn;
   for (let i = 0; i < 48; i++) {
     const h = i / 2;
     const a = hourToAngle(h);
     const rank = tickRank(h);
-    const major = rank === "major";
-    const hourly = rank === "hourly";
-    const innerR = major ? rIn - R * 0.012 : hourly ? rOut - bandW * 0.5 : rOut - bandW * 0.25;
-    const inner = pointOnCircle(a, innerR);
+    const geo = tickGeometry(rank, rOut, rIn, R);
+    const ink = tickInk(rank);
+    const inner = pointOnCircle(a, rOut - geo.length);
     const outer = pointOnCircle(a, rOut);
-    ctx.lineWidth = (major ? 1.4 : hourly ? 1.0 : 0.75) * dpr;
-    ctx.strokeStyle = major ? goldLeaf(ctx, -rOut, rOut) : hourly ? THEME.inkMid : THEME.inkLow;
-    ctx.globalAlpha = major ? 0.95 : hourly ? 0.9 : 1;
+    ctx.lineWidth = geo.weight * dpr;
+    ctx.strokeStyle =
+      ink === "gold" ? goldLeaf(ctx, -rOut, rOut)
+        : ink === "ink" ? THEME.inkMid
+          : THEME.inkLow;
+    ctx.globalAlpha = tickAlpha(rank);
     ctx.beginPath();
     ctx.moveTo(inner.x, inner.y);
     ctx.lineTo(outer.x, outer.y);
     ctx.stroke();
-    if (major) {
+    if (ink === "gold") {
       ctx.globalAlpha = 1;
       const p = pointOnCircle(a, rIn - R * 0.062);
       ctx.fillStyle = goldLeaf(ctx, p.y - R * 0.04, p.y + R * 0.04);

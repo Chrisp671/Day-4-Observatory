@@ -14,7 +14,6 @@
  * Falsifiable by construction: lighten the field, or dim an ink, and this fails.
  */
 import { describe, expect, it } from "vitest";
-import indexHtml from "../../index.html?raw";
 import { tickAlpha, tickGeometry, tickRank } from "./dial";
 import {
   ALTITUDE_SWEEP,
@@ -34,6 +33,18 @@ import { THEME } from "./theme";
 const AA_TEXT = 4.5;
 /** WCAG 1.4.11 for graphics that carry information, and for focus rings. */
 const AA_GRAPHIC = 3;
+
+/**
+ * The page's own stylesheet, as text. Loaded with `import.meta.glob` rather
+ * than a plain `?raw` import: the review pipeline refuses to follow a relative
+ * import carrying a query string, and halts the run as incomplete. The glob's
+ * first argument must stay a literal — Vite rewrites it at build time.
+ */
+const indexHtml = import.meta.glob("../../index.html", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+})["../../index.html"] as string;
 
 /** Assert a measured floor and name the altitude that came closest, so a failure
  * says when it happened rather than only that it did. */

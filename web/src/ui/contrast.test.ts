@@ -34,6 +34,9 @@ const AA_TEXT = 4.5;
 /** WCAG 1.4.11 for graphics that carry information, and for focus rings. */
 const AA_GRAPHIC = 3;
 
+/** Float slack, well below anything the design would ever call a step. */
+const F_EPSILON = 1e-9;
+
 /**
  * The page's own stylesheet, as text. Loaded with `import.meta.glob` rather
  * than a plain `?raw` import: the review pipeline refuses to follow a relative
@@ -163,6 +166,13 @@ describe("inkLow is exempt from 3:1, and the exemption is paid for in geometry",
     // DESIGN-CONSOLIDATED #4: "Rank by length and weight, not opacity." Three
     // ranks, and dial.ts claims "≥2:1 length steps" — which holds for every
     // adjacent pair, not just one.
+    //
+    // The contract is a FLOOR of 2:1, not an exact 2:1, and asserting an exact
+    // ratio here would make this an implementation lock wearing a design guard's
+    // clothes: the insets happen to halve, so the ratio is exactly 2 at any
+    // radius, and anyone moving an inset for looks would trip a nine-digit
+    // tolerance instead of a clear "the ranks are no longer far enough apart".
+    // F_EPSILON is float noise, not slack in the design.
     const R = 340;
     const rOut = R * 0.985;
     const rIn = R * 0.875;
@@ -173,10 +183,27 @@ describe("inkLow is exempt from 3:1, and the exemption is paid for in geometry",
     expect(major.length).toBeGreaterThan(hourly.length);
     expect(hourly.length).toBeGreaterThan(minor.length);
     expect(minor.length).toBeGreaterThan(0);
-    expect(major.length / hourly.length).toBeGreaterThanOrEqual(2);
-    expect(hourly.length / minor.length).toBeCloseTo(2, 9);
+    expect(major.length / hourly.length).toBeGreaterThanOrEqual(2 - F_EPSILON);
+    expect(hourly.length / minor.length).toBeGreaterThanOrEqual(2 - F_EPSILON);
     expect(major.weight).toBeGreaterThan(hourly.weight);
     expect(hourly.weight).toBeGreaterThan(minor.weight);
+    // The floor is necessary but NOT sufficient. A major that stopped flush with
+    // the band's inner edge would measure exactly 2:1 and sail through, while
+    // contradicting the reason it overshoots at all — that it spans the whole
+    // band rather than ending where the band ends. So the span is its own claim.
+    expect(major.length).toBeGreaterThan(rOut - rIn);
+  });
+
+  it("keeps the 2:1 floor at every dial size, not just the one it was checked at", () => {
+    // The floor is a property of the design, so it has to hold across the range
+    // the canvas fit actually produces, not at one hand-picked radius.
+    for (const R of [180, 260, 340, 512, 900]) {
+      const rOut = R * 0.985;
+      const rIn = R * 0.875;
+      const hourly = tickGeometry("hourly", rOut, rIn, R);
+      const minor = tickGeometry("minor", rOut, rIn, R);
+      expect(hourly.length / minor.length).toBeGreaterThanOrEqual(2 - F_EPSILON);
+    }
   });
 
   it("makes the faintest rank the MOST opaque, so no rank is carried by tint", () => {

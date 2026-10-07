@@ -378,15 +378,23 @@
        hand — the time-travel rail, the station entry, the mode tabs — is
        hidden, and the readouts keep. */
     @media print{
-      /* The one rule the whole block exists for. */
+      /* The one rule the whole block exists for. `box-shadow` is reset because a
+         drop shadow around a button is meaningless on paper; `text-shadow` is
+         deliberately NOT touched, contrary to the usual print reset, because
+         DEC-014's scrim is what carries the masthead's small type and dropping
+         it takes `inkMid` from 8.7:1 to 4.1:1. A halo does not print as a filled
+         rectangle, so it costs nothing to keep.
+         An earlier version of this block carried `*,*::before,*::after
+         {text-shadow:inherit}`, commented as the thing that preserved the
+         scrims. It did not: a universal selector is specificity 0,0,0, so every
+         rule that actually declares a shadow (all of them class selectors)
+         outranked it and the shadows were untouched. It was dead code that
+         looked load-bearing, and a reviewer read it as stripping the scrims.
+         Removed; `scripts/review/print-check.mjs` now asserts the scrims survive
+         print so the concern cannot recur. */
       *,*::before,*::after{
         -webkit-print-color-adjust:exact; print-color-adjust:exact;
         box-shadow:none}
-      /* Text shadows survive on purpose: DEC-014's scrim is what carries the
-         masthead's small type, and removing it is what drops `inkMid` from
-         8.7:1 to 4.1:1. It is a halo, not a box, so it does not print as a
-         filled rectangle. */
-      *,*::before,*::after{text-shadow:inherit}
       html,body{height:auto; overflow:visible; background:var(--print-1)}
       body{background:radial-gradient(125% 125% at 50% 30%,
         var(--print-1) 0%, var(--print-0) 90%); min-height:0}

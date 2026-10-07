@@ -544,9 +544,11 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     doc.documentElement.dataset["mode"] = mode;
   };
   const showFrozen = (frozen: boolean): void => {
+    // `aria-pressed` is the state; the visual is styled from it (`#freeze
+    // [aria-pressed="true"]`), so there is no class to toggle. Toggling a
+    // `.held` class here would be DOM mutation nothing reads.
     els.freeze?.setAttribute("aria-pressed", String(frozen));
     els.freeze?.setAttribute("aria-label", frozen ? "Let the clock run again" : "Hold the clock where it is");
-    els.freeze?.classList.toggle("held", frozen);
   };
 
   /* ————— the rail: steppers and NOW ————— */

@@ -135,6 +135,18 @@ export async function verifyPrint(url, output) {
           railHidden: hidden('.rail'),
           modesHidden: hidden('.modes'),
           stationHidden: hidden('.station-toggle'),
+          // DEC-014's scrims, read back from print media. They are what carry the
+          // masthead's small type — `inkMid` is 4.07:1 on the raw sky and 8.7:1
+          // under the scrim — so a print reset that strips them is a legibility
+          // regression, not a cosmetic one. Asserted rather than assumed: an
+          // earlier version of this block carried `*{text-shadow:inherit}`
+          // commented as preserving them, which was dead code that a reviewer
+          // reasonably read as stripping them. Measuring settles which it is.
+          scrims: {
+            verse: cs('.verse').textShadow,
+            hero: cs('.hero span').textShadow,
+            modes: cs('.modes button').textShadow,
+          },
           // The readouts must survive: a print mode that hides the instrument
           // to make the layout tidy has thrown away the only reason to print.
           baysVisible: document.querySelectorAll('.bay').length,
@@ -172,6 +184,13 @@ export async function verifyPrint(url, output) {
     assert.ok(facts.baysVisible >= 3, `${where}: the readouts did not survive print`);
     assert.ok(facts.ledgerVisible >= 1, `${where}: the programme did not survive print`);
     assert.match(facts.clock, /\d/, `${where}: the clock readout is empty on paper`);
+    // The scrims must still be painted on paper. "none" here would mean the
+    // masthead's small type dropped from 8.7:1 to 4.07:1 — below AA for normal
+    // text — and it is the failure mode that looks correct in a screenshot.
+    for (const [what, value] of Object.entries(facts.scrims)) {
+      assert.notEqual(value, 'none', `${where}: the ${what} scrim is gone on paper`);
+      assert.match(value, /rgba?\(/, `${where}: the ${what} scrim is not a shadow (got "${value}")`);
+    }
     // A blank sheet is ~all paper. The defect being fixed measured 1.15:1.
     assert.ok(pixels.paper < 0.5, `${where}: ${(pixels.paper * 100).toFixed(1)}% of the sheet is blank paper`);
     assert.ok(pixels.ink > 0.01, `${where}: no dark ground was printed`);

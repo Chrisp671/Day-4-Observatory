@@ -241,6 +241,16 @@
     #trouble-open:hover,#trouble-open[aria-expanded="true"]{color:var(--sunlight)}
     .trouble-report{margin-top:8px;display:flex;flex-direction:column;
       align-items:center;gap:6px}
+    /* DISMISS is deliberately quiet next to REPORT: reporting is the act the
+       owner wants, dismissing is the visitor declining it, and the two should
+       not compete for the same emphasis. */
+    .trouble-ask{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+      justify-content:center}
+    #trouble-dismiss{font-family:var(--mono);font-size:9px;letter-spacing:.16em;
+      color:var(--ink-mid);background:transparent;border:0;padding:6px 4px;
+      cursor:pointer;text-decoration:underline;
+      text-underline-offset:2px;text-decoration-color:var(--hair)}
+    #trouble-dismiss:hover{color:var(--ink-hi)}
     #trouble-text{width:100%;max-width:52ch;font-family:var(--mono);font-size:10.5px;
       line-height:1.45;color:var(--ink-hi);background:var(--print-0);
       border:1px solid var(--hair);border-radius:3px;padding:7px 8px;
@@ -525,8 +535,11 @@
            themselves. -->
       <div class="trouble" id="trouble" hidden>
         <p class="trouble-note" id="trouble-note" role="status"></p>
-        <button id="trouble-open" aria-expanded="false" aria-controls="trouble-report"
-          aria-label="Compose a report about this problem">REPORT THIS PROBLEM?</button>
+        <div class="trouble-ask">
+          <button id="trouble-open" aria-expanded="false" aria-controls="trouble-report"
+            aria-label="Compose a report about this problem">REPORT THIS PROBLEM?</button>
+          <button id="trouble-dismiss" aria-label="Hide this notice">DISMISS</button>
+        </div>
         <div class="trouble-report" id="trouble-report" hidden>
           <label class="sr-only" for="trouble-text">The composed problem report</label>
           <textarea id="trouble-text" readonly rows="10" spellcheck="false"></textarea>

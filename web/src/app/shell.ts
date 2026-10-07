@@ -61,6 +61,7 @@ export const IDS = {
   trouble: "trouble",
   troubleNote: "trouble-note",
   troubleOpen: "trouble-open",
+  troubleDismiss: "trouble-dismiss",
   troubleReport: "trouble-report",
   troubleText: "trouble-text",
   troubleCopy: "trouble-copy",
@@ -105,6 +106,8 @@ export interface ShellHandlers {
   readonly onFreeze: () => void;
   /** The visitor asked to see the composed problem report. */
   readonly onReport: () => void;
+  /** The visitor declined to report it and wants the notice gone (DEC-052). */
+  readonly onDismissTrouble: () => void;
   readonly onStation: (station: Station) => void;
   readonly onLocate: () => void;
   /** The viewer tapped a planet row; null releases the lit ring. */
@@ -583,7 +586,14 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     // reached only from the two capture handlers, each of which the driver
     // exercises by throwing.
     box.hidden = count === 0;
-    if (count === 0) return;
+    if (count === 0) {
+      // Hiding the strip must close the panel inside it, or dismissing would
+      // leave an expanded, focused report stranded behind a hidden parent.
+      if (els.troubleReport !== undefined) els.troubleReport.hidden = true;
+      els.troubleOpen?.setAttribute("aria-expanded", "false");
+      setText("troubleCopied", "");
+      return;
+    }
     setText(
       "troubleNote",
       count === 1
@@ -640,6 +650,13 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     else if (panel !== undefined) panel.hidden = true;
     els.troubleOpen?.setAttribute("aria-expanded", String(open));
   });
+  /* Dismiss is separate from copy on purpose (DEC-052). Copying is how the
+     visitor takes the report away; dismissing is how they decline to, and the
+     two are not the same act. Tying the notice's fate to the clipboard would
+     hide a fault the moment someone pressed a key, including for the very
+     visitor who copied it and then wanted to read it. */
+  els.troubleDismiss?.addEventListener("click", () => handlers.onDismissTrouble());
+
   els.troubleCopy?.addEventListener("click", () => {
     const text = els.troubleText as HTMLTextAreaElement | undefined;
     const report = text?.value ?? "";

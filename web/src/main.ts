@@ -126,6 +126,12 @@ const shell = bind(document, {
   onReport: () => {
     shell.showReport(composeReport(troubles.all(), troubleEnv()));
   },
+  onDismissTrouble: () => {
+    // The visitor declined to report. Clear the buffer as well as the notice, so
+    // a *later* failure raises a fresh strip rather than counting this one again.
+    troubles.clear();
+    shell.showTrouble(0);
+  },
   onStation: (next: Station) => {
     station = next;
     saveStation(station);

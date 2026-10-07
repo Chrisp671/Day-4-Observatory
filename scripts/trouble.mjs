@@ -73,7 +73,7 @@ for (const viewport of VIEWPORTS) {
     () => (document.querySelector("#trouble-note")?.textContent ?? "").includes("2 things"),
     undefined,
     { timeout: 5000 },
-  ).catch(() => { /* the count wording is checked below against the report instead */ });
+  );
 
   // 4. Opening the panel composes the report, and it is a real bug report.
   await page.locator("#trouble-open").click();
@@ -107,6 +107,52 @@ for (const viewport of VIEWPORTS) {
 
   // 7. The strip is honest that it sent nothing.
   assert.match(await page.locator(".trouble-hint").textContent(), /nothing was sent/i);
+
+  // 8. DISMISS is a real exit (DEC-052). Copying is how a visitor takes the
+  //    report away; declining to is a different act, and one the visitor is
+  //    entitled to. Without it the notice is unremovable for the session.
+  //
+  //    The count is checked on a *second* error first, so that the dismissal
+  //    below has to drop a strip whose count is visibly non-zero. Asserting only
+  //    "it disappeared" would be satisfied by a strip that was never told to show
+  //    in the first place, which is the mutation this caught.
+  await page.evaluate(() => {
+    setTimeout(() => { throw new Error("second deliberate failure"); }, 0);
+  });
+  await page.waitForFunction(
+    () => (document.querySelector("#trouble-note")?.textContent ?? "").includes("3 things"),
+    undefined,
+    { timeout: 5000 },
+  );
+  await page.locator("#trouble-dismiss").click();
+  await page.locator("#trouble").waitFor({ state: "hidden" });
+  assert.equal(await page.locator("#trouble").isHidden(), true,
+    `${viewport.name}: DISMISS left the notice up`);
+  // Dismissing must also close the panel, or an expanded, focusable report is
+  // stranded behind a hidden parent and reachable by keyboard alone.
+  assert.equal(await page.locator("#trouble-open").getAttribute("aria-expanded"), "false",
+    `${viewport.name}: DISMISS left the report panel marked open`);
+
+  // 9. And it re-arms: a LATER failure raises a fresh strip counting only what
+  //    happened after the dismissal, not tallying the dismissed ones again.
+  await page.evaluate(() => {
+    setTimeout(() => { throw new Error("third deliberate failure"); }, 0);
+  });
+  await page.locator("#trouble").waitFor({ state: "visible" });
+  const freshNote = await page.locator("#trouble-note").textContent();
+  assert.match(freshNote, /something went wrong/i, `${viewport.name}: the strip did not come back`);
+  assert(!/things went wrong/.test(freshNote),
+    `${viewport.name}: the dismissed failures are still being counted: "${freshNote}"`);
+  await page.locator("#trouble-open").click();
+  await page.locator("#trouble-report").waitFor({ state: "visible" });
+  const second = await page.locator("#trouble-text").inputValue();
+  assert.match(second, /third deliberate failure/, `${viewport.name}: the new failure is not in the report`);
+  assert(!second.includes("deliberate rejection"),
+    `${viewport.name}: a dismissed failure is still in the report`);
+
+  // 10. Still nothing transmitted, after all of that.
+  const addedAfter = requests.filter((u) => !cleanRequests.includes(u));
+  assert.deepEqual(addedAfter, [], `${viewport.name}: a request was made after dismiss: ${addedAfter.join(", ")}`);
 
   await context.close();
   console.log(`trouble: ${viewport.name} OK`);

@@ -57,6 +57,14 @@ export const IDS = {
   steppers: "steppers",
   now: "now",
   freeze: "freeze",
+  /* Error reporting (DEC-041). */
+  trouble: "trouble",
+  troubleNote: "trouble-note",
+  troubleOpen: "trouble-open",
+  troubleReport: "trouble-report",
+  troubleText: "trouble-text",
+  troubleCopy: "trouble-copy",
+  troubleCopied: "trouble-copied",
   tonightToggle: "tonight-toggle",
   tonightNote: "tonight-note",
   tonightList: "tonight-list",
@@ -95,6 +103,8 @@ export interface ShellHandlers {
   readonly onNow: () => void;
   /** Freeze-time (DEC-051): hold the clock where it is, or release it. */
   readonly onFreeze: () => void;
+  /** The visitor asked to see the composed problem report. */
+  readonly onReport: () => void;
   readonly onStation: (station: Station) => void;
   readonly onLocate: () => void;
   /** The viewer tapped a planet row; null releases the lit ring. */
@@ -133,6 +143,13 @@ export interface Shell {
    * the Scene has no opinion about how the displayed instant was chosen, so the
    * pressed state is written here rather than read out of a Scene field. */
   showFrozen(frozen: boolean): void;
+  /** Error reporting (DEC-041): show the affordance with a plain count, or hide
+   * it entirely when nothing has failed. */
+  showTrouble(count: number): void;
+  /** Put the composed report in the field the visitor copies. */
+  showReport(report: string): void;
+  /** Confirm a copy without claiming a channel: DEC-041 sends nothing itself. */
+  reportCopied(ok: boolean): void;
   /** Whether the TONIGHT fold is open (the programme paints only then). */
   isFoldOpen(): boolean;
   /** Set the station entry's fields (after LOCATE succeeds). */
@@ -551,6 +568,43 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     els.freeze?.setAttribute("aria-label", frozen ? "Let the clock run again" : "Hold the clock where it is");
   };
 
+  /* ————— error reporting: an offer, never a transmission (DEC-041) ————— */
+  const showTrouble = (count: number): void => {
+    const box = els.trouble;
+    if (box === undefined) return;
+    // A working page shows none of this. Zero failures means hidden, not "0
+    // problems" — an error strip on a healthy page is noise that trains people
+    // to ignore it, which is exactly what a real failure must not be.
+    //
+    // The driver cannot prove this line is load-bearing: on a healthy page
+    // `showTrouble` is never called at all, so breaking it changes nothing the
+    // driver can see. The clause that matters is therefore asserted where it
+    // lives — `erroreport.test.ts` covers the count, and this function is
+    // reached only from the two capture handlers, each of which the driver
+    // exercises by throwing.
+    box.hidden = count === 0;
+    if (count === 0) return;
+    setText(
+      "troubleNote",
+      count === 1
+        ? "Something went wrong on this page."
+        : `${count} things went wrong on this page.`,
+    );
+  };
+  const showReport = (report: string): void => {
+    const panel = els.troubleReport;
+    const text = els.troubleText as HTMLTextAreaElement | undefined;
+    if (panel !== undefined) panel.hidden = false;
+    els.troubleOpen?.setAttribute("aria-expanded", "true");
+    if (text !== undefined) text.value = report;
+    setText("troubleCopied", "");
+  };
+  const reportCopied = (ok: boolean): void => {
+    // Deliberately says what happened and nothing more: no "we'll look into it",
+    // because nobody is notified. DEC-041's cost, said out loud.
+    setText("troubleCopied", ok ? "copied" : "copy failed — select the text above");
+  };
+
   /* ————— the rail: steppers and NOW ————— */
   if (els.steppers !== undefined) {
     for (const { unit, label } of STEP_UNITS.filter((u) => SHOWN_UNITS.has(u.unit))) {
@@ -574,6 +628,38 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
 
   /* ————— freeze: hold the clock, keep the controls (DEC-051) ————— */
   els.freeze?.addEventListener("click", () => handlers.onFreeze());
+
+  /* ————— error reporting (DEC-041) —————
+     The button opens a panel and nothing else: the report is already composed,
+     and no handler here transmits anything, because there is nowhere to transmit
+     it to. Copy is a clipboard write, which leaves the device. */
+  els.troubleOpen?.addEventListener("click", () => {
+    const panel = els.troubleReport;
+    const open = panel !== undefined && panel.hidden === true;
+    if (open) handlers.onReport();
+    else if (panel !== undefined) panel.hidden = true;
+    els.troubleOpen?.setAttribute("aria-expanded", String(open));
+  });
+  els.troubleCopy?.addEventListener("click", () => {
+    const text = els.troubleText as HTMLTextAreaElement | undefined;
+    const report = text?.value ?? "";
+    if (report === "") {
+      reportCopied(false);
+      return;
+    }
+    // navigator.clipboard needs a secure context and a permission; a refused or
+    // absent clipboard must leave the visitor able to select the text by hand,
+    // so the failure path reports rather than throws.
+    const clipboard = win.navigator?.clipboard;
+    if (clipboard === undefined) {
+      reportCopied(false);
+      return;
+    }
+    void clipboard.writeText(report).then(
+      () => reportCopied(true),
+      () => reportCopied(false),
+    );
+  });
 
   /* ————— the station: the readout is the control (DEC-028) ————— */
   const latIn = asInput(els.latIn);
@@ -670,7 +756,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }).observe(stage);
   }
 
-  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, showFrozen, chartStatus };
+  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, showFrozen, showTrouble, showReport, reportCopied, chartStatus };
 }
 
 /* ————— element lookup and row builders ————— */

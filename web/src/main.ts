@@ -14,6 +14,13 @@ import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
 import { chartLoader, type Chart } from "./app/charts";
 import { clockAt, needsTick, scrubClock, stepClock } from "./app/freeze";
+import {
+  ErrorBuffer,
+  composeReport,
+  fromRejection,
+  fromUncaught,
+  readBuild,
+} from "./app/erroreport";
 import { drawChart } from "./ui/chart";
 import { stepTime, type StepUnit } from "./app/timecontrol";
 import { drawDial } from "./ui/dial";
@@ -60,6 +67,35 @@ const charts = chartLoader("charts/");
 let chartData: Chart | null = null;
 let chartDataFor: string | null = null;
 
+/* ————— error reporting (DEC-041) —————
+ * Captured in memory, bounded, and never transmitted: the module has no fetch
+ * and this file sends nothing either. The whole of it is "the visitor is told
+ * it broke, and offered a copy they choose to send". Registered before the
+ * first tick, so a failure during boot is caught rather than lost. */
+const troubles = new ErrorBuffer();
+const troubleEnv = () => ({
+  build: readBuild(document),
+  userAgent: window.navigator.userAgent,
+  // Local time, not a locale or a zone name: the owner needs to know when, not
+  // where the visitor is.
+  when: new Date().toLocaleString("en-CA", { hour12: false }),
+});
+/** Show the affordance the moment something failed, not only on the next tick:
+ * an error thrown inside a tick would otherwise be reported by the tick that
+ * never completed. */
+const noteTrouble = (): void => shell.showTrouble(troubles.size);
+
+window.addEventListener("error", (event: ErrorEvent) => {
+  troubles.add(
+    fromUncaught(event.message, event.filename, event.lineno, event.colno, event.error, Date.now()),
+  );
+  noteTrouble();
+});
+window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+  troubles.add(fromRejection(event.reason, Date.now()));
+  noteTrouble();
+});
+
 /* ————— the shell ————— */
 const shell = bind(document, {
   onStep: (unit: StepUnit, dir: 1 | -1) => {
@@ -86,6 +122,9 @@ const shell = bind(document, {
     if (frozenAt === null) offsetMillis = 0;
     shell.showFrozen(frozenAt !== null);
     tick();
+  },
+  onReport: () => {
+    shell.showReport(composeReport(troubles.all(), troubleEnv()));
   },
   onStation: (next: Station) => {
     station = next;

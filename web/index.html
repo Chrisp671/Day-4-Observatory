@@ -227,6 +227,34 @@
       margin-right:7px;border-radius:1px}
     .lrow .season{color:var(--gold-soft)}
 
+    /* ————— error reporting (DEC-041) —————
+       Dressed as the plinth's own voice: the same caps, the same gold. It is
+       here because the owner asked whether the instrument is broken, and it
+       appears only when something failed — a working page shows none of this. */
+    .trouble{border-top:1px solid var(--hair-soft);padding:8px 2px 2px;
+      text-align:center}
+    .trouble-note{font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:12.5px;color:var(--scripture);margin-bottom:4px}
+    #trouble-open{font-family:var(--caps);font-weight:700;font-size:9px;
+      letter-spacing:.22em;color:var(--gold-soft);background:transparent;
+      border:1px solid var(--hair);padding:6px 12px;cursor:pointer}
+    #trouble-open:hover,#trouble-open[aria-expanded="true"]{color:var(--sunlight)}
+    .trouble-report{margin-top:8px;display:flex;flex-direction:column;
+      align-items:center;gap:6px}
+    #trouble-text{width:100%;max-width:52ch;font-family:var(--mono);font-size:10.5px;
+      line-height:1.45;color:var(--ink-hi);background:var(--print-0);
+      border:1px solid var(--hair);border-radius:3px;padding:7px 8px;
+      text-align:left;white-space:pre;overflow-wrap:normal;overflow-x:auto;
+      resize:vertical}
+    .trouble-actions{display:flex;align-items:center;gap:10px}
+    #trouble-copy{font-family:var(--caps);font-weight:700;font-size:9px;
+      letter-spacing:.22em;color:var(--gold-soft);background:transparent;
+      border:1px solid var(--hair);padding:5px 14px;cursor:pointer}
+    #trouble-copy:hover{color:var(--sunlight)}
+    #trouble-copied{font-family:var(--mono);font-size:9.5px;color:var(--ink-mid)}
+    .trouble-hint{font-family:var(--serif);font-style:italic;font-size:12px;
+      color:var(--ink-mid);max-width:46ch;text-wrap:pretty}
+
     /* the fold: the whole sky as a program with movements, not a wall */
     .tonight.open .tonight-list{display:none}
     .tonight.open .tonight-all{display:block}
@@ -404,7 +432,8 @@
       #firmament{position:absolute; height:100%}
 
       /* Chrome that cannot be operated on paper. */
-      .rail, .station-toggle, .modes, .focus-t, #now, #freeze, .tonight-toggle{display:none}
+      .rail, .station-toggle, .modes, .focus-t, #now, #freeze, .tonight-toggle,
+      .trouble{display:none}
       .plinth::before, .focus-context::before{display:none}
       /* The plinth's own scrim is the ground under the type; keep it. */
       .plinth{page-break-inside:auto; padding-top:4mm}
@@ -490,6 +519,26 @@
         <div class="tonight-list" id="tonight-list"></div>
         <div class="tonight-all" id="tonight-all" hidden></div>
       </section>
+      <!-- Error reporting (DEC-041). Hidden until something actually fails, so a
+           working page carries no error UI at all. Nothing is sent anywhere: the
+           report is composed into a field the visitor copies and sends
+           themselves. -->
+      <div class="trouble" id="trouble" hidden>
+        <p class="trouble-note" id="trouble-note" role="status"></p>
+        <button id="trouble-open" aria-expanded="false" aria-controls="trouble-report"
+          aria-label="Compose a report about this problem">REPORT THIS PROBLEM?</button>
+        <div class="trouble-report" id="trouble-report" hidden>
+          <label class="sr-only" for="trouble-text">The composed problem report</label>
+          <textarea id="trouble-text" readonly rows="10" spellcheck="false"></textarea>
+          <div class="trouble-actions">
+            <button id="trouble-copy" aria-label="Copy the report to the clipboard">COPY</button>
+            <span id="trouble-copied" role="status"></span>
+          </div>
+          <p class="trouble-hint">Nothing was sent. Copy this and send it however you
+            like &mdash; it contains no information about you, your location or this
+            device, beyond the browser you are using.</p>
+        </div>
+      </div>
     </div>
   </section>
   </div>

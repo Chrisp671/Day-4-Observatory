@@ -187,6 +187,14 @@
       border:0;padding:9px 14px;cursor:pointer}
     #now:hover{color:var(--scripture)}
     #now.armed{color:var(--sunlight)}
+    /* Freeze-time (DEC-051): dressed as the rail's own word, because it is one
+       of its controls. A pressed state that reads in gold and says so, rather
+       than a tint on the button alone. */
+    #freeze{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:9.5px;
+      letter-spacing:.22em;color:var(--ink-mid);background:transparent;
+      border:0;border-left:1px solid var(--hair-soft);padding:9px 14px;cursor:pointer}
+    #freeze:hover{color:var(--ink-hi)}
+    #freeze[aria-pressed="true"]{color:var(--sunlight)}
 
     /* the ledger: tonight's program */
     .ledger{border-top:1px solid var(--hair);padding:8px 2px 0}
@@ -346,6 +354,65 @@
     .sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;
       overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
     :focus-visible{outline:2px solid var(--sunlight);outline-offset:2px}
+
+    /* ————— print: the same instrument, on paper (DEC-050) —————
+       Printing this page used to produce a near-blank sheet, and the reason is
+       worth recording because it is not obvious: `print-color-adjust` defaults
+       to `economy`, which drops backgrounds, and in this design *every* colour
+       is a background. The field is a gradient on `body`; the ink is pale type
+       meant to sit on it. Measured with backgrounds dropped, `inkHi` — all of
+       the body type — reaches 1.15:1 on white paper, and `inkLow`, the one
+       token that fails on screen, becomes the most legible at 6.09:1. The
+       palette inverts and the page prints blank.
+
+       So print forces the ground rather than inverting it: the night sky is
+       what the instrument looks like, and the ratios DEC-049 gates are exactly
+       the ones that must survive onto paper. The visitor has to enable
+       "Background graphics" in the print dialogue, which is the same thing
+       every dark-themed site asks for and the honest cost of this choice.
+
+       The layout is also released. The page is a viewport-locked flex column
+       (`height:100dvh`, `overflow:hidden`) that fits a screen and nothing
+       else; on paper it has to flow, and the dial is sized in millimetres
+       because A4 is not a viewport. Chrome you cannot operate with paper in
+       hand — the time-travel rail, the station entry, the mode tabs — is
+       hidden, and the readouts keep. */
+    @media print{
+      /* The one rule the whole block exists for. */
+      *,*::before,*::after{
+        -webkit-print-color-adjust:exact; print-color-adjust:exact;
+        box-shadow:none}
+      /* Text shadows survive on purpose: DEC-014's scrim is what carries the
+         masthead's small type, and removing it is what drops `inkMid` from
+         8.7:1 to 4.1:1. It is a halo, not a box, so it does not print as a
+         filled rectangle. */
+      *,*::before,*::after{text-shadow:inherit}
+      html,body{height:auto; overflow:visible; background:var(--print-1)}
+      body{background:radial-gradient(125% 125% at 50% 30%,
+        var(--print-1) 0%, var(--print-0) 90%); min-height:0}
+
+      /* A fixed element prints once per page, which puts the star field on top
+       of every sheet. Absolute prints once, with the content. */
+      #firmament{position:absolute; height:100%}
+
+      /* Chrome that cannot be operated on paper. */
+      .rail, .station-toggle, .modes, .focus-t, #now, #freeze, .tonight-toggle{display:none}
+      .plinth::before, .focus-context::before{display:none}
+      /* The plinth's own scrim is the ground under the type; keep it. */
+      .plinth{page-break-inside:auto; padding-top:4mm}
+
+      /* A4 with 12mm margins leaves 186mm; the dial takes a fixed square so it
+         does not depend on a viewport that does not exist in print. */
+      #stage{display:block; padding:4mm 0}
+      #sky{width:120mm !important; height:120mm !important; margin:0 auto}
+      .chart-stage{height:auto}
+      #chart{width:110mm !important; height:110mm !important; margin:0 auto}
+
+      /* Keep a readout whole rather than splitting a rise/set pair across sheets. */
+      .bay, .ledger, .prow, .crow, .chart-head, .section{page-break-inside:avoid}
+      .ledger-h, .section{page-break-after:avoid}
+      thead{display:table-header-group}
+    }
   </style>
 </head>
 <body>
@@ -404,6 +471,7 @@
       <div class="rail" role="group" aria-label="Time travel">
         <div id="steppers" style="display:contents"></div>
         <button id="now" aria-label="Return to the present">NOW</button>
+        <button id="freeze" aria-pressed="false" aria-label="Hold the clock where it is">HOLD</button>
       </div>
       <section class="ledger tonight" aria-label="Constellations tonight">
         <div class="ledger-h">

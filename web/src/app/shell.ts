@@ -56,6 +56,7 @@ export const IDS = {
   zone: "zone",
   steppers: "steppers",
   now: "now",
+  freeze: "freeze",
   tonightToggle: "tonight-toggle",
   tonightNote: "tonight-note",
   tonightList: "tonight-list",
@@ -92,6 +93,8 @@ export const IDS = {
 export interface ShellHandlers {
   readonly onStep: (unit: StepUnit, dir: 1 | -1) => void;
   readonly onNow: () => void;
+  /** Freeze-time (DEC-051): hold the clock where it is, or release it. */
+  readonly onFreeze: () => void;
   readonly onStation: (station: Station) => void;
   readonly onLocate: () => void;
   /** The viewer tapped a planet row; null releases the lit ring. */
@@ -126,6 +129,10 @@ export interface Shell {
   fit(): Stage;
   /** Write the whole Scene to the DOM. */
   paint(scene: Scene): void;
+  /** Whether the clock is held (DEC-051). This is control state, not a readout:
+   * the Scene has no opinion about how the displayed instant was chosen, so the
+   * pressed state is written here rather than read out of a Scene field. */
+  showFrozen(frozen: boolean): void;
   /** Whether the TONIGHT fold is open (the programme paints only then). */
   isFoldOpen(): boolean;
   /** Set the station entry's fields (after LOCATE succeeds). */
@@ -536,6 +543,11 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     // The page's own layout rules may differ by view (the Constellations lists scroll).
     doc.documentElement.dataset["mode"] = mode;
   };
+  const showFrozen = (frozen: boolean): void => {
+    els.freeze?.setAttribute("aria-pressed", String(frozen));
+    els.freeze?.setAttribute("aria-label", frozen ? "Let the clock run again" : "Hold the clock where it is");
+    els.freeze?.classList.toggle("held", frozen);
+  };
 
   /* ————— the rail: steppers and NOW ————— */
   if (els.steppers !== undefined) {
@@ -557,6 +569,9 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }
   }
   els.now?.addEventListener("click", () => handlers.onNow());
+
+  /* ————— freeze: hold the clock, keep the controls (DEC-051) ————— */
+  els.freeze?.addEventListener("click", () => handlers.onFreeze());
 
   /* ————— the station: the readout is the control (DEC-028) ————— */
   const latIn = asInput(els.latIn);
@@ -653,7 +668,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }).observe(stage);
   }
 
-  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, chartStatus };
+  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, showFrozen, chartStatus };
 }
 
 /* ————— element lookup and row builders ————— */

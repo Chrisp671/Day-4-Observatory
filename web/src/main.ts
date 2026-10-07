@@ -9,7 +9,7 @@
  * offset, the lit ring, and the mode. Nothing else is remembered.
  */
 import { scene, type Scene } from "./app/scene";
-import { bind, type Stage } from "./app/shell";
+import { bind, type Shell, type Stage } from "./app/shell";
 import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
 import { chartLoader, type Chart } from "./app/charts";
@@ -71,8 +71,17 @@ let chartDataFor: string | null = null;
  * Captured in memory, bounded, and never transmitted: the module has no fetch
  * and this file sends nothing either. The whole of it is "the visitor is told
  * it broke, and offered a copy they choose to send". Registered before the
- * first tick, so a failure during boot is caught rather than lost. */
+ * first tick, so a failure during boot is caught rather than lost.
+ *
+ * `shell` is read through a holder rather than closed over directly. It is
+ * declared below this block, and the `error` and `unhandledrejection` handlers
+ * are live from this line — so anything thrown while `bind()` is still running
+ * arrives here with `shell` not yet assigned. Closing over the binding directly
+ * is a temporal dead zone waiting for the first boot-time exception, and it
+ * would throw a *second* error from inside the handler, hiding the first.
+ * `shellRef()` therefore tolerates an unassigned shell and says so. */
 const troubles = new ErrorBuffer();
+let shellRef: Shell | null = null;
 const troubleEnv = () => ({
   build: readBuild(document),
   userAgent: window.navigator.userAgent,
@@ -83,7 +92,12 @@ const troubleEnv = () => ({
 /** Show the affordance the moment something failed, not only on the next tick:
  * an error thrown inside a tick would otherwise be reported by the tick that
  * never completed. */
-const noteTrouble = (): void => shell.showTrouble(troubles.size);
+const noteTrouble = (): void => {
+  // Null until `bind()` returns. A failure during boot is still CAPTURED and
+  // still counted; it simply has no strip to raise yet, and the count is
+  // non-zero by the time one exists.
+  shellRef?.showTrouble(troubles.size);
+};
 
 window.addEventListener("error", (event: ErrorEvent) => {
   troubles.add(
@@ -211,6 +225,13 @@ function chooseChart(name: string): void {
 }
 
 shell.showMode(mode);
+shellRef = shell;
+// A failure between registering the handlers and finishing boot was captured
+// while there was still no shell to raise a notice on. Now there is one, so
+// show what the app is already carrying. This cannot rescue a failure *inside*
+// `bind` itself — that leaves no shell at all, and nothing can be shown on a
+// page that did not finish building — but it covers the window on either side.
+noteTrouble();
 let stage: Stage = shell.fit();
 let firmamentKey = "";
 

@@ -154,6 +154,42 @@ for (const viewport of VIEWPORTS) {
   const addedAfter = requests.filter((u) => !cleanRequests.includes(u));
   assert.deepEqual(addedAfter, [], `${viewport.name}: a request was made after dismiss: ${addedAfter.join(", ")}`);
 
+  // 11. A failure DURING boot is reported once, not twice (DEC-052).
+  //
+  //     This is the clause that makes the TDZ fix load-bearing. `bind()` runs
+  //     before `shell` is assigned, and the capture handlers are live by then, so
+  //     reading `shell` directly throws a ReferenceError *from inside the error
+  //     handler* — the very thing meant to report a fault becomes a second fault
+  //     and buries the first. Asserted on the COUNT of errors, because that is
+  //     what regressed.
+  const bootErrors = [];
+  const bootContext = await browser.newContext({ viewport: { width: viewport.width, height: viewport.height } });
+  const bootPage = await bootContext.newPage();
+  bootPage.setDefaultTimeout(15000);
+  bootPage.on("pageerror", (error) => bootErrors.push(String(error).slice(0, 160)));
+  // bind() calls getElementById for every element role; throwing there is
+  // squarely inside bind(), which is the window the fix is about.
+  await bootPage.addInitScript(() => {
+    const real = Document.prototype.getElementById;
+    Document.prototype.getElementById = function (id) {
+      if (id === "tonight-toggle") throw new Error("thrown inside bind");
+      return real.call(this, id);
+    };
+  });
+  await bootPage.goto(target.href, { waitUntil: "domcontentloaded" });
+  await bootPage.waitForTimeout(1200);
+  assert.deepEqual(
+    bootErrors.map((e) => e.split("\n")[0]),
+    ["Error: thrown inside bind"],
+    `${viewport.name}: a boot-time failure produced ${bootErrors.length} errors, expected 1`,
+  );
+  // Deliberately NOT asserting that the notice is visible here. When `bind`
+  // itself throws there is no shell, so there is nothing to raise it on — the
+  // fix guarantees the failure is *counted once and not masked*, not that a
+  // page which failed to build can explain itself. Asserting visibility here
+  // would be asserting something impossible.
+  await bootContext.close();
+
   await context.close();
   console.log(`trouble: ${viewport.name} OK`);
 }

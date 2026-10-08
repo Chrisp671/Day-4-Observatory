@@ -396,5 +396,53 @@ class ReporterTests(unittest.TestCase):
         _, model = self.execute(github)
         model.assert_not_called()
 
+    def statuses(self, github):
+        return [(path, data, method) for path, data, method in github.writes if path.startswith('/statuses/')]
+
+    def test_branch_protection_status_is_published_beside_the_check_run(self):
+        # Branch protection resolves `required_status_checks` against commit statuses,
+        # so a passing check run alone leaves main blocked. Both must be written.
+        for expected in ('success', 'failure'):
+            github = FakeGitHub()
+            result = good_review()
+            if expected == 'failure':
+                result['findings'] = [{'severity': 'BLOCKING', 'category': 'spec', 'file': 'web/src/a.ts', 'line': 1,
+                                       'title': 'Defect', 'evidence': 'Wrong output.', 'fix': 'Correct the output.'}]
+            self.execute(github, result)
+            posted = self.statuses(github)
+            self.assertEqual(len(posted), 1)
+            path, data, method = posted[0]
+            self.assertEqual(path, f'/statuses/{github.run["head_sha"]}')
+            self.assertEqual(method, 'POST')
+            self.assertEqual(data['state'], expected)
+            self.assertEqual(data['context'], review.CHECK)
+            self.assertIn('/actions/runs/10/', data['target_url'])
+
+    def test_incomplete_review_publishes_a_failure_status(self):
+        github = FakeGitHub()
+        with patch.dict(os.environ):
+            os.environ['REVIEW_API_KEY'] = ''
+            self.execute(github)
+        self.assertEqual(self.statuses(github)[0][1]['state'], 'failure')
+
+    def test_status_description_is_bounded_and_a_forbidden_post_keeps_the_verdict(self):
+        seen = {}
+
+        class Recorder:
+            def call(self, path, data=None, method=None, **kwargs):
+                seen.update(path=path, data=data, method=method)
+                return {}
+
+        class Forbidden:
+            def call(self, path, data=None, method=None, **kwargs):
+                raise Incomplete('API request failed (HTTP 403).')
+
+        self.assertTrue(review.publish_status(Recorder(), 'a' * 40, 'success', 'x' * 400, 'https://example.test/run'))
+        self.assertEqual(seen['method'], 'POST')
+        self.assertEqual(seen['path'], '/statuses/' + 'a' * 40)
+        self.assertLessEqual(len(seen['data']['description']), 140)
+        # A refused status must not raise: the check run and comment are already published.
+        self.assertFalse(review.publish_status(Forbidden(), 'a' * 40, 'success', 'Verdict kept.', 'https://example.test/run'))
+
 
 if __name__ == '__main__': unittest.main()

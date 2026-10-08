@@ -155,6 +155,26 @@ def update_comment(github, pr, body):
         github.call(f'/issues/{pr["number"]}/comments', {'body': body})
 
 
+def publish_status(github, sha, state, description, run_url):
+    """Branch protection reads commit statuses, not check runs.
+
+    A check run drives the review comment and the PR checks list, but
+    `required_status_checks` resolves against `/statuses` only. Publishing one
+    without the other leaves main blocked with no way to satisfy the gate, so
+    the verdict is written to both. GitHub caps description at 140 characters.
+    """
+    try:
+        github.call(f'/statuses/{sha}', {'state': state, 'context': CHECK,
+                    'description': safe_text(description)[:140], 'target_url': run_url}, 'POST')
+        return True
+    except Exception:
+        # Both call sites sit outside the outer try/except, so propagating here would
+        # leave a completed check run with no status: the mirror image of the bug this
+        # fixes. The status is a secondary channel, so it never fails the reporter.
+        print(f'WARNING: could not publish the "{CHECK}" commit status; main stays blocked.', file=sys.stderr)
+        return False
+
+
 def run_review(github, event):
     event_run = event['workflow_run']
     run = github.call(f'/actions/runs/{int(event_run["id"])}')
@@ -230,10 +250,16 @@ def run_review(github, event):
     if not current(github, run, pr):
         github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': 'cancelled',
                     'output': {'title': 'Superseded review', 'summary': 'PR metadata, base or head changed; rerun the build.'}}, 'PATCH')
+        # This commit may still be head (a body or base edit keeps the sha), so leave
+        # a pending status behind: the gate stays correctly shut until a fresh verdict lands.
+        publish_status(github, run['head_sha'], 'pending', 'Superseded review; a newer attempt decides.', run_url)
         return 0
     update_comment(github, pr, message)
     github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': conclusion,
                 'output': {'title': CHECK, 'summary': message}}, 'PATCH')
+    publish_status(github, run['head_sha'], 'success' if conclusion == 'success' else 'failure',
+                   'Review passed; see the review comment.' if conclusion == 'success'
+                   else 'Review found blocking findings; see the review comment.', run_url)
     print(f'{CHECK}: {conclusion}')
     return 0 if conclusion == 'success' else 1
 

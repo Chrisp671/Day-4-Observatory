@@ -167,8 +167,10 @@ def publish_status(github, sha, state, description, run_url):
         github.call(f'/statuses/{sha}', {'state': state, 'context': CHECK,
                     'description': safe_text(description)[:140], 'target_url': run_url}, 'POST')
         return True
-    except Incomplete:
-        # Never lose a published verdict to the secondary channel; say so loudly.
+    except Exception:
+        # Both call sites sit outside the outer try/except, so propagating here would
+        # leave a completed check run with no status: the mirror image of the bug this
+        # fixes. The status is a secondary channel, so it never fails the reporter.
         print(f'WARNING: could not publish the "{CHECK}" commit status; main stays blocked.', file=sys.stderr)
         return False
 

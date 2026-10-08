@@ -437,12 +437,19 @@ class ReporterTests(unittest.TestCase):
             def call(self, path, data=None, method=None, **kwargs):
                 raise Incomplete('API request failed (HTTP 403).')
 
+        class Unexpected:
+            # Not an Incomplete: the advisory's point is that any exception here would
+            # otherwise leave a completed check run with no status, the original bug inverted.
+            def call(self, path, data=None, method=None, **kwargs):
+                raise RuntimeError('unexpected')
+
         self.assertTrue(review.publish_status(Recorder(), 'a' * 40, 'success', 'x' * 400, 'https://example.test/run'))
         self.assertEqual(seen['method'], 'POST')
         self.assertEqual(seen['path'], '/statuses/' + 'a' * 40)
         self.assertLessEqual(len(seen['data']['description']), 140)
         # A refused status must not raise: the check run and comment are already published.
-        self.assertFalse(review.publish_status(Forbidden(), 'a' * 40, 'success', 'Verdict kept.', 'https://example.test/run'))
+        for refused in (Forbidden(), Unexpected()):
+            self.assertFalse(review.publish_status(refused, 'a' * 40, 'success', 'Verdict kept.', 'https://example.test/run'))
 
 
 if __name__ == '__main__': unittest.main()

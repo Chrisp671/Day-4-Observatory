@@ -13,6 +13,7 @@ import { bind, type Stage } from "./app/shell";
 import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
 import { chartLoader, type Chart } from "./app/charts";
+import { clockAt, needsTick, scrubClock, stepClock } from "./app/freeze";
 import { drawChart } from "./ui/chart";
 import { stepTime, type StepUnit } from "./app/timecontrol";
 import { drawDial } from "./ui/dial";
@@ -30,6 +31,12 @@ import { drawSun } from "./ui/sun";
 let station: Station = loadStation();
 /** Time-travel offset: displayed time = real now + offset. 0 = live. */
 let offsetMillis = 0;
+/** Freeze-time (DEC-051): the instant the clock is held at, or null while live.
+ * A pinned instant rather than an offset, because a freeze at 23:00 must still
+ * read 23:00 an hour later. It is deliberately NOT remembered across visits —
+ * unlike the station or the mode, a stale freeze would open on a stopped sky
+ * with nothing explaining why. */
+let frozenAt: number | null = null;
 
 const LIT_KEY = "day4.lit";
 /** The one ring lit on the rete, remembered across visits; Saturn to begin. */
@@ -56,11 +63,28 @@ let chartDataFor: string | null = null;
 /* ————— the shell ————— */
 const shell = bind(document, {
   onStep: (unit: StepUnit, dir: 1 | -1) => {
-    offsetMillis = stepTime(Date.now() + offsetMillis, unit, dir) - Date.now();
+    const state = clockAt(Date.now(), offsetMillis, frozenAt);
+    const next = stepClock(
+      state,
+      // Step the DISPLAYED instant, so the sky moves from where it is and a
+      // calendar unit keeps the wall-clock hour across a DST boundary.
+      stepTime(state.displayedUnixMillis, unit, dir),
+      (displayed) => stepTime(displayed, unit, dir),
+    );
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
     tick();
   },
   onNow: () => {
     offsetMillis = 0;
+    tick();
+  },
+  onFreeze: () => {
+    // Freeze at whatever is on the dial right now, so the button holds the
+    // instant the viewer is already looking at; release returns to live.
+    frozenAt = frozenAt === null ? clockAt(Date.now(), offsetMillis, null).displayedUnixMillis : null;
+    if (frozenAt === null) offsetMillis = 0;
+    shell.showFrozen(frozenAt !== null);
     tick();
   },
   onStation: (next: Station) => {
@@ -96,7 +120,9 @@ const shell = bind(document, {
     tick();
   },
   onScrub: (deltaHours: number) => {
-    offsetMillis += deltaHours * 3600000;
+    const next = scrubClock(clockAt(Date.now(), offsetMillis, frozenAt), offsetMillis, deltaHours);
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
     tick();
   },
   onResize: () => {
@@ -184,10 +210,10 @@ function paintChart(): void {
 
 /** The Scene for the displayed instant; memoised inside, so cheap to ask twice. */
 function currentScene(): Scene {
-  const now = Date.now();
+  const clock = clockAt(Date.now(), offsetMillis, frozenAt);
   return scene({
-    displayedUnixMillis: now + offsetMillis,
-    nowUnixMillis: now,
+    displayedUnixMillis: clock.displayedUnixMillis,
+    nowUnixMillis: clock.nowUnixMillis,
     station,
     lit,
     chart,
@@ -208,4 +234,8 @@ tick();
 // The heavens move slowly; for those who ask for reduced motion, the
 // instrument follows them once a minute instead of every second.
 const cadence = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 60000 : 1000;
-setInterval(tick, cadence);
+// A frozen clock does not advance (DEC-051), so the interval has nothing to do
+// and the tick is skipped rather than repainting an identical dial.
+setInterval(() => {
+  if (needsTick(clockAt(Date.now(), offsetMillis, frozenAt))) tick();
+}, cadence);

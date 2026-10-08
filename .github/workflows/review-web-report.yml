@@ -9,6 +9,9 @@ permissions:
   contents: read
   actions: read
   checks: write
+  # Branch protection resolves `required_status_checks` against commit statuses,
+  # not check runs. Without this the "Web review" gate can never be satisfied.
+  statuses: write
   pull-requests: write
 
 # Serialize callbacks for a commit; the reporter also checks run/attempt freshness.

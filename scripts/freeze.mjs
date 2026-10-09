@@ -129,6 +129,27 @@ for (const viewport of VIEWPORTS) {
   assert.equal(await clock(page), before, `${viewport.name}: releasing did not return to the present`);
   await shot(page, `${viewport.name}-released.png`);
 
+  // NOW, pressed while the clock is *held*, must release and return to the present.
+  // It used to clear only the travel offset, which a held clock ignores: the button
+  // stayed dressed as `.armed`, looked live, and repainted the same pinned instant.
+  // Nothing caught that because the driver only ever released through HOLD, and the
+  // pure module cannot see a click handler. This clause is the one that bites.
+  await page.locator("#freeze").click();
+  assert.equal(await pressed(page), "true", `${viewport.name}: could not re-hold for the NOW check`);
+  await page.getByRole("button", { name: "Forward one hour", exact: true }).click();
+  await page.waitForTimeout(300);
+  assert.equal(await pressed(page), "true", `${viewport.name}: stepping released the hold before NOW`);
+  const heldAway = await clock(page);
+  assert.notEqual(heldAway, before, `${viewport.name}: the step did not move the held clock`);
+
+  await page.getByRole("button", { name: "Return to the present", exact: true }).click();
+  await page.waitForTimeout(300);
+  assert.equal(await pressed(page), "false",
+    `${viewport.name}: NOW did not release the hold, so it promised a present it could not reach`);
+  assert.equal(await clock(page), before,
+    `${viewport.name}: NOW did not return to the present while held`);
+  await shot(page, `${viewport.name}-now-from-held.png`);
+
   assert.deepEqual(errors, [], `${viewport.name}: browser errors`);
   await context.close();
   console.log(`freeze: ${viewport.name} OK`);

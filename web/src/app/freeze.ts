@@ -91,6 +91,27 @@ export function scrubClock(
 }
 
 /**
+ * What "return to the present" means (DEC-051).
+ *
+ * Clearing the travel offset is *not* enough while the clock is held: the offset
+ * is unused in that mode, so a NOW that only cleared it repainted the very same
+ * pinned instant. The button sat there dressed as armed, promised a present, and
+ * did nothing — in exactly the state where a viewer most wants to get back to it.
+ *
+ * So saying "present" has to include letting the clock run again. Stated here as
+ * one rule rather than in the click handler, because the bug was never that the
+ * handler forgot a line: it was that nobody wrote down what the button *means*
+ * while it was held, and so nothing tested it. The user can always escape a held
+ * clock; a control that looks live and is not is worse than one that looks dead.
+ */
+export function returnToPresent(): {
+  readonly offsetMillis: number;
+  readonly frozenAt: number | null;
+} {
+  return { offsetMillis: 0, frozenAt: null };
+}
+
+/**
  * Whether the sky needs redrawing on a timer.
  *
  * A frozen clock is exactly the case where the answer is no: the one thing the

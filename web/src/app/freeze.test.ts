@@ -2,7 +2,7 @@
  * The frozen clock (DEC-051). Four rules, and the reason each one is what it is.
  */
 import { describe, expect, it } from "vitest";
-import { clockAt, needsTick, scrubClock, stepClock } from "./freeze";
+import { clockAt, needsTick, returnToPresent, scrubClock, stepClock } from "./freeze";
 import { stepTime, type StepUnit } from "./timecontrol";
 
 const T = (iso: string): number => new Date(iso).getTime();
@@ -188,5 +188,49 @@ describe("why the skip is only testable here", () => {
     expect(needsTick(live)).toBe(true);
     expect(needsTick(frozen)).toBe(false);
     expect(needsTick(live)).not.toBe(needsTick(frozen));
+  });
+});
+
+describe("returning to the present", () => {
+  // The shipped bug: while the clock was held, NOW cleared only the travel offset,
+  // which that mode ignores. It looked armed and repainted the same pinned instant.
+  it("releases a held clock, because clearing the offset alone cannot", () => {
+    const now = T("2026-10-02T12:00:00Z");
+    const held = clockAt(now, 0, T("2026-10-02T09:30:00Z"));
+    expect(held.displayedUnixMillis).toBe(T("2026-10-02T09:30:00Z"));
+    expect(needsTick(held)).toBe(false);
+
+    const next = returnToPresent();
+    expect(next.frozenAt).toBe(null);
+    expect(next.offsetMillis).toBe(0);
+    expect(needsTick(clockAt(now, next.offsetMillis, next.frozenAt))).toBe(true);
+  });
+
+  it("actually arrives at the present, not merely stops being frozen", () => {
+    // The assertion that bites: before the fix the display stayed pinned at 09:30
+    // and only the mode changed. Reaching the present is the whole promise.
+    const now = T("2026-10-02T12:00:00Z");
+    const next = returnToPresent();
+    expect(clockAt(now, next.offsetMillis, next.frozenAt).displayedUnixMillis).toBe(now);
+    expect(clockAt(now, next.offsetMillis, next.frozenAt).displayedUnixMillis)
+      .not.toBe(T("2026-10-02T09:30:00Z"));
+  });
+
+  it("is idempotent, and does not disturb a clock that was already live and untravelled", () => {
+    const now = T("2026-10-02T12:00:00Z");
+    const live = clockAt(now, 0, null);
+    const next = returnToPresent();
+    const once = clockAt(now, next.offsetMillis, next.frozenAt);
+    const twice = clockAt(now, returnToPresent().offsetMillis, returnToPresent().frozenAt);
+    expect(once).toEqual(twice);
+    expect(once.displayedUnixMillis).toBe(live.displayedUnixMillis);
+  });
+
+  it("discards a travel offset as well, so NOW means now and not merely unpinned", () => {
+    const now = T("2026-10-02T12:00:00Z");
+    const travelled = clockAt(now, 3 * HOUR, null);
+    expect(travelled.displayedUnixMillis).toBe(T("2026-10-02T15:00:00Z"));
+    const next = returnToPresent();
+    expect(clockAt(now, next.offsetMillis, next.frozenAt).displayedUnixMillis).toBe(now);
   });
 });

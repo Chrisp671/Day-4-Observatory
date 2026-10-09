@@ -13,7 +13,7 @@ import { bind, type Shell, type Stage } from "./app/shell";
 import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
 import { chartLoader, type Chart } from "./app/charts";
-import { clockAt, needsTick, scrubClock, stepClock } from "./app/freeze";
+import { clockAt, needsTick, returnToPresent, scrubClock, stepClock } from "./app/freeze";
 import {
   ErrorBuffer,
   composeReport,
@@ -126,7 +126,14 @@ const shell = bind(document, {
     tick();
   },
   onNow: () => {
-    offsetMillis = 0;
+    // "Return to the present" includes releasing a held clock. Clearing the offset
+    // alone left NOW armed and inert while frozen — the offset is unused then — so
+    // the button promised a present it could not reach.
+    const next = returnToPresent();
+    const wasFrozen = frozenAt !== null;
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
+    if (wasFrozen) shell.showFrozen(false);
     tick();
   },
   onFreeze: () => {

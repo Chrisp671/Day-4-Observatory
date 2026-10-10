@@ -478,8 +478,10 @@ class ReporterTests(unittest.TestCase):
             self.assertFalse(review.publish_status(refused, 'a' * 40, 'success', 'Verdict kept.', 'https://example.test/run'))
 
 
-class SkipWordingContractTests(ReporterTests):
+class SkipWordingContractTests(unittest.TestCase):
     """Tests for the skip-path wording contract (contract points 1-5)."""
+    # Borrow the reporter harness without inheriting, so ReporterTests does not run twice.
+    setUp, execute, statuses = ReporterTests.setUp, ReporterTests.execute, ReporterTests.statuses
 
     def test_skip_status_says_skipped_not_passed(self):
         """Contract 1: Skip path writes one status with 'skipped' (not 'passed'), model not called."""

@@ -478,4 +478,98 @@ class ReporterTests(unittest.TestCase):
             self.assertFalse(review.publish_status(refused, 'a' * 40, 'success', 'Verdict kept.', 'https://example.test/run'))
 
 
+class SkipWordingContractTests(ReporterTests):
+    """Tests for the skip-path wording contract (contract points 1-5)."""
+
+    def test_skip_status_says_skipped_not_passed(self):
+        """Contract 1: Skip path writes one status with 'skipped' (not 'passed'), model not called."""
+        github = FakeGitHub()
+        github.changes = [{'filename': 'README.md'}]
+        code, model = self.execute(github)
+        self.assertEqual(code, 0)
+        model.assert_not_called()
+
+        posted = self.statuses(github)
+        self.assertEqual(len(posted), 1, 'Exactly one commit status should be written')
+        path, data, method = posted[0]
+        self.assertEqual(data['state'], 'success')
+        desc = data['description'].lower()
+        self.assertIn('skipped', desc, f'Status description must contain "skipped" (case-insensitive): {data["description"]}')
+        self.assertNotIn('passed', desc, f'Status description must NOT contain "passed" (case-insensitive): {data["description"]}')
+
+    def test_skip_check_run_title_contains_skipped(self):
+        """Contract 2: Skip path check-run has conclusion 'success' and output.title contains 'skipped', name stays CHECK."""
+        github = FakeGitHub()
+        github.changes = [{'filename': 'README.md'}]
+        self.execute(github)
+
+        check = github.checks[0]
+        self.assertEqual(check['conclusion'], 'success')
+        self.assertEqual(check['name'], review.CHECK)
+        title = check['output']['title'].lower()
+        self.assertIn('skipped', title, f'Check run output.title must contain "skipped" (case-insensitive): {check["output"]["title"]}')
+
+    def test_real_review_status_description_exact(self):
+        """Contract 3: Real review (web/src/a.ts) has exact status description and check-run title CHECK."""
+        github = FakeGitHub()
+        github.changes = [{'filename': 'web/src/a.ts', 'status': 'modified'}]
+        self.execute(github)
+
+        posted = self.statuses(github)
+        self.assertEqual(len(posted), 1)
+        path, data, method = posted[0]
+        self.assertEqual(data['state'], 'success')
+        self.assertEqual(data['description'], safe_text('Review passed; see the review comment.'))
+
+        check = github.checks[0]
+        self.assertEqual(check['output']['title'], review.CHECK)
+
+    def test_rename_relevant_to_irrelevant_is_real_review(self):
+        """Contract 4: Rename from relevant to irrelevant is treated as real review — model called, no 'skipped' in status."""
+        github = FakeGitHub()
+        github.changes = [{'filename': 'docs/a.md', 'previous_filename': 'web/src/a.ts', 'status': 'renamed'}]
+        code, model = self.execute(github)
+        self.assertEqual(code, 0)
+        model.assert_called_once()
+
+        posted = self.statuses(github)
+        self.assertEqual(len(posted), 1)
+        path, data, method = posted[0]
+        desc = data['description'].lower()
+        self.assertNotIn('skipped', desc, f'Status description must NOT contain "skipped" for rename: {data["description"]}')
+
+    def test_all_status_descriptions_bounded_140(self):
+        """Contract 5: Every status description in points 1-4 is at most 140 characters."""
+        # Skip path
+        github = FakeGitHub()
+        github.changes = [{'filename': 'README.md'}]
+        self.execute(github)
+        for _, data, _ in self.statuses(github):
+            self.assertLessEqual(len(data['description']), 140, f'Skip status description exceeds 140 chars: {data["description"]}')
+
+        # Real review (success)
+        github = FakeGitHub()
+        github.changes = [{'filename': 'web/src/a.ts', 'status': 'modified'}]
+        self.execute(github)
+        for _, data, _ in self.statuses(github):
+            self.assertLessEqual(len(data['description']), 140, f'Real review success status description exceeds 140 chars: {data["description"]}')
+
+        # Real review (failure/blocking)
+        github = FakeGitHub()
+        github.changes = [{'filename': 'web/src/a.ts', 'status': 'modified'}]
+        result = good_review()
+        result['findings'] = [{'severity': 'BLOCKING', 'category': 'spec', 'file': 'web/src/a.ts', 'line': 1,
+                               'title': 'Defect', 'evidence': 'Wrong output.', 'fix': 'Correct the output.'}]
+        self.execute(github, result)
+        for _, data, _ in self.statuses(github):
+            self.assertLessEqual(len(data['description']), 140, f'Real review failure status description exceeds 140 chars: {data["description"]}')
+
+        # Rename relevant to irrelevant
+        github = FakeGitHub()
+        github.changes = [{'filename': 'docs/a.md', 'previous_filename': 'web/src/a.ts', 'status': 'renamed'}]
+        self.execute(github)
+        for _, data, _ in self.statuses(github):
+            self.assertLessEqual(len(data['description']), 140, f'Rename status description exceeds 140 chars: {data["description"]}')
+
+
 if __name__ == '__main__': unittest.main()

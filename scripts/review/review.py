@@ -197,6 +197,7 @@ def run_review(github, event):
     if check['status'] == 'completed' or run['status'] != 'completed':
         return 0
     skipped = False  # True when no changed file is relevant: a pass without a review.
+    incomplete = False  # True when no verdict was reached: an outage is not a finding.
     try:
         changed = github.pages(f'/pulls/{pr["number"]}/files', max_pages=30)
         require(len(changed) == pr['changed_files'], 'PR file list was truncated.')
@@ -244,11 +245,11 @@ def run_review(github, event):
             conclusion = 'failure' if any(f['severity'] == 'BLOCKING' for f in review['findings']) else 'success'
     except Incomplete as error:
         message = f'{MARKER}\n## Web review incomplete\n\nCommit: `{run["head_sha"]}`\n\n{safe_text(str(error))}\n\n[Build and evidence]({run_url})'
-        conclusion = 'failure'
+        conclusion = 'failure'; incomplete = True
     except Exception:
         # Never dump provider bodies, signed URLs, PR content or credential-bearing traces.
         message = f'{MARKER}\n## Web review incomplete\n\nUnexpected evidence or API shape. Commit: `{run["head_sha"]}`. [Run]({run_url}).'
-        conclusion = 'failure'
+        conclusion = 'failure'; incomplete = True
     if not current(github, run, pr):
         github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': 'cancelled',
                     'output': {'title': 'Superseded review', 'summary': 'PR metadata, base or head changed; rerun the build.'}}, 'PATCH')
@@ -264,6 +265,8 @@ def run_review(github, event):
                 'output': {'title': f'{CHECK} skipped' if skipped else CHECK, 'summary': message}}, 'PATCH')
     if skipped:
         description = 'No web or review-pipeline changes; review skipped.'
+    elif incomplete:
+        description = 'Review incomplete, no verdict; see the review comment.'
     elif conclusion == 'success':
         description = 'Review passed; see the review comment.'
     else:

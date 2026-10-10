@@ -452,7 +452,29 @@ class ReporterTests(unittest.TestCase):
         with patch.dict(os.environ):
             os.environ['REVIEW_API_KEY'] = ''
             self.execute(github)
-        self.assertEqual(self.statuses(github)[0][1]['state'], 'failure')
+        status = self.statuses(github)[0][1]
+        self.assertEqual(status['state'], 'failure')
+        # A missing key or provider outage is not a finding; the status must say so.
+        self.assertIn('incomplete', status['description'].lower())
+        self.assertNotIn('blocking', status['description'].lower())
+
+    def test_unexpected_error_is_incomplete_not_blocking(self):
+        github = FakeGitHub()
+        with patch('review.validate_review', side_effect=RuntimeError('provider shape')):
+            code, _ = self.execute(github)
+        self.assertEqual(code, 1)
+        status = self.statuses(github)[0][1]
+        self.assertEqual(status['state'], 'failure')
+        self.assertIn('incomplete', status['description'].lower())
+        self.assertNotIn('blocking', status['description'].lower())
+
+    def test_blocking_status_still_names_blocking_findings(self):
+        github = FakeGitHub()
+        result = good_review()
+        result['findings'] = [{'severity': 'BLOCKING', 'category': 'spec', 'file': 'web/src/a.ts', 'line': 1,
+                               'title': 'Defect', 'evidence': 'Wrong output.', 'fix': 'Correct the output.'}]
+        self.execute(github, result)
+        self.assertIn('blocking', self.statuses(github)[0][1]['description'].lower())
 
     def test_status_description_is_bounded_and_a_forbidden_post_keeps_the_verdict(self):
         seen = {}

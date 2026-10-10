@@ -390,6 +390,32 @@ class ReporterTests(unittest.TestCase):
         self.execute(github)
         self.assertEqual(github.writes, [])
 
+    def test_skipped_review_is_labelled_skipped_not_passed(self):
+        # Branch protection and humans read the status description and the check-run
+        # title, never the comment, so a docs-only pass must not look like an approval.
+        github = FakeGitHub(); github.changes = [{'filename': 'README.md'}]
+        code, model = self.execute(github)
+        self.assertEqual(code, 0); model.assert_not_called()
+        (_, status, _), = self.statuses(github)
+        self.assertEqual(status['state'], 'success')  # Docs-only PRs are not blocked.
+        self.assertIn('skipped', status['description'].lower())
+        self.assertNotIn('passed', status['description'].lower())
+        self.assertLessEqual(len(status['description']), 140)
+        self.assertEqual(github.checks[0]['name'], review.CHECK)  # Branch protection keys on the name.
+        self.assertEqual(github.checks[0]['conclusion'], 'success')
+        self.assertIn('skipped', github.checks[0]['output']['title'].lower())
+
+    def test_real_review_keeps_passed_wording_and_a_relevant_rename_is_reviewed(self):
+        for changes in ([{'filename': 'web/src/a.ts', 'status': 'modified'}],
+                        [{'filename': 'README.md', 'previous_filename': 'web/src/a.ts', 'status': 'renamed'}]):
+            github = FakeGitHub(); github.changes = changes
+            code, model = self.execute(github)
+            self.assertEqual(code, 0); model.assert_called_once()
+            # publish_status escapes Markdown punctuation before posting; the wording is what matters.
+            self.assertEqual(self.statuses(github)[0][1]['description'],
+                             review.safe_text('Review passed; see the review comment.'))
+            self.assertEqual(github.checks[0]['output']['title'], review.CHECK)
+
     def test_duplicate_callback_does_not_charge_again(self):
         github = FakeGitHub()
         self.execute(github)

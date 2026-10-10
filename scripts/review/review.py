@@ -196,12 +196,14 @@ def run_review(github, event):
         'external_id': external, 'details_url': run_url})
     if check['status'] == 'completed' or run['status'] != 'completed':
         return 0
+    skipped = False  # True when no changed file is relevant: a pass without a review.
     try:
         changed = github.pages(f'/pulls/{pr["number"]}/files', max_pages=30)
         require(len(changed) == pr['changed_files'], 'PR file list was truncated.')
         if not any(relevant(f['filename']) or relevant(f.get('previous_filename', '')) for f in changed):
             message = f'{MARKER}\n## Web review\n\nNo web or review-pipeline changes in `{run["head_sha"]}`.'
             conclusion = 'success'
+            skipped = True
         else:
             require(run['conclusion'] == 'success', 'Build, tests or screenshot capture failed. See the build run.')
             jobs = github.pages(f'/actions/runs/{run["id"]}/attempts/{run["run_attempt"]}/jobs', 'jobs')
@@ -255,11 +257,18 @@ def run_review(github, event):
         publish_status(github, run['head_sha'], 'pending', 'Superseded review; a newer attempt decides.', run_url)
         return 0
     update_comment(github, pr, message)
+    # A skipped review must not read as an approval: branch protection and humans see
+    # the status description and the check-run title, not the comment. The check-run
+    # name stays CHECK because branch protection keys on it.
     github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': conclusion,
-                'output': {'title': CHECK, 'summary': message}}, 'PATCH')
-    publish_status(github, run['head_sha'], 'success' if conclusion == 'success' else 'failure',
-                   'Review passed; see the review comment.' if conclusion == 'success'
-                   else 'Review found blocking findings; see the review comment.', run_url)
+                'output': {'title': f'{CHECK} skipped' if skipped else CHECK, 'summary': message}}, 'PATCH')
+    if skipped:
+        description = 'No web or review-pipeline changes; review skipped.'
+    elif conclusion == 'success':
+        description = 'Review passed; see the review comment.'
+    else:
+        description = 'Review found blocking findings; see the review comment.'
+    publish_status(github, run['head_sha'], 'success' if conclusion == 'success' else 'failure', description, run_url)
     print(f'{CHECK}: {conclusion}')
     return 0 if conclusion == 'success' else 1
 

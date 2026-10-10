@@ -162,10 +162,14 @@ def publish_status(github, sha, state, description, run_url):
     `required_status_checks` resolves against `/statuses` only. Publishing one
     without the other leaves main blocked with no way to satisfy the gate, so
     the verdict is written to both. GitHub caps description at 140 characters.
+    GitHub shows the description as plain text, not Markdown, so it is never
+    Markdown-escaped (that put literal backslashes on the PR page); control
+    characters and line breaks collapse to single spaces instead.
     """
+    plain = ' '.join(re.sub(r'[\x00-\x1f\x7f]', ' ', str(description)).split())
     try:
         github.call(f'/statuses/{sha}', {'state': state, 'context': CHECK,
-                    'description': safe_text(description)[:140], 'target_url': run_url}, 'POST')
+                    'description': plain[:140], 'target_url': run_url}, 'POST')
         return True
     except Exception:
         # Both call sites sit outside the outer try/except, so propagating here would

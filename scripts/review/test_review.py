@@ -398,7 +398,7 @@ class ReporterTests(unittest.TestCase):
         self.assertEqual(code, 0); model.assert_not_called()
         (_, status, _), = self.statuses(github)
         self.assertEqual(status['state'], 'success')  # Docs-only PRs are not blocked.
-        self.assertEqual(status['description'], safe_text('No web or review-pipeline changes; review skipped.'))
+        self.assertEqual(status['description'], 'No web or review-pipeline changes; review skipped.')
         self.assertNotIn('passed', status['description'].lower())
         self.assertLessEqual(len(status['description']), 140)
         self.assertEqual(github.checks[0]['name'], review.CHECK)  # Branch protection keys on the name.
@@ -414,9 +414,8 @@ class ReporterTests(unittest.TestCase):
             github = FakeGitHub(); github.changes = changes
             code, model = self.execute(github)
             self.assertEqual(code, 0); model.assert_called_once()
-            # publish_status escapes Markdown punctuation before posting; the wording is what matters.
             self.assertEqual(self.statuses(github)[0][1]['description'],
-                             review.safe_text('Review passed; see the review comment.'))
+                             'Review passed; see the review comment.')
             self.assertEqual(github.checks[0]['output']['title'], review.CHECK)
 
     def test_duplicate_callback_does_not_charge_again(self):
@@ -494,6 +493,10 @@ class ReporterTests(unittest.TestCase):
             def call(self, path, data=None, method=None, **kwargs):
                 raise RuntimeError('unexpected')
 
+        # GitHub shows the description as plain text: no Markdown escaping (a visible
+        # backslash on the PR page), and line breaks or control characters become spaces.
+        self.assertTrue(review.publish_status(Recorder(), 'a' * 40, 'success', 'Re-run; see it.\nNext\x00line', 'https://example.test/run'))
+        self.assertEqual(seen['data']['description'], 'Re-run; see it. Next line')
         self.assertTrue(review.publish_status(Recorder(), 'a' * 40, 'success', 'x' * 400, 'https://example.test/run'))
         self.assertEqual(seen['method'], 'POST')
         self.assertEqual(seen['path'], '/statuses/' + 'a' * 40)
@@ -546,7 +549,7 @@ class SkipWordingContractTests(unittest.TestCase):
         self.assertEqual(len(posted), 1)
         path, data, method = posted[0]
         self.assertEqual(data['state'], 'success')
-        self.assertEqual(data['description'], safe_text('Review passed; see the review comment.'))
+        self.assertEqual(data['description'], 'Review passed; see the review comment.')
 
         check = github.checks[0]
         self.assertEqual(check['output']['title'], review.CHECK)

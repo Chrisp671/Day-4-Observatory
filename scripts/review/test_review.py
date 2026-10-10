@@ -391,19 +391,22 @@ class ReporterTests(unittest.TestCase):
         self.assertEqual(github.writes, [])
 
     def test_skipped_review_is_labelled_skipped_not_passed(self):
-        # Branch protection and humans read the status description and the check-run
-        # title, never the comment, so a docs-only pass must not look like an approval.
+        # Branch protection reads the status; humans read it, the check-run title and the
+        # PR comment. On a docs-only skip, none of the three may read like an approval.
         github = FakeGitHub(); github.changes = [{'filename': 'README.md'}]
         code, model = self.execute(github)
         self.assertEqual(code, 0); model.assert_not_called()
         (_, status, _), = self.statuses(github)
         self.assertEqual(status['state'], 'success')  # Docs-only PRs are not blocked.
-        self.assertIn('skipped', status['description'].lower())
+        self.assertEqual(status['description'], safe_text('No web or review-pipeline changes; review skipped.'))
         self.assertNotIn('passed', status['description'].lower())
         self.assertLessEqual(len(status['description']), 140)
         self.assertEqual(github.checks[0]['name'], review.CHECK)  # Branch protection keys on the name.
         self.assertEqual(github.checks[0]['conclusion'], 'success')
         self.assertIn('skipped', github.checks[0]['output']['title'].lower())
+        comment = github.comments[0]['body']
+        self.assertIn('No web or review-pipeline changes', comment)
+        self.assertNotIn('passed', comment.lower())
 
     def test_real_review_keeps_passed_wording_and_a_relevant_rename_is_reviewed(self):
         for changes in ([{'filename': 'web/src/a.ts', 'status': 'modified'}],

@@ -257,9 +257,9 @@ def run_review(github, event):
         publish_status(github, run['head_sha'], 'pending', 'Superseded review; a newer attempt decides.', run_url)
         return 0
     update_comment(github, pr, message)
-    # A skipped review must not read as an approval: branch protection and humans see
-    # the status description and the check-run title, not the comment. The check-run
-    # name stays CHECK because branch protection keys on it.
+    # A skipped review must not read as an approval anywhere it is shown: the status
+    # description (which branch protection reads), the check-run title and the PR
+    # comment. The check-run name stays CHECK because branch protection keys on it.
     github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': conclusion,
                 'output': {'title': f'{CHECK} skipped' if skipped else CHECK, 'summary': message}}, 'PATCH')
     if skipped:

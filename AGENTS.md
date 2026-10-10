@@ -46,8 +46,11 @@ the owner's explicit OK.
 The gate reads commit statuses, not check runs, and the reviewer publishes to
 **both** — so `gh pr checks` showing green is not proof the gate is satisfied. Check
 `/commits/<sha>/status` has a `Web review` context before assuming a merge will be
-allowed. A fix to the reporter itself is the one case that needs an admin merge,
-because the reporter runs from the default branch.
+allowed. A PR that touches no web or review-pipeline file is skipped, not reviewed:
+its status stays green so docs-only changes can merge, but its description says
+"skipped" and the check-run title reads `Web review skipped`. A green status on
+such a PR is not an approval. A fix to the reporter itself is the one case that
+needs an admin merge, because the reporter runs from the default branch.
 
 Browser drivers for layout, keyboard and rendering work, after
 `npx vite preview --port 4173 --strictPort --host 127.0.0.1`:

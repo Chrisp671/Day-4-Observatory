@@ -15,7 +15,11 @@ STATES = ('loaded', 'month', 'tonight', 'planets', 'constellations')
 DEVICES = {'phone': ((390, 844), STATES), 'tablet': ((820, 1180), ('loaded', 'planets', 'constellations'))}
 IMAGES = {f'{device}-{state}.png': size for device, (size, states) in DEVICES.items() for state in states}
 CANON = {'DEC-026', 'DEC-027', 'DEC-035', 'DEC-036', 'DEC-038', 'REQ-011'}
-OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen'}
+# Reviewer model id -> the underlying model family, which is what the
+# independence check compares against the builder's declaration. The two
+# free-tier models stay usable after the Go account's weekly usage limit;
+# OpenCode calls them unlimited "for a limited time", so they may be withdrawn.
+OPENCODE_GO_MODELS = {'qwen3.7-plus': 'qwen', 'step-5-preview-free': 'stepfun', 'longcat-2.5-preview-free': 'meituan'}
 # Real model families a builder may declare, matched case-insensitively. A
 # proxy or gateway vendor (OpenCode Go, OpenRouter, Bedrock...) is not a family:
 # routing through a different gateway does not establish independence.
@@ -38,6 +42,13 @@ class Incomplete(Exception):
 def require(condition, message):
     if not condition:
         raise Incomplete(message)
+
+
+def opencode_go_family(model):
+    """The model family behind an approved OpenCode Go reviewer; any other id fails before a request."""
+    require(model in OPENCODE_GO_MODELS,
+            'OpenCode Go reviewer must be an approved vision model: ' + ', '.join(OPENCODE_GO_MODELS) + '.')
+    return OPENCODE_GO_MODELS[model]
 
 
 def object_schema(properties):
@@ -161,8 +172,7 @@ def provider_config(provider, model, body):
     require(re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]{0,99}', model or ''), 'Set REVIEW_MODEL to a valid vision model ID.')
     prefixes = {'openai': r'(?:gpt-|o[1-9])', 'anthropic': r'claude-', 'google': r'gemini-'}
     if provider == 'opencode-go':
-        require(model in OPENCODE_GO_MODELS, 'OpenCode Go reviewer must be an approved vision model: qwen3.7-plus.')
-        family = OPENCODE_GO_MODELS[model]
+        family = opencode_go_family(model)
     else:
         require(re.match(prefixes[provider], model), 'REVIEW_MODEL does not match the configured provider family.')
         family = provider

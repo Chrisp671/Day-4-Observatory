@@ -56,7 +56,13 @@ Two more Go models are allowlisted for the reviewer: `step-5-preview-free`
 needs only a change to `REVIEW_MODEL` and a re-run of **Web review evidence**. Go
 serves them on its OpenAI-compatible `chat/completions` endpoint rather than
 `messages`; the adapter accepts exactly one choice that finished with `stop`,
-carries string content, and has no tool call or refusal. OpenCode says the free
+carries string content, and has no tool call or refusal. When a response is
+rejected, the failure names the check that failed using only a fixed vocabulary
+(choice count, `finish_reason`, whether content, reasoning, tool calls or a
+refusal were present, and integer token counts), never the provider's text. The
+chat path allows 32,000 output tokens because the free models reason before
+answering and that reasoning counts against the cap; the other adapters keep
+12,000. OpenCode says the free
 models stay usable after the Go account reaches its usage limit, so they are the
 fallback when `qwen3.7-plus` answers HTTP 429 (`GoUsageLimitError`). OpenCode
 calls them unlimited "for a limited time", so they may be withdrawn or renamed

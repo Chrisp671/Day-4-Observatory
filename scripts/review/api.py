@@ -26,6 +26,11 @@ MAX_REQUEST_BYTES = 6_000_000
 # chat-completions endpoint; every other approved Go model stays on
 # /v1/messages. Membership here never bypasses the contract's allowlist.
 OPENCODE_GO_CHAT_MODELS = frozenset({'step-5-preview-free', 'longcat-2.5-preview-free'})
+# The free models reason before they answer, and on chat-completions the
+# reasoning tokens count against max_tokens; the other adapters keep 12000.
+OPENCODE_GO_CHAT_MAX_TOKENS = 32000
+# The only provider value a chat-completions diagnostic may echo verbatim.
+FINISH_REASON_WORD = re.compile(r'[a-z_]{1,32}')
 
 
 def provider_error_excerpt(raw, headers):
@@ -118,6 +123,55 @@ class GitHub:
         return request(location, limit=16 * 1024 * 1024)
 
 
+def chat_completion_review(response):
+    """The review text of a chat-completions response, or an Incomplete that names the failed check.
+
+    The diagnostic is built only from a fixed vocabulary: counts, presence
+    flags, a finish_reason that matches FINISH_REASON_WORD (else "other"), and
+    token counts copied only as integers. No other provider value reaches the
+    message. A reasoning field is reported as present but never accepted as
+    the review: the review must be the model's final answer, in content.
+    """
+    choices = response.get('choices')
+    choices = choices if type(choices) is list else []
+    choice = choices[0] if choices and type(choices[0]) is dict else {}
+    message = choice.get('message')
+    message = message if type(message) is dict else {}
+    finish = choice.get('finish_reason')
+    content = message.get('content')
+    if finish is None:
+        finish_word = 'missing'
+    elif type(finish) is str and FINISH_REASON_WORD.fullmatch(finish):
+        finish_word = finish
+    else:
+        finish_word = 'other'
+    if content is None:
+        content_word = 'null'
+    elif type(content) is not str:
+        content_word = 'non-text'
+    else:
+        content_word = 'text' if content else 'empty'
+
+    def presence(*keys):
+        return 'present' if any(message.get(key) for key in keys) else 'absent'
+    facts = [f'choices={len(choices) if len(choices) <= 9 else "9+"}', f'finish_reason={finish_word}',
+             f'content={content_word}', f'reasoning={presence("reasoning_content", "reasoning")}',
+             f'tool_calls={presence("tool_calls")}', f'function_call={presence("function_call")}',
+             f'refusal={presence("refusal")}']
+    usage = response.get('usage')
+    usage = usage if type(usage) is dict else {}
+    details = usage.get('completion_tokens_details')
+    details = details if type(details) is dict else {}
+    for name, count in (('completion_tokens', usage.get('completion_tokens')),
+                        ('reasoning_tokens', details.get('reasoning_tokens'))):
+        if type(count) is int and 0 <= count < 10 ** 9:
+            facts.append(f'{name}={count}')
+    accepted = (len(choices) == 1 and finish_word == 'stop' and content_word == 'text'
+                and all(presence(key) == 'absent' for key in ('tool_calls', 'function_call', 'refusal')))
+    require(accepted, f'OpenCode Go response was incomplete or refused ({", ".join(facts)}).')
+    return content
+
+
 def model_request(provider, model, key, instructions, evidence, images):
     require(bool(key), 'Set the repository secret REVIEW_API_KEY.')
     text_bytes = len(instructions.encode('utf-8')) + len(evidence.encode('utf-8'))
@@ -153,7 +207,7 @@ def model_request(provider, model, key, instructions, evidence, images):
         url = 'https://opencode.ai/zen/go/v1/chat/completions'
         headers = {'Authorization': f'Bearer {key}', 'User-Agent': 'day4-review/1.0',
                    'x-opencode-session': 'day4-' + hashlib.sha256((instructions + '\0' + evidence).encode()).hexdigest()}
-        body = {'model': model, 'max_tokens': 12000,
+        body = {'model': model, 'max_tokens': OPENCODE_GO_CHAT_MAX_TOKENS,
                 'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': content}]}
     elif provider == 'opencode-go':
         opencode_go_family(model)
@@ -196,15 +250,7 @@ def model_request(provider, model, key, instructions, evidence, images):
         require(response.get('stop_reason') == 'end_turn', 'Anthropic response was incomplete or refused.')
         text = ''.join(c.get('text', '') for c in response.get('content', []) if c.get('type') == 'text')
     elif provider == 'opencode-go' and model in OPENCODE_GO_CHAT_MODELS:
-        choices = response.get('choices')
-        require(type(choices) is list and len(choices) == 1 and type(choices[0]) is dict,
-                'OpenCode Go response was incomplete or refused.')
-        message = choices[0].get('message')
-        require(choices[0].get('finish_reason') == 'stop' and type(message) is dict
-                and not message.get('tool_calls') and not message.get('function_call') and not message.get('refusal'),
-                'OpenCode Go response was incomplete or refused.')
-        text = message.get('content')
-        require(type(text) is str and bool(text), 'OpenCode Go returned non-text content instead of a review.')
+        text = chat_completion_review(response)
     elif provider == 'opencode-go':
         require(response.get('stop_reason') == 'end_turn', 'OpenCode Go response was incomplete or refused.')
         blocks = response.get('content')

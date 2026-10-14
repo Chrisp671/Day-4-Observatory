@@ -298,7 +298,7 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(headers['Content-Type'], 'application/json')
                 self.assertTrue(headers['x-opencode-session'].startswith('day4-'))
                 self.assertEqual(body['model'], model)
-                self.assertEqual(body['max_tokens'], 12000)
+                self.assertEqual(body['max_tokens'], 32000)
                 self.assertNotIn('tools', body)
                 self.assertNotIn('test-key', json.dumps(body))
                 self.assertEqual([m['role'] for m in body['messages']], ['system', 'user'])
@@ -323,6 +323,7 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(headers['x-api-key'], 'test-key')
             self.assertNotIn('Authorization', headers)
             self.assertEqual(body['system'], 'policy')
+            self.assertEqual(body['max_tokens'], 12000)
             self.assertEqual(len([c for c in body['messages'][0]['content'] if c['type'] == 'image']), len(IMAGES))
         with patch('api.request', return_value=json.dumps(chat).encode()), self.assertRaises(Incomplete):
             api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'policy', 'evidence', images)
@@ -351,6 +352,72 @@ class ContractTests(unittest.TestCase):
                     with patch('api.request', return_value=json.dumps(response).encode()), self.assertRaises(Incomplete) as caught:
                         api.model_request('opencode-go', model, 'test-key', 'policy', 'evidence', {})
                     self.assertNotIn('I cannot review this.', str(caught.exception))
+
+    def test_chat_completion_rejection_names_the_failed_check_without_provider_text(self):
+        sentinel = 'SENTINEL-7f3e-never-published'
+        def choice(**fields):
+            message = {'role': 'assistant', 'content': '{}'}
+            message.update(fields.pop('message', {}))
+            return {'finish_reason': 'stop', 'message': message, **fields}
+        cases = (
+            ({'choices': [choice(finish_reason='length', message={'content': sentinel})]}, 'finish_reason=length'),
+            ({'choices': [choice(finish_reason='Stop!!', message={'content': sentinel})]}, 'finish_reason=other'),
+            ({'choices': [choice(finish_reason=sentinel)]}, 'finish_reason=other'),
+            ({'choices': [{'message': {'role': 'assistant', 'content': sentinel}}]}, 'finish_reason=missing'),
+            ({'choices': [choice(message={'content': None})]}, 'content=null'),
+            ({'choices': [choice(message={'content': ''})]}, 'content=empty'),
+            ({'choices': [choice(message={'content': '', 'reasoning_content': sentinel})]}, 'content=empty, reasoning=present'),
+            ({'choices': [choice(message={'content': '', 'reasoning': sentinel})]}, 'reasoning=present'),
+            ({'choices': [choice(message={'content': [{'type': 'text', 'text': sentinel}]})]}, 'content=non-text'),
+            ({'choices': [choice(message={'tool_calls': [{'id': sentinel, 'type': 'function',
+                                                           'function': {'name': sentinel, 'arguments': '{}'}}]})]},
+             'tool_calls=present'),
+            ({'choices': [choice(message={'function_call': {'name': sentinel, 'arguments': '{}'}})]}, 'function_call=present'),
+            ({'choices': [choice(message={'refusal': sentinel})]}, 'refusal=present'),
+            ({'choices': [choice(), choice(message={'content': sentinel})]}, 'choices=2'),
+            ({'choices': [choice()] * 12}, 'choices=9+'),
+            ({'choices': []}, 'choices=0, finish_reason=missing, content=null'),
+            ({'choices': [{'finish_reason': 'stop', 'message': sentinel}]}, 'content=null'),
+        )
+        for response, fragment in cases:
+            with self.subTest(fragment=fragment):
+                with patch('api.request', return_value=json.dumps(response).encode()), self.assertRaises(Incomplete) as caught:
+                    api.model_request('opencode-go', 'step-5-preview-free', 'test-key', 'policy', 'evidence', {})
+                failure = str(caught.exception)
+                self.assertTrue(failure.startswith('OpenCode Go response was incomplete or refused ('), failure)
+                self.assertIn(fragment, failure)
+                self.assertNotIn(sentinel, failure)
+                self.assertNotIn('SENTINEL', failure)
+        # A reasoning field carrying a valid review is still not the review.
+        reasoned = {'choices': [choice(finish_reason='length', message={'content': '', 'reasoning_content': json.dumps(good_review())})]}
+        with patch('api.request', return_value=json.dumps(reasoned).encode()), self.assertRaises(Incomplete) as caught:
+            api.model_request('opencode-go', 'longcat-2.5-preview-free', 'test-key', 'policy', 'evidence', {})
+        self.assertEqual(str(caught.exception), 'OpenCode Go response was incomplete or refused (choices=1, finish_reason=length, '
+                         'content=empty, reasoning=present, tool_calls=absent, function_call=absent, refusal=absent).')
+
+    def test_chat_completion_rejection_reports_usage_only_as_integers(self):
+        sentinel = 'SENTINEL-7f3e-never-published'
+        truncated = {'finish_reason': 'length', 'message': {'role': 'assistant', 'content': ''}}
+        numeric = {'choices': [truncated], 'usage': {'prompt_tokens': 90000, 'completion_tokens': 12000,
+                                                      'completion_tokens_details': {'reasoning_tokens': 11874}}}
+        with patch('api.request', return_value=json.dumps(numeric).encode()), self.assertRaises(Incomplete) as caught:
+            api.model_request('opencode-go', 'step-5-preview-free', 'test-key', 'policy', 'evidence', {})
+        self.assertTrue(str(caught.exception).endswith(', completion_tokens=12000, reasoning_tokens=11874).'), str(caught.exception))
+        self.assertNotIn('prompt_tokens', str(caught.exception))
+        for usage in (
+            {'completion_tokens': f'12000 {sentinel}', 'completion_tokens_details': {'reasoning_tokens': sentinel}},
+            {'completion_tokens': 1.5, 'completion_tokens_details': {'reasoning_tokens': True}},
+            {'completion_tokens': -1, 'completion_tokens_details': {'reasoning_tokens': 10 ** 12}},
+            {'completion_tokens': None, 'completion_tokens_details': sentinel},
+            sentinel,
+        ):
+            with self.subTest(usage=usage):
+                response = {'choices': [truncated], 'usage': usage}
+                with patch('api.request', return_value=json.dumps(response).encode()), self.assertRaises(Incomplete) as caught:
+                    api.model_request('opencode-go', 'step-5-preview-free', 'test-key', 'policy', 'evidence', {})
+                self.assertTrue(str(caught.exception).endswith(', refusal=absent).'), str(caught.exception))
+                self.assertNotIn('tokens', str(caught.exception))
+                self.assertNotIn(sentinel, str(caught.exception))
 
     def test_free_go_models_are_approved_for_every_builder_family(self):
         for model, family in (('step-5-preview-free', 'stepfun'), ('longcat-2.5-preview-free', 'meituan')):

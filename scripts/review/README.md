@@ -70,6 +70,14 @@ without notice; when one disappears, set `REVIEW_MODEL` back to `qwen3.7-plus`
 or add the replacement with its family after review. Neither family is a builder
 family, so every named builder keeps the independence check.
 
+Live status, 2026-10-14: `step-5-preview-free` returned a complete, schema-valid
+review of trial PR #35 (eight legibility judgements, no findings) with the
+32,000-token cap. Its first attempt, under the old 12,000-token cap, was
+rejected as incomplete. `longcat-2.5-preview-free` answered "Endpoint is
+unavailable" when tried. One trivial-diff trial shows the fallback produces
+well-formed reviews; it does not show it finds defects as reliably as
+`qwen3.7-plus`, so it is the fallback, not the default.
+
 One more value is accepted, `routed-unknown`, meaning the builder ran as a routed
 model served through a gateway and its underlying model family could not be
 established from inside the session. Use it instead of guessing: a plausible

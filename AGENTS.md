@@ -49,13 +49,18 @@ The gate reads commit statuses, not check runs, and the reviewer publishes to
 allowed. A PR that touches no web or review-pipeline file is skipped, not reviewed:
 its status stays green so docs-only changes can merge, but its description says
 "skipped" and the check-run title reads `Web review skipped`. A green status on
-such a PR is not an approval. A fix to the reporter itself is the one case that
-needs an admin merge, because the reporter runs from the default branch.
+such a PR is not an approval. The reporter runs from the default branch, so a
+change to the reporter is reviewed by main's current reporter. That only forces
+an admin merge when main's reporter cannot review at all (broken, or its
+reviewer refused); #32, #33 and #34 all changed the reporter and merged through
+the gate.
 
 The reviewer is chosen by the repository variables `REVIEW_PROVIDER=opencode-go`
 and `REVIEW_MODEL`, sharing one `REVIEW_API_KEY`: `qwen3.7-plus` normally, or
 `step-5-preview-free` / `longcat-2.5-preview-free` when Go answers HTTP 429
-(`GoUsageLimitError`, its usage limit). To retry a review after changing the
+(`GoUsageLimitError`, its usage limit). Step 5 is the verified fallback (a
+complete live review on 2026-10-14); switch back to `qwen3.7-plus` once the paid
+quota resets. PLAN.md RSK-008 records the outage policy. To retry a review after changing the
 variable or after a provider failure, re-run the PR's **Web review evidence**
 run, never the reporter run: the reporter dedups on evidence run id and attempt,
 so re-running it alone is a silent no-op.

@@ -3,3 +3,7 @@
 */*.xcodeproj/project.xcworkspace/
 *~
 .DS_Store
+node_modules/
+
+# Local design screenshots (regenerate with scripts/shot.cjs)
+web/.shots/

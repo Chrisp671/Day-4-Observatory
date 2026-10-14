@@ -1,0 +1,174 @@
+# Review pipeline design
+
+## PR #3 diagnostics and evidence bounds
+
+The original 6,202,288-byte PR #3 request reproduced HTTP 400 with
+`MissingSessionID`, not a context/image limit. Add `x-opencode-session` derived
+from a SHA-256 digest of the bounded review text: stable for a repeated snapshot,
+distinct for changed evidence, no credentials or raw PR text in the header.
+Cap instructions plus evidence at 600,000 UTF-8 bytes and the serialized request
+at 6,000,000 bytes before HTTP (the provider refused a 6,994,978-byte request; eight captures fit). These are local safety limits, not provider token guarantees.
+
+Provider errors may cross into a public PR comment. Read only a bounded error
+prefix, redact credential header values and common token/URL forms before
+truncating to 500 characters, and retain Markdown escaping at publication.
+Enable body diagnostics only for the fixed model endpoints, never GitHub or
+signed artifact storage. Error text remains untrusted data, never instructions.
+
+Source context will consist of changed text files and their direct relative
+imports only. Resolve imports against the Git tree with POSIX paths, reject
+hidden/non-regular files, never import or execute source, and do not recursively
+expand the dependency graph. No silent truncation: oversized evidence fails
+locally before the model call. Keep the existing CSS-size PNG validation and
+lossless compression; do not reduce resolution below the rendered viewport.
+The successful provider response wrapped its JSON in one Markdown `json` fence.
+Allow exactly that outer wrapper (or an unlabelled fence) before strict parsing;
+no JSON repair, substring extraction or trailing commentary is accepted. The
+same complete/schema/location/legibility checks still govern the final verdict.
+Regression tests must exercise request boundaries, redaction and source selection.
+These changes retain the existing trust split and require no new dependencies.
+
+## OpenCode Go activation amendment
+
+The owner requested a different vision reviewer after the configured MiMo Pro
+proved text-only. Qwen3.7 Plus is served by the same existing Go account and accepts
+images. The new adapter uses only the fixed HTTPS endpoint
+`https://opencode.ai/zen/go/v1/messages`; it does not accept arbitrary
+OpenAI-compatible base URLs. The allowlist initially contains only `qwen3.7-plus`,
+mapped to the underlying `qwen` family. A proxy's provider name is not a
+model family and cannot evade independence checks. Unknown/text-only models fail
+before a paid request. Credentials remain step-scoped and no new dependency is
+introduced. Responses must end normally. Only text and reasoning blocks are accepted;
+reasoning is discarded and only final text enters the strict review validator.
+Tool-use and other unexpected blocks are rejected, even with an end-turn marker.
+The HTTP adapter retains no-redirect, size and time bounds. This amendment was
+walked through the Rafter ingestion/deployment and LLM/CWE questions before code.
+
+## Routed builders amendment
+
+The family declaration is the pipeline's input for calibrating trust in a review,
+and it accepted only named model families. A builder served through a gateway
+that hides the underlying model had no truthful value to give, and the gate told
+it to pick a family anyway. A guess there is worse than an admission, because
+downstream nothing can tell a guessed family from a verified one.
+
+`contract.py` therefore accepts one further value, `routed-unknown`, kept apart
+from `BUILDER_FAMILIES` as `ROUTED_UNKNOWN`. It means exactly: the builder ran as
+a routed model and its family cannot be established from inside the session. It
+is matched verbatim, case-sensitive and whole, so trailing text, alternate
+spellings and compounds such as `anthropic/routed-unknown` fail; the named
+families remain case-insensitive. The failure message now names both the
+families and this value.
+
+The cost is deliberate and confined to PRs declaring this value: the
+reviewer/builder independence check does not run for them, because a routed
+model is not guaranteed to differ from the reviewer's family (it may even be the
+reviewer's own). Nothing downstream compensates: the trusted rubric does not
+weight `builder_family`, so the reviewer model treats such a PR like any other.
+What the pipeline does instead is refuse to hide it: `render` prints the builder
+family on the comment header with "independence not established", so a human
+reader can tell an unchecked review from a checked one. Every named family keeps
+the check unchanged; the exactly-one-line rule, the refusal of provider and
+gateway names, and the rejection of near-misses all stay in force. Regression
+tests cover each of those five properties and the header line. Reviewer
+configuration is unaffected: the reviewer must still be a named provider and an
+allowlisted model. A rubric clause weighting `routed-unknown`, or a maintainer
+label required to accept it, is a possible follow-up and is not part of this
+amendment.
+
+## Contract and ownership
+
+The pipeline owns `.github/workflows/review-web.yml`,
+`.github/workflows/review-web-report.yml`, the final verification job and supporting
+artifact/output changes in `deploy-web.yml`, `scripts/review/**`, and
+`.github/review-rubric.md`. Application files and PLAN.md are read-only.
+
+Two workflows implement one review pipeline. `pull_request` executes the gate and
+captures without secrets or write permissions. `workflow_run` executes trusted
+default-branch Python only, reads evidence as data, calls the configured vision
+provider, and publishes the `Web review` check on the PR head SHA and one comment.
+The required check is deliberately not a workflow-level path-filtered job.
+
+The initial pipeline PR requires manual review: the reporting workflow cannot run
+until installed on the default branch. Pipeline/rubric modifications are themselves
+reviewed against the default-branch policy; policy cannot change its own verdict.
+
+## Rafter secure-design decisions (before implementation)
+
+- Data flow: PR source -> disposable read-only build runner -> bounded PNG artifact
+  -> fresh trusted reporting runner -> allowlisted model API -> validated JSON ->
+  GitHub comment and check. Deployment build -> immutable dist artifact -> Pages ->
+  separate unprivileged browser job comparing asset bytes with that artifact.
+- Identity: GitHub supplies workflow/run/PR identities. The reporter re-fetches
+  them, checks workflow path, repository, PR head, latest run and attempt. Artifact
+  contents cannot select the PR, SHA, provider, endpoint, executable, or output path.
+- Secrets: REVIEW_API_KEY is supplied only to the trusted review step. GITHUB_TOKEN
+  is ephemeral and limited to contents/actions read and checks/pull-requests write.
+  Checkout does not persist credentials. No application build, install script, or
+  browser runs in that credential-bearing job. Owner rotates the repository secret.
+- Ingestion: standard JSON parsing, explicit exact-key schemas, bounded API bodies,
+  source context, diff, findings and images. ZIP entries are allowlisted, bounded,
+  checked for duplicates and PNG dimensions, and read in memory, never extracted.
+  Oversized, missing or invalid evidence fails closed as review incomplete.
+- Network: provider hosts and API paths are fixed adapters (OpenAI, Anthropic,
+  Google); model IDs have bounded safe characters and known family prefixes.
+  Authenticated API requests do not follow redirects. Artifact signed downloads
+  use a separately validated GitHub storage destination without an auth header.
+  Live verification permits only the deployment's HTTPS origin and same-origin
+  assets; localhost HTTP is an explicit local-test option. Redirects fail.
+- Dependencies: Python standard library for API/report processing; Microsoft
+  Playwright for real browser capture, exact version and npm integrity lockfile in
+  scripts/review. CI installs this package with --ignore-scripts and installs the
+  browser explicitly. The app's requested npm ci runs only without secrets.
+  GitHub actions added by this pipeline are pinned to commits. Security scanning
+  and npm audit accompany validation; browser pins need routine updates.
+- Model boundary: base-branch rubric is trusted policy; PR body, code, PLAN entries,
+  screenshots, and model response are untrusted evidence. No tools or shell access
+  for the reviewer. Model text is escaped before publication. Findings require
+  valid source locations. No automatic merges or source edits.
+- Resource bounds: workflow timeouts, concurrency, finite pagination, bounded
+  model output and one paid model request per completed eligible run. No automatic
+  model retries. Missing configuration, provider failure or truncation fails closed.
+- Storage: evidence artifacts retained 14 days, including capture configuration.
+  Prompt/source payloads, raw API errors and credentials are not logged. Repository
+  source and images are sent to the owner-selected provider; its account retention
+  policy applies. OpenAI response storage is disabled. No database, PII ingestion,
+  authentication system, uploads service or user-data deletion is introduced.
+
+## STRIDE and abuse cases
+
+| Boundary | Abuse | Control |
+| --- | --- | --- |
+| PR -> build | Install script steals reviewer key (disclosure/elevation) | No reviewer secret or write token in build; fresh reporting VM |
+| Build -> reporter | Forged artifact chooses another PR or overwrites Python (spoofing/tampering) | API-derived identity; fixed artifact name; no ZIP extraction or execution |
+| Evidence -> model | PR says ignore rubric, invent approval (tampering) | Role separation, no tools, strict result validation; owner review remains necessary |
+| Model -> GitHub | Output injects images, mentions or links (disclosure) | Escape all free text, generate only trusted repository links |
+| Re-run -> check | Old run overwrites a new result (repudiation/tampering) | Latest-run/attempt and head rechecks immediately before writes; run links retained |
+| APIs -> runner | ZIP bomb, huge diff or repeated paid calls (DoS) | Byte/count/pagination/time limits, no automatic paid retry, concurrency |
+| Deployment -> verifier | HTML points at internal URL or stale bundle (SSRF/tampering) | Same-origin asset allowlist, no redirects, artifact-to-live SHA-256 comparisons |
+
+Residual limits: screenshot evidence comes from a PR-controlled runner and is not
+an attestation against a malicious contributor. Prompt injection cannot be made
+impossible. A model-family declaration is auditable metadata, not proof of who
+built code. Maintainers must protect workflow/policy changes and review findings;
+this system does not replace those controls. Real phone observations outrank
+model judgements. A post-deploy failure reports a bad release but does not roll it
+back automatically. Repository settings and the full owner profile remain owner
+configuration, not inferred secrets or fabricated policy.
+
+## Planet photo state (WI-033, DEC-039)
+
+The Planets capture state stays one state per viewport: the open row's detail now
+must show its reference photo fully loaded before the judgement is taken. The
+capture waits for `img.pimg` in the open detail to have `src` and decode, and
+asserts the caption's "not live" notice plus the NASA credit link opening in a
+new tab with `noopener noreferrer`. Heads without photos skip by the `img ===
+null` clause, so the same script serves pre-WI-033 heads. Archive contents are
+unchanged (eight images plus manifest), so `contract.py` needs no change and the
+6 MB request bound is unaffected. Rubric: DEC-039 governs photo honesty and
+legibility; the dial canvas rule is untouched.
+
+The reviewer must keep every string field at most 1000 characters. The schema
+declares maxLength but the provider does not enforce it, so the instruction says
+so in prose: validation stays strict and a review that still runs long fails
+rather than being truncated or retried.

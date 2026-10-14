@@ -1,0 +1,314 @@
+/**
+ * Day4 Observatory — the instrument, assembled.
+ *
+ * Three parts, and this file only joins them (DEC-037):
+ *   - scene(): everything the page shows, computed and worded (app/scene.ts).
+ *   - the shell: DOM binding and input (app/shell.ts).
+ *   - the painters: pure functions of a Scene slice (ui/*).
+ * State here is exactly what the viewer can change: the station, the travel
+ * offset, the lit ring, and the mode. Nothing else is remembered.
+ */
+import { scene, type Scene } from "./app/scene";
+import { bind, type Shell, type Stage } from "./app/shell";
+import { loadStation, saveStation, type Station } from "./app/location";
+import { loadMode, saveMode, type Mode } from "./app/mode";
+import { chartLoader, type Chart } from "./app/charts";
+import { clockAt, needsTick, returnToPresent, scrubClock, stepClock } from "./app/freeze";
+import {
+  ErrorBuffer,
+  composeReport,
+  fromRejection,
+  fromUncaught,
+  readBuild,
+} from "./app/erroreport";
+import { drawChart } from "./ui/chart";
+import { stepTime, type StepUnit } from "./app/timecontrol";
+import { drawDial } from "./ui/dial";
+import { drawEarth } from "./ui/earth";
+import { drawFiducial } from "./ui/fiducial";
+import { drawFirmament } from "./ui/firmament";
+import { drawGrain } from "./ui/grain";
+import { drawGround } from "./ui/ground";
+import { drawMoon } from "./ui/moon";
+import { drawAxis, drawPassionHours, drawWell } from "./ui/passion";
+import { drawRete } from "./ui/planetarcs";
+import { drawSun } from "./ui/sun";
+
+/* ————— what the viewer can change ————— */
+let station: Station = loadStation();
+/** Time-travel offset: displayed time = real now + offset. 0 = live. */
+let offsetMillis = 0;
+/** Freeze-time (DEC-051): the instant the clock is held at, or null while live.
+ * A pinned instant rather than an offset, because a freeze at 23:00 must still
+ * read 23:00 an hour later. It is deliberately NOT remembered across visits —
+ * unlike the station or the mode, a stale freeze would open on a stopped sky
+ * with nothing explaining why. */
+let frozenAt: number | null = null;
+
+const LIT_KEY = "day4.lit";
+/** The one ring lit on the rete, remembered across visits; Saturn to begin. */
+let lit: string | null = (() => {
+  try {
+    const v = localStorage.getItem(LIT_KEY);
+    return v === null ? "Saturn" : v === "" ? null : v;
+  } catch {
+    return "Saturn";
+  }
+})();
+
+/** Which view is showing: Day 4 on a first visit, then whatever was chosen
+ * last. The station and the travel offset are shared by every view. */
+let mode: Mode = loadMode();
+
+/** The constellation chosen in the Constellations view; the first one up
+ * when the view is first opened. Its chart is fetched only then. */
+let chart: string | null = null;
+const charts = chartLoader("charts/");
+let chartData: Chart | null = null;
+let chartDataFor: string | null = null;
+
+/* ————— error reporting (DEC-041) —————
+ * Captured in memory, bounded, and never transmitted: the module has no fetch
+ * and this file sends nothing either. The whole of it is "the visitor is told
+ * it broke, and offered a copy they choose to send". Registered before the
+ * first tick, so a failure during boot is caught rather than lost.
+ *
+ * `shell` is read through a holder rather than closed over directly. It is
+ * declared below this block, and the `error` and `unhandledrejection` handlers
+ * are live from this line — so anything thrown while `bind()` is still running
+ * arrives here with `shell` not yet assigned. Closing over the binding directly
+ * is a temporal dead zone waiting for the first boot-time exception, and it
+ * would throw a *second* error from inside the handler, hiding the first.
+ * `shellRef()` therefore tolerates an unassigned shell and says so. */
+const troubles = new ErrorBuffer();
+let shellRef: Shell | null = null;
+const troubleEnv = () => ({
+  build: readBuild(document),
+  userAgent: window.navigator.userAgent,
+  // Local time, not a locale or a zone name: the owner needs to know when, not
+  // where the visitor is.
+  when: new Date().toLocaleString("en-CA", { hour12: false }),
+});
+/** Show the affordance the moment something failed, not only on the next tick:
+ * an error thrown inside a tick would otherwise be reported by the tick that
+ * never completed. */
+const noteTrouble = (): void => {
+  // Null until `bind()` returns. A failure during boot is still CAPTURED and
+  // still counted; it simply has no strip to raise yet, and the count is
+  // non-zero by the time one exists.
+  shellRef?.showTrouble(troubles.size);
+};
+
+window.addEventListener("error", (event: ErrorEvent) => {
+  troubles.add(
+    fromUncaught(event.message, event.filename, event.lineno, event.colno, event.error, Date.now()),
+  );
+  noteTrouble();
+});
+window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
+  troubles.add(fromRejection(event.reason, Date.now()));
+  noteTrouble();
+});
+
+/* ————— the shell ————— */
+const shell = bind(document, {
+  onStep: (unit: StepUnit, dir: 1 | -1) => {
+    const state = clockAt(Date.now(), offsetMillis, frozenAt);
+    const next = stepClock(
+      state,
+      // Step the DISPLAYED instant, so the sky moves from where it is and a
+      // calendar unit keeps the wall-clock hour across a DST boundary.
+      stepTime(state.displayedUnixMillis, unit, dir),
+      (displayed) => stepTime(displayed, unit, dir),
+    );
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
+    tick();
+  },
+  onNow: () => {
+    // "Return to the present" includes releasing a held clock. Clearing the offset
+    // alone left NOW armed and inert while frozen — the offset is unused then — so
+    // the button promised a present it could not reach.
+    const next = returnToPresent();
+    const wasFrozen = frozenAt !== null;
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
+    if (wasFrozen) shell.showFrozen(false);
+    tick();
+  },
+  onFreeze: () => {
+    // Freeze at whatever is on the dial right now, so the button holds the
+    // instant the viewer is already looking at; release returns to live.
+    frozenAt = frozenAt === null ? clockAt(Date.now(), offsetMillis, null).displayedUnixMillis : null;
+    if (frozenAt === null) offsetMillis = 0;
+    shell.showFrozen(frozenAt !== null);
+    tick();
+  },
+  onReport: () => {
+    shell.showReport(composeReport(troubles.all(), troubleEnv()));
+  },
+  onDismissTrouble: () => {
+    // The visitor declined to report. Clear the buffer as well as the notice, so
+    // a *later* failure raises a fresh strip rather than counting this one again.
+    troubles.clear();
+    shell.showTrouble(0);
+  },
+  onStation: (next: Station) => {
+    station = next;
+    saveStation(station);
+    shell.stationStatus("");
+    tick();
+  },
+  onLocate: () => {
+    if (!("geolocation" in navigator)) {
+      shell.stationStatus("geolocation unavailable — enter coordinates");
+      return;
+    }
+    shell.stationStatus("locating…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        station = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        saveStation(station);
+        shell.showStation(station);
+        shell.stationStatus("");
+        tick();
+      },
+      () => shell.stationStatus("location denied — enter coordinates"),
+    );
+  },
+  onLit: (name: string | null) => {
+    lit = name;
+    try {
+      localStorage.setItem(LIT_KEY, name ?? "");
+    } catch {
+      /* private mode: the choice simply does not persist */
+    }
+    tick();
+  },
+  onScrub: (deltaHours: number) => {
+    const next = scrubClock(clockAt(Date.now(), offsetMillis, frozenAt), offsetMillis, deltaHours);
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
+    tick();
+  },
+  onResize: () => {
+    stage = shell.fit();
+    firmamentKey = "";
+    tick();
+  },
+  onMode: (next: Mode) => {
+    mode = next;
+    saveMode(mode);
+    shell.showMode(mode);
+    // Day 4's stage may have just come back into the layout: refit before painting.
+    stage = shell.fit();
+    if (mode === "constellations" && chart === null) {
+      // Open on something: the first constellation that is up right now.
+      const up = currentScene().tonight.programme[1]?.rows[0];
+      if (up !== undefined) chooseChart(up.name);
+    }
+    tick();
+  },
+  onChart: (name: string) => {
+    chooseChart(name);
+    tick();
+  },
+});
+
+/** Choose a constellation and fetch its chart if it is not already here. */
+function chooseChart(name: string): void {
+  chart = name;
+  if (chartDataFor === name) return;
+  chartData = null;
+  chartDataFor = null;
+  shell.chartStatus("loading chart…");
+  void charts.load(name).then((data) => {
+    if (chart !== name) return; // the viewer has moved on
+    chartData = data;
+    chartDataFor = name;
+    shell.chartStatus(data === null ? "no chart for this one" : "");
+    tick();
+  });
+}
+
+shell.showMode(mode);
+shellRef = shell;
+// A failure between registering the handlers and finishing boot was captured
+// while there was still no shell to raise a notice on. Now there is one, so
+// show what the app is already carrying. This cannot rescue a failure *inside*
+// `bind` itself — that leaves no shell at all, and nothing can be shown on a
+// page that did not finish building — but it covers the window on either side.
+noteTrouble();
+let stage: Stage = shell.fit();
+let firmamentKey = "";
+
+/* ————— the painters, in paint order ————— */
+function paint(s: Scene): void {
+  const { dial: ctx, firmament: fctx, W, R, dpr, viewport } = stage;
+
+  // The firmament redraws only when the light meaningfully changes.
+  const key = `${s.light.key}|${viewport.width}x${viewport.height}`;
+  if (fctx !== null && key !== firmamentKey) {
+    drawFirmament(fctx, viewport.width, viewport.height, s.light);
+    firmamentKey = key;
+  }
+  // No dial to paint while another view is showing and the stage has never been sized.
+  if (ctx === null || W === 0) return;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, W, W);
+  drawGrain(ctx, W, W);
+  ctx.translate(W / 2, W / 2);
+
+  drawGround(ctx, R, dpr, s.light);
+  drawDial(ctx, R, dpr, s.band);
+  drawPassionHours(ctx, R, dpr, s.band);
+  drawWell(ctx, R);
+  drawAxis(ctx, R, dpr, s.light);
+  drawEarth(ctx, R, dpr, s.earth);
+  drawRete(ctx, R, dpr, s.rete);
+  drawMoon(ctx, R, dpr, s.moon);
+  drawSun(ctx, R, dpr, s.sun);
+  drawFiducial(ctx, R, dpr, s.marks);
+}
+
+/** The constellation chart, when one is chosen and loaded. */
+function paintChart(): void {
+  const { chart: cctx, chartW, dpr } = stage;
+  if (cctx === null || chartW === 0) return;
+  cctx.setTransform(1, 0, 0, 1, 0, 0);
+  cctx.clearRect(0, 0, chartW, chartW);
+  if (chartData !== null && chartDataFor === chart) drawChart(cctx, chartW, dpr, chartData);
+}
+
+/** The Scene for the displayed instant; memoised inside, so cheap to ask twice. */
+function currentScene(): Scene {
+  const clock = clockAt(Date.now(), offsetMillis, frozenAt);
+  return scene({
+    displayedUnixMillis: clock.displayedUnixMillis,
+    nowUnixMillis: clock.nowUnixMillis,
+    station,
+    lit,
+    chart,
+  });
+}
+
+/* ————— one tick: compute, paint, bind ————— */
+function tick(): void {
+  const s = currentScene();
+  paint(s);
+  paintChart();
+  shell.paint(s);
+}
+
+/* ————— boot ————— */
+shell.showStation(station);
+tick();
+// The heavens move slowly; for those who ask for reduced motion, the
+// instrument follows them once a minute instead of every second.
+const cadence = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 60000 : 1000;
+// A frozen clock does not advance (DEC-051), so the interval has nothing to do
+// and the tick is skipped rather than repainting an identical dial.
+setInterval(() => {
+  if (needsTick(clockAt(Date.now(), offsetMillis, frozenAt))) tick();
+}, cadence);

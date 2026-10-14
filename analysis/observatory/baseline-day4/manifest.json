@@ -1,0 +1,132 @@
+{
+  "version": 1,
+  "time": "2026-09-02T23:00:00.000Z",
+  "timezone": "America/New_York",
+  "station": {
+    "lat": 40,
+    "lon": -74
+  },
+  "scale": "css",
+  "screenshots": [
+    {
+      "file": "phone-loaded.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "loaded",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 844,
+      "errors": []
+    },
+    {
+      "file": "phone-month.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "month",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 844,
+      "errors": []
+    },
+    {
+      "file": "phone-tonight.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "tonight",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 1637,
+      "errors": []
+    },
+    {
+      "file": "phone-second-row.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "state": "second-row",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 844,
+      "errors": []
+    },
+    {
+      "file": "tablet-loaded.png",
+      "viewport": {
+        "width": 820,
+        "height": 1180
+      },
+      "state": "loaded",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 1180,
+      "errors": []
+    },
+    {
+      "file": "tablet-month.png",
+      "viewport": {
+        "width": 820,
+        "height": 1180
+      },
+      "state": "month",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 1180,
+      "errors": []
+    },
+    {
+      "file": "tablet-tonight.png",
+      "viewport": {
+        "width": 820,
+        "height": 1180
+      },
+      "state": "tonight",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 1180,
+      "errors": []
+    },
+    {
+      "file": "tablet-second-row.png",
+      "viewport": {
+        "width": 820,
+        "height": 1180
+      },
+      "state": "second-row",
+      "canvasText": [
+        "sky: 12",
+        "sky: 6 AM",
+        "sky: 6 PM"
+      ],
+      "scrollHeight": 1180,
+      "errors": []
+    }
+  ]
+}

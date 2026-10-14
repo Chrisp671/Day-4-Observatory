@@ -1,0 +1,40 @@
+graph TD
+    subgraph App ["Application Shell"]
+        BOOT["1 Lifecycle & Boot<br/>main.mm, OrreryAppDelegate"]
+        UI["5 UI Controllers & Settings<br/>Main/Flipside/AlarmSet VCs"]
+    end
+    subgraph Core ["Engine"]
+        CLOCK["2 Clock Engine<br/>EOClock (singleton, timer loop)"]
+        ALARM["6 Alarm & Audio<br/>ECAudio + EOClock alarm logic"]
+    end
+    subgraph Views ["Rendering"]
+        COMP["3 View Composition<br/>EOBaseView / EOScheduledView / EOShuffleView"]
+        REND["4 Celestial Renderers<br/>hands, rings, moon, earth, eclipse"]
+    end
+    subgraph Support ["Support"]
+        UTIL["7 Diagnostics & Utilities<br/>Utilities, Constants.h, ECTrace,<br/>ECErrorReporter, EOBatteryAndDAL"]
+        RES["9 Build / Resources / l10n"]
+    end
+    EXT["8 External ES* libs<br/>esutil, estime, eslocation, esastro<br/>(sibling repos — NOT on disk)"]
+
+    BOOT -->|"creates singleton, fg/bg calls"| CLOCK
+    BOOT -->|"loads MainView-iPad nib"| UI
+    BOOT -->|"starts NTP, ESLocationTimeHelper"| EXT
+    BOOT -->|"ECAudio setup, DAL startup"| ALARM
+    BOOT --> UTIL
+    UI -->|"reads time/env, NSUserDefaults writes"| CLOCK
+    UI -->|"test ring, alarm enable"| ALARM
+    UI --> UTIL
+    CLOCK -->|"creates + positions all subviews"| COMP
+    CLOCK -->|"creates hands/rings, tick loop"| REND
+    CLOCK -->|"schedules UILocalNotification, startRinging"| ALARM
+    CLOCK -->|"owns ESWatchTime, ESTimeLocAstroEnvironment"| EXT
+    CLOCK --> UTIL
+    REND -->|"inherits EOScheduledView/EOHandView"| COMP
+    REND -->|"reads [EOClock theClock] state"| CLOCK
+    REND -->|"ESAstronomy queries"| EXT
+    COMP -->|"ESWatchTime"| EXT
+    COMP -->|"touch fwd to MainViewController (EOShuffleView.mm:14)"| UI
+    UTIL -->|"ESAstroConstants, ESTime, ESCalendar"| EXT
+    RES -.->|"bootstrap clones / verifies"| EXT
+    RES -.->|"nibs, textures, chime WAVs"| UI

@@ -1,0 +1,600 @@
+/**
+ * THE PLINTH — the worded half of the Scene (SEAM-003, DEC-037).
+ *
+ * Everything below the band and around it that is read rather than drawn:
+ * the rete's rings and their honest weight, every readout string, the
+ * TONIGHT ledger (glance and programme), and the spoken transcript. Ported
+ * wording-for-wording from the shell it replaces; the rules are the shell's
+ * rules, only now they live on the far side of the seam.
+ *
+ * Memoisation lives here, keyed as the shell keyed it: the sun day, moon
+ * day, planet days and seasons by local date and station; the planet board
+ * by the displayed minute and station. Callers keep nothing.
+ *
+ * Nothing here throws. A failure in the engine yields an empty rete, blank
+ * readouts, an empty ledger, or an empty transcript — the painters draw
+ * nothing for it and the page stays up.
+ */
+import type { FrameState } from "../engine/frame";
+import { planetBoard, planetDays, sunDay, type PlanetDay, type PlanetTimes } from "../engine/planets";
+import { planetSeason } from "../engine/season";
+import { localHoursOfDay, RING_ORDER, ringFraction } from "../ui/clockface";
+import { PLANET_COLORS } from "../ui/theme";
+import { fmt12, fmt12c } from "./clock12";
+import { mismatchPhrase, zoneReport } from "./clockzone";
+import { altAz, CONSTELLATIONS, isDarkEnough, skyEntry, tonightBoard, type SkyEntry } from "./constellations";
+import { formatCountdown, nextSunEvent } from "./hero";
+import { passionHours } from "./hours";
+import { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
+import type {
+  SceneConstellation,
+  SceneMovement,
+  ScenePlanet,
+  SceneReadouts,
+  SceneRequest,
+  SceneRing,
+  SceneRow,
+  SceneTonight,
+} from "./scene";
+import { isTravelled, moonDayFor } from "./scene-core";
+import { compassAbbrev, compassPoint, transcript } from "./transcript";
+import { VERSE_VERSION, verseOfDay } from "./verse";
+
+export interface PlinthInput {
+  readonly frame: FrameState;
+  readonly request: SceneRequest;
+}
+
+/* ————————————————————————————— never throw ————————————————————————————— */
+
+/** Run `fn`; on any failure hand back `fallback` instead of an exception. */
+function safely<T>(fn: () => T, fallback: T): T {
+  try {
+    return fn();
+  } catch {
+    return fallback;
+  }
+}
+
+/* ————————————————————————————— keys ————————————————————————————— */
+
+const stationKey = (r: SceneRequest): string => `${r.station.lat}|${r.station.lon}`;
+
+/** Local calendar date + station: the key for every day-anchored value. */
+const dayKey = (r: SceneRequest): string =>
+  `${new Date(r.displayedUnixMillis).toDateString()}|${stationKey(r)}`;
+
+/* ————————————————————————————— the sun's day ————————————————————————————— */
+
+let sunDayKey = "";
+let sunToday: { riseUnixMillis: number | null; setUnixMillis: number | null } =
+  { riseUnixMillis: null, setUnixMillis: null };
+
+/** Today's sunrise/sunset, steady until the date changes (DEC-031, turn 98). */
+function sunDayNow(r: SceneRequest): typeof sunToday {
+  const key = dayKey(r);
+  if (key !== sunDayKey) {
+    sunDayKey = key;
+    sunToday = sunDay(r.displayedUnixMillis, r.station.lat, r.station.lon);
+  }
+  return sunToday;
+}
+
+/* ————————————————————————————— the moon's day ————————————————————————————— */
+
+
+/* ————————————————————————————— the rete ————————————————————————————— */
+
+/** Hours the planet is up, allowing for a set that falls after midnight. */
+const spanHours = (rise: number, set: number): number => (((set - rise) % 24) + 24) % 24;
+
+/**
+ * Hours of real night inside an up-window: the overlap of [rise, set] with
+ * the night that runs from this day's sunset to the next sunrise. Polar days
+ * and nights pass null and get the whole window (night) or none of it (day).
+ */
+function nightOverlapHours(
+  rise: number,
+  set: number,
+  dayRise: number | null,
+  daySet: number | null,
+): number {
+  const up = spanHours(rise, set);
+  if (dayRise === null || daySet === null) return dayRise === null && daySet === null ? up : 0;
+  const nightLen = spanHours(daySet, dayRise);
+  // Walk the up-window in 6-minute steps and count those inside the night.
+  const STEP = 0.1;
+  let total = 0;
+  for (let h = 0; h < up; h += STEP) {
+    if (spanHours(daySet, (rise + h) % 24) < nightLen) total += STEP;
+  }
+  return Math.min(up, total);
+}
+
+/** A ring counts as "tonight's" when it is up at least this long after dark. */
+const NIGHT_MIN_HOURS = 1;
+
+interface DayArc {
+  readonly name: string;
+  readonly riseHours: number;
+  readonly setHours: number;
+  readonly transitHours: number | null;
+  readonly nightHours: number;
+}
+
+let planetDayKey = "";
+let planetDayList: readonly PlanetDay[] = [];
+let planetArcs: readonly DayArc[] = [];
+
+/** Every planet's day — rise, following set, peak — whether or not it makes an arc. */
+function planetDaysNow(r: SceneRequest): readonly PlanetDay[] {
+  planetArcsNow(r);
+  return planetDayList;
+}
+
+/** The up-arcs for the displayed calendar day (cached daily); a planet with
+ * no rise-and-set pair that day has no arc and is absent here. */
+function planetArcsNow(r: SceneRequest): readonly DayArc[] {
+  const key = dayKey(r);
+  if (key !== planetDayKey) {
+    planetDayKey = key;
+    const sd = sunDayNow(r);
+    const dayRise = sd.riseUnixMillis === null ? null : localHoursOfDay(sd.riseUnixMillis);
+    const daySet = sd.setUnixMillis === null ? null : localHoursOfDay(sd.setUnixMillis);
+    planetDayList = planetDays(r.displayedUnixMillis, r.station.lat, r.station.lon);
+    planetArcs = planetDayList
+      .filter((p: PlanetDay) => p.riseUnixMillis !== null && p.setUnixMillis !== null)
+      .map((p: PlanetDay) => {
+        const riseHours = localHoursOfDay(p.riseUnixMillis as number);
+        const setHours = localHoursOfDay(p.setUnixMillis as number);
+        return {
+          name: p.name,
+          riseHours,
+          setHours,
+          transitHours: p.transitUnixMillis === null ? null : localHoursOfDay(p.transitUnixMillis),
+          nightHours: nightOverlapHours(riseHours, setHours, dayRise, daySet),
+        };
+      });
+  }
+  return planetArcs;
+}
+
+/**
+ * The rete: one ring per planet that rises and sets this calendar day, in
+ * ring order, Mercury nearest the band. Honest weight unless one ring is
+ * lit; an unknown lit name lights nothing and dims the rest.
+ */
+export function sceneRete(input: PlinthInput): readonly SceneRing[] {
+  return safely((): readonly SceneRing[] => {
+    const { request } = input;
+    const arcs = [...planetArcsNow(request)]
+      .sort((a, b) => RING_ORDER.indexOf(a.name) - RING_ORDER.indexOf(b.name));
+    return arcs.map((arc) => ({
+      name: arc.name,
+      color: PLANET_COLORS[arc.name] ?? "",
+      radius: ringFraction(arc.name),
+      riseHours: arc.riseHours,
+      setHours: arc.setHours,
+      peakHours: arc.transitHours,
+      weight: request.lit === null
+        ? (arc.nightHours >= NIGHT_MIN_HOURS ? "bright" : "faint")
+        : (arc.name === request.lit ? "lit" : "dim"),
+    }));
+  }, []);
+}
+
+/* ————————————————————————————— readouts ————————————————————————————— */
+
+const PHASE_NAMES = [
+  "new moon", "waxing crescent", "first quarter", "waxing gibbous",
+  "full moon", "waning gibbous", "last quarter", "waning crescent",
+] as const;
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+const phaseName = (phaseAngleDeg: number): string => {
+  const phaseIdx = Math.floor((phaseAngleDeg / 360) * 8 + 0.5) % 8;
+  return PHASE_NAMES[phaseIdx] ?? "";
+};
+
+/** "↑6:12a · ↓9:40p Thu" / "no moonrise today" — the moon's day, worded. */
+function moonTimesLine(r: SceneRequest): string {
+  const d = new Date(r.displayedUnixMillis);
+  const md = moonDayFor(r);
+  if (md.riseUnixMillis === null) return "no moonrise today";
+  let out = `↑${fmt12c(md.riseUnixMillis)}`;
+  if (md.setUnixMillis !== null) {
+    const setD = new Date(md.setUnixMillis);
+    // The moon often sets on the next date; say so instead of confusing.
+    const dayTag = setD.getDate() === d.getDate() ? "" : ` ${WEEKDAY[setD.getDay()] ?? ""}`;
+    out += ` · ↓${fmt12c(md.setUnixMillis)}${dayTag}`;
+  }
+  return out;
+}
+
+const BLANK_READOUTS: SceneReadouts = {
+  verse: "", verseRef: "", heroKind: "", heroValue: "", travelledDate: "", zoneNote: "",
+  sunRise: "", sunSet: "", moonPhase: "", moonTimes: "", station: "", clock: "", zone: "",
+  passion: "",
+};
+
+/** Every string the header and plinth show, final and in the page's voice. */
+export function sceneReadouts(input: PlinthInput): SceneReadouts {
+  return safely((): SceneReadouts => {
+    const { frame: s, request: r } = input;
+    const t = r.displayedUnixMillis;
+    const { station } = r;
+
+    // The masthead verse follows the real calendar day (a daily devotion),
+    // not the time-travelled instrument time.
+    const verse = verseOfDay(r.nowUnixMillis);
+
+    const ev = nextSunEvent(s.sun.nextRiseUnixMillis, s.sun.nextSetUnixMillis);
+    const heroKind = ev === null ? "Polar day or night" : ev.kind === "sunset" ? "Sunset in" : "Sunrise in";
+    const heroValue = ev === null ? "" : formatCountdown(ev.atUnixMillis - t);
+
+    // Travelled: the header says where you have landed — the date Parker
+    // steps toward, month by month, looking for Saturn season (DEC-031).
+    const travelledDate = !isTravelled(r) ? ""
+      : new Date(t).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+
+    // Times are rendered in the device's zone; say so, and say when that is not
+    // the clock the station keeps (a New York sunrise on a Chicago clock).
+    const zone = zoneReport(t, station.lon);
+    const zoneNote = zone.mismatched
+      ? `readouts in ${zone.label} — ${mismatchPhrase(zone.offsetDeltaHours)}`
+      : "";
+
+    const sd = sunDayNow(r);
+    const sunRise = sd.riseUnixMillis === null ? "—" : `↑${fmt12(sd.riseUnixMillis)}`;
+    const sunSet = sd.setUnixMillis === null ? "" : `↓${fmt12(sd.setUnixMillis)}`;
+
+    // The sixth hour to the ninth, counted from sunrise as Scripture counts
+    // them (Mark 15:33). The caption speaks only while they are passing.
+    const passion = passionHours(s.sun.dayRiseUnixMillis, s.sun.daySetUnixMillis);
+    const inPassion = passion !== null && t >= passion.fromUnixMillis && t <= passion.toUnixMillis;
+
+    return {
+      verse: verse.text,
+      verseRef: `${verse.reference} · ${VERSE_VERSION}`,
+      heroKind,
+      heroValue,
+      travelledDate,
+      zoneNote,
+      sunRise,
+      sunSet,
+      // The phase by name; the age lives in the spoken transcript.
+      moonPhase: phaseName(s.moon.phaseAngleDeg),
+      moonTimes: moonTimesLine(r),
+      station: `${Math.abs(station.lat).toFixed(1)}°${station.lat >= 0 ? "N" : "S"} ${Math.abs(station.lon).toFixed(1)}°${station.lon >= 0 ? "E" : "W"}`,
+      clock: fmt12(t),
+      zone: zone.label,
+      passion: inPassion && passion !== null
+        ? `The sixth hour to the ninth · ${fmt12(passion.fromUnixMillis)}–${fmt12(passion.toUnixMillis)}`
+        : "",
+    };
+  }, BLANK_READOUTS);
+}
+
+/* ————————————————————————————— tonight ————————————————————————————— */
+
+/** How many of the board's entries the glance shows; the rest wait in the fold. */
+
+let boardKey = "";
+let board: readonly PlanetTimes[] = [];
+
+/** The five planets for the displayed minute; searches cached accordingly. */
+function planetsNow(r: SceneRequest): readonly PlanetTimes[] {
+  const key = `${Math.floor(r.displayedUnixMillis / 60000)}|${stationKey(r)}`;
+  if (key !== boardKey) {
+    boardKey = key;
+    board = planetBoard(r.displayedUnixMillis, r.station.lat, r.station.lon);
+  }
+  return board;
+}
+
+/* ————— the season: Parker's month-by-month hunt, answered ————— */
+const seasonCache = new Map<string, string>();
+
+/** "season from Sep 14" for a planet not yet rising in the evening, else "". */
+function seasonNote(name: string, r: SceneRequest): string {
+  const key = `${name}|${dayKey(r)}`;
+  const hit = seasonCache.get(key);
+  if (hit !== undefined) return hit;
+  const note = safely(() => {
+    const s = planetSeason(name, r.displayedUnixMillis, r.station.lat, r.station.lon);
+    return s.nowInSeason || s.fromUnixMillis === null
+      ? ""
+      : `season from ${new Date(s.fromUnixMillis).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  }, "");
+  seasonCache.set(key, note);
+  return note;
+}
+
+/** "rises in 2h 14m · peaks 21:20" — the planning line for one planet. */
+function planetPhrase(p: PlanetTimes, r: SceneRequest): string {
+  const t = r.displayedUnixMillis;
+  const next = p.upNow ? p.setUnixMillis : p.riseUnixMillis;
+  const verb = p.upNow ? "sets in" : "rises in";
+  // Parts joined by " · ", so a planet with no next event (up all day at a
+  // polar station) never starts its line with a stray separator.
+  const parts: string[] = [];
+  if (next !== null) parts.push(`${verb} ${formatCountdown(next - t)}`);
+  else parts.push(p.upNow ? "up all day" : "not rising");
+  if (p.upNow) {
+    let where = `${Math.round(p.altitudeDeg)}° ${compassAbbrev(p.azimuthDeg)}`;
+    if (p.transitUnixMillis !== null && p.setUnixMillis !== null && p.transitUnixMillis < p.setUnixMillis) {
+      // ⋆ marks the peak — the culmination Parker plans viewing around.
+      where += ` ⋆${fmt12c(p.transitUnixMillis)}`;
+    }
+    parts.push(where);
+  } else {
+    // Not an evening object yet: say when it will be, so nobody has to step
+    // month by month to find out (DEC-031: "when will I be able to see Saturn?").
+    const season = seasonNote(p.name, r);
+    if (season !== "") parts.push(season);
+  }
+  return parts.join(" · ");
+}
+
+/** "up all night" / "sets in 3h 40m" / "rises in 2h 14m". */
+function skyPhrase(entry: SkyEntry): string {
+  if (entry.status === "circumpolar") return "up all night";
+  const countdown = formatCountdown(entry.untilMillis ?? 0);
+  return entry.status === "up" ? `sets in ${countdown}` : `rises in ${countdown}`;
+}
+
+/** Short forms for the columns: the name never yields, so the verb does. */
+const shortSkyPhrase = (e: SkyEntry): string =>
+  skyPhrase(e).replace(" in ", " ").replace("up all night", "all night");
+
+const planetRow = (p: PlanetTimes, r: SceneRequest): SceneRow => ({
+  name: p.name,
+  line: planetPhrase(p, r),
+  up: p.upNow,
+  color: PLANET_COLORS[p.name] ?? null,
+  lit: p.name === r.lit,
+  starred: false,
+});
+
+const skyRow = (e: SkyEntry, line: string, chart: string | null): SceneRow => ({
+  name: e.constellation.name,
+  line,
+  up: e.status !== "down",
+  color: null,
+  lit: e.constellation.name === chart,
+  starred: e.constellation.mazzaroth === true,
+});
+
+const FOOTNOTE =
+  "★ Mazzaroth — the constellations of the sun’s path, led out in their season (Job 38:32)";
+
+const EMPTY_TONIGHT: SceneTonight = {
+  note: "",
+  glance: [],
+  programme: [
+    { title: MOVEMENTS.wandering, rows: [] },
+    { title: MOVEMENTS.up, rows: [] },
+    { title: MOVEMENTS.rising, rows: [] },
+  ],
+  footnote: FOOTNOTE,
+};
+
+/** The evening's program: three headliners at a glance, the whole sky in the fold. */
+export function sceneTonight(input: PlinthInput): SceneTonight {
+  return safely((): SceneTonight => {
+    const { frame: s, request: r } = input;
+    const lst = s.siderealHours + r.station.lon / 15;
+
+    // A constellation that never rises from this station is not news; drop it.
+    // The glance board holds three headliners; the full sky lives behind the
+    // TONIGHT fold (DEC-028's pattern: the label is the control).
+    const notable = tonightBoard(lst, r.station.lat, CONSTELLATIONS.filter((c) => c.notable === true))
+      .filter((e) => e.status !== "never");
+
+    // Saturn and Jupiter first — "when will I be able to see Saturn?" is the
+    // question this board exists to answer (DEC-031).
+    // The lit planet leads; then the club's favourites; all in ring order.
+    const planets = planetsNow(r);
+    const lit = r.lit;
+    const wanted = new Set([lit ?? "", "Saturn", "Jupiter"]);
+    const favourites = planets
+      .filter((p) => wanted.has(p.name))
+      .sort((a, b) => (a.name === lit ? -1 : b.name === lit ? 1 : RING_ORDER.indexOf(a.name) - RING_ORDER.indexOf(b.name)));
+    const glance: SceneRow[] = [
+      ...favourites.map((p) => planetRow(p, r)),
+      ...notable.map((e) => skyRow(e, skyPhrase(e), r.chart)),
+    ].slice(0, GLANCE_ROWS);
+
+    // The program, in movements: the wandering stars first, then what is up,
+    // then what is still to rise — each counted, the Mazzaroth starred,
+    // never-risers left out. A programme, not a wall (DEC-030).
+    const all = tonightBoard(lst, r.station.lat).filter((e) => e.status !== "never");
+    const up = all.filter((e) => e.status !== "down");
+    const rising = all.filter((e) => e.status === "down");
+    const programme: SceneMovement[] = [
+      { title: MOVEMENTS.wandering, rows: planets.map((p) => planetRow(p, r)) },
+      { title: MOVEMENTS.up, rows: up.map((e) => skyRow(e, shortSkyPhrase(e), r.chart)) },
+      { title: MOVEMENTS.rising, rows: rising.map((e) => skyRow(e, shortSkyPhrase(e), r.chart)) },
+    ];
+
+    return {
+      // Up is not the same as visible: only promise stars once the sky is dark.
+      note: isDarkEnough(s.sun.altitudeDeg) ? "" : "visible after dark",
+      glance,
+      programme,
+      footnote: FOOTNOTE,
+    };
+  }, EMPTY_TONIGHT);
+}
+
+/* ————————————————————————————— planets ————————————————————————————— */
+
+/** "↓4:05 am Thu" — a time, with the weekday when it falls on another date. */
+function dayTagged(prefix: string, unixMillis: number, displayed: number): string {
+  const d = new Date(unixMillis);
+  const tag = d.getDate() === new Date(displayed).getDate() ? "" : ` ${WEEKDAY[d.getDay()] ?? ""}`;
+  return `${prefix}${fmt12(unixMillis)}${tag}`;
+}
+
+/** Below this altitude a planet needs a clear, unobstructed horizon. */
+const LOW_ALTITUDE_DEG = 10;
+/** Roughly how long after sunset the sky is still too bright for a faint planet. */
+const TWILIGHT_MS = 45 * 60_000;
+
+/** One honest sentence about seeing this planet at the displayed instant. */
+function visibilityLine(p: PlanetTimes, r: SceneRequest, sunAltitudeDeg: number, sunSet: number | null): string {
+  const t = r.displayedUnixMillis;
+  const dir = compassPoint(p.azimuthDeg);
+  const alt = Math.round(p.altitudeDeg);
+  if (p.upNow) {
+    if (isDarkEnough(sunAltitudeDeg)) {
+      return alt < LOW_ALTITUDE_DEG
+        ? `Up now, low in the ${dir}: it needs a clear horizon.`
+        : `Up now and the sky is dark: look ${dir}, ${alt}° above the horizon.`;
+    }
+    // Daylight. Does it survive until dark, set in twilight, or go before the sun?
+    if (p.setUnixMillis !== null && sunSet !== null) {
+      if (p.setUnixMillis < sunSet) {
+        return `Up now, but in daylight; it sets at ${fmt12(p.setUnixMillis)}, before the sun does.`;
+      }
+      if (p.setUnixMillis < sunSet + TWILIGHT_MS) {
+        return `Up now in daylight; it sets at ${fmt12(p.setUnixMillis)}, in twilight — look low in the ${dir} just after sunset.`;
+      }
+    }
+    return `Up now in daylight, ${alt}° up in the ${dir}; visible after dark.`;
+  }
+  if (p.riseUnixMillis === null) return "Below the horizon, and it does not rise from this station on this date.";
+  const season = seasonNote(p.name, r);
+  const when = `Below the horizon; rises in ${formatCountdown(p.riseUnixMillis - t)}, at ${fmt12(p.riseUnixMillis)}.`;
+  return season === "" ? when : `${when} Evening ${season}.`;
+}
+
+/** Why this planet has no arc on the rete today, or "" when it has one. */
+function arcNoteFor(p: PlanetTimes, day: PlanetDay | undefined, r: SceneRequest): string {
+  if (day !== undefined && day.riseUnixMillis !== null && day.setUnixMillis !== null) return "";
+  if (p.riseUnixMillis === null && p.setUnixMillis === null) {
+    return p.upNow
+      ? "No ring today: from this station it stays above the horizon all day and night, so there is no rise or set to draw."
+      : "No ring today: from this station it stays below the horizon, so there is no rise or set to draw.";
+  }
+  if (day === undefined || day.riseUnixMillis === null) {
+    return p.riseUnixMillis === null
+      ? "No ring today: no rise falls on this calendar date."
+      : `No ring today: its rise slipped past midnight — the next is ${dayTagged("", p.riseUnixMillis, r.displayedUnixMillis)}, and the ring returns with it.`;
+  }
+  return `No ring today: it rises at ${fmt12(day.riseUnixMillis)} but no set follows soon enough to close the arc.`;
+}
+
+const EMPTY_PLANETS: readonly ScenePlanet[] = [];
+
+/**
+ * The five wandering stars for the Planets view (REQ-014): the ledger's own
+ * line, the day's rise, peak and set, where to look now, one honest
+ * sentence on visibility, and — when the rete has no ring for it — why.
+ * Always five rows, in ring order; never throws.
+ */
+export function scenePlanets(input: PlinthInput): readonly ScenePlanet[] {
+  return safely((): readonly ScenePlanet[] => {
+    const { frame: s, request: r } = input;
+    const t = r.displayedUnixMillis;
+    const days = planetDaysNow(r);
+    return [...planetsNow(r)]
+      .sort((a, b) => RING_ORDER.indexOf(a.name) - RING_ORDER.indexOf(b.name))
+      .map((p): ScenePlanet => {
+        const day = days.find((d) => d.name === p.name);
+        return {
+          name: p.name,
+          color: PLANET_COLORS[p.name] ?? "",
+          up: p.upNow,
+          lit: p.name === r.lit,
+          line: planetPhrase(p, r),
+          rise: day?.riseUnixMillis == null ? "—" : `↑${fmt12(day.riseUnixMillis)}`,
+          peak: day?.transitUnixMillis == null ? "—" : dayTagged("⋆", day.transitUnixMillis, t),
+          set: day?.setUnixMillis == null ? "—" : dayTagged("↓", day.setUnixMillis, t),
+          // Where to look, only when there is somewhere to look; the
+          // visibility sentence says "below the horizon" once, not twice.
+          where: p.upNow ? `${Math.round(p.altitudeDeg)}° up, ${compassPoint(p.azimuthDeg)}` : "",
+          visibility: visibilityLine(p, r, s.sun.altitudeDeg, s.sun.nextSetUnixMillis),
+          arcNote: arcNoteFor(p, day, r),
+        };
+      });
+  }, EMPTY_PLANETS);
+}
+
+/* ————————————————————————————— the chosen constellation ————————————————————————————— */
+
+/**
+ * The chosen constellation for the Constellations view (REQ-015): its
+ * standing in the sky at the shared place and time, tracked by its
+ * brightest star, and an honest sentence on seeing it. Null when nothing is
+ * chosen or the name is not in the catalog; never throws.
+ */
+export function sceneConstellation(input: PlinthInput): SceneConstellation | null {
+  return safely((): SceneConstellation | null => {
+    const { frame: s, request: r } = input;
+    if (r.chart === null) return null;
+    const c = CONSTELLATIONS.find((k) => k.name === r.chart);
+    if (c === undefined) return null;
+    const lst = s.siderealHours + r.station.lon / 15;
+    const e = skyEntry(c, lst, r.station.lat);
+    const { altitudeDeg, azimuthDeg } = altAz(c.raHours, c.decDeg, lst, r.station.lat);
+    const up = e.status === "up" || e.status === "circumpolar";
+    const dir = compassPoint(azimuthDeg);
+    const alt = Math.round(altitudeDeg);
+    const dark = isDarkEnough(s.sun.altitudeDeg);
+    const hemi = r.station.lat >= 0 ? "N" : "S";
+
+    const status =
+      e.status === "circumpolar" ? "Up all night"
+      : e.status === "never" ? "Never rises from this station"
+      : e.status === "up" ? `Up now · sets in ${formatCountdown(e.untilMillis ?? 0)}`
+      : `Rises in ${formatCountdown(e.untilMillis ?? 0)}`;
+
+    let visibility: string;
+    if (e.status === "never") {
+      visibility = `From ${Math.abs(r.station.lat).toFixed(0)}°${hemi}, ${c.star} never clears the horizon; travel ${hemi === "N" ? "south" : "north"} to see it.`;
+    } else if (up && alt > 0) {
+      visibility = !dark
+        ? `Up now, but the sky is not dark yet; look ${dir}, ${alt}° up, once it is.`
+        : alt < 10
+          ? `Up now, low in the ${dir}: it needs a clear horizon.`
+          : `Up now and the sky is dark: look ${dir}, ${alt}° above the horizon.`;
+    } else if (e.status === "circumpolar") {
+      // Circumpolar, but grazing the horizon at this moment.
+      visibility = `Up now, but right on the ${dir} horizon; it climbs later in the night.`;
+    } else if (up) {
+      // Up by the catalogue but at the horizon: it is setting as you look.
+      visibility = `Setting now, right on the ${dir} horizon; it returns tomorrow.`;
+    } else {
+      visibility = `Below the horizon; rises in the ${dir} in ${formatCountdown(e.untilMillis ?? 0)}.`;
+    }
+
+    return {
+      name: c.name,
+      tracked: `tracked by ${c.star}`,
+      status,
+      where: up && alt > 0 ? `${alt}° up, ${dir}` : "",
+      visibility,
+      note: c.mazzaroth === true ? FOOTNOTE : "",
+      starred: c.mazzaroth === true,
+    };
+  }, null);
+}
+
+/* ————————————————————————————— spoken ————————————————————————————— */
+
+/** The dial in one plain paragraph, for aria-describedby (DEC-029). */
+export function sceneSpoken(input: PlinthInput): string {
+  return safely(() => {
+    const { frame: s } = input;
+    return transcript({
+      sunAltitudeDeg: s.sun.altitudeDeg,
+      sunAzimuthDeg: s.sun.azimuthDeg,
+      moonPhaseName: phaseName(s.moon.phaseAngleDeg) || "moon",
+      moonAgeDays: s.moon.ageDays,
+      riseHHMM: s.sun.nextRiseUnixMillis === null ? null : fmt12(s.sun.nextRiseUnixMillis),
+      setHHMM: s.sun.nextSetUnixMillis === null ? null : fmt12(s.sun.nextSetUnixMillis),
+    });
+  }, "");
+}

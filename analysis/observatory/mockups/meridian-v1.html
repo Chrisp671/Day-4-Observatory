@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Day4 Observatory — a living sky instrument (mockup v2, brand-aligned)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  /* ————— Cyanotype tokens ————— */
+  :root{
+    --print-0:#081627;   /* vignette deep      */
+    --print-1:#0E2440;   /* Prussian field     */
+    --ink-hi:#D7E6F2;    /* primary linework   */
+    --ink-mid:#7E9CB8;   /* secondary linework */
+    --ink-low:#3A5876;   /* faint linework     */
+    --sunlight:#F0B310;  /* the sun, only — Day4 brand gold */
+    --moonlight:#ECF2F7; /* the moon, only     */
+    --serif:'Instrument Serif', Georgia, serif;
+    --mono:'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(120% 120% at 50% 42%, var(--print-1) 0%, var(--print-0) 78%);
+    color:var(--ink-hi);
+    font-family:var(--mono);
+    display:flex;flex-direction:column;
+    min-height:100dvh;
+    overflow:hidden;
+  }
+
+  /* ————— the print develops ————— */
+  @keyframes develop{
+    from{opacity:0;filter:blur(10px) saturate(.4)}
+    to{opacity:1;filter:blur(0) saturate(1)}
+  }
+  .develop{animation:develop 1.6s cubic-bezier(.2,.6,.2,1) both}
+  .develop.d1{animation-delay:.15s}
+  .develop.d2{animation-delay:.55s}
+  .develop.d3{animation-delay:.95s}
+  @media (prefers-reduced-motion: reduce){
+    .develop{animation:none}
+  }
+
+  header{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding:clamp(14px,2.4vh,28px) clamp(18px,3vw,40px) 0;
+  }
+  .wordmark{font-family:var(--serif);font-style:italic;font-weight:400;
+    font-size:clamp(22px,3.2vh,34px);letter-spacing:.02em;color:var(--ink-hi)}
+  .wordmark small{font-family:var(--mono);font-style:normal;font-size:.38em;
+    letter-spacing:.32em;color:var(--ink-mid);vertical-align:.45em;margin-left:.9em}
+  .clockline{font-size:clamp(10px,1.5vh,13px);letter-spacing:.14em;color:var(--ink-mid);
+    text-align:right;font-weight:300}
+  .clockline b{color:var(--ink-hi);font-weight:500}
+
+  main{flex:1;display:grid;place-items:center;min-height:0;padding:0 12px}
+  canvas{display:block;max-width:100%;max-height:100%}
+
+  footer{
+    display:grid;grid-template-columns:repeat(4,1fr);
+    gap:1px;background:var(--ink-low);
+    border-top:1px solid var(--ink-low);
+    margin:0 clamp(18px,3vw,40px) clamp(14px,2.4vh,26px);
+    border:1px solid var(--ink-low);
+  }
+  .cell{background:var(--print-0);padding:10px 14px 12px}
+  .cell .k{font-size:9px;letter-spacing:.28em;color:var(--ink-mid);font-weight:300}
+  .cell .v{font-size:clamp(12px,1.9vh,16px);letter-spacing:.06em;margin-top:4px;font-weight:400}
+  .cell .v .u{color:var(--ink-mid);font-size:.78em}
+  .note{padding:6px clamp(18px,3vw,40px) 12px;font-size:9px;letter-spacing:.2em;
+    color:var(--ink-low);text-align:center}
+  @media (max-width:560px){
+    footer{grid-template-columns:repeat(2,1fr)}
+    .clockline span.date{display:none}
+  }
+  :focus-visible{outline:2px solid var(--sunlight);outline-offset:3px}
+</style>
+</head>
+<body>
+
+<header class="develop d1">
+  <div class="wordmark"><img src="https://day4.org/wp-content/uploads/2022/12/Day-4-Astronomy-Wide-Logo-For-Dark-Background.png"
+    alt="Day4 Astronomy" style="height:1.5em;vertical-align:-0.35em;margin-right:.45em">Observatory</div>
+  <div class="clockline"><span class="date" id="dateline">—</span> &nbsp; <b id="timeline">—</b></div>
+</header>
+
+<main class="develop d2">
+  <canvas id="sky" role="img"
+    aria-label="Live astronomical chart: the sun and moon on a 24-hour dial around Earth's day-night terminator"></canvas>
+</main>
+
+<footer class="develop d3">
+  <div class="cell"><div class="k">SUNRISE</div><div class="v" id="rise">—</div></div>
+  <div class="cell"><div class="k">SUNSET</div><div class="v" id="set">—</div></div>
+  <div class="cell"><div class="k">MOON</div><div class="v" id="moon">—</div></div>
+  <div class="cell"><div class="k">STATION</div><div class="v" id="station">—</div></div>
+</footer>
+<div class="note develop d3">"AND LET THEM BE FOR SIGNS AND SEASONS, AND FOR DAYS AND YEARS" — GENESIS 1:14&nbsp;&nbsp;·&nbsp;&nbsp;DESIGN MOCKUP · POSITIONS APPROXIMATE · ASSUMED 40°N</div>
+
+<script>
+"use strict";
+/* Meridian mockup v1 — cyanotype sky instrument.
+   Mockup-grade astronomy: good enough to be truthful on screen,
+   NOT the engine (see PLAN.md SEAM-001 for the real contract). */
+
+const TAU = Math.PI*2;
+const LAT = 40*Math.PI/180;            // assumed station latitude (see footer note)
+const SYNODIC = 29.530588;             // days per lunation
+const NEWMOON_JD = 2451550.26;         // 2000-01-06 18:14 UTC
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C = {
+  inkHi:css('--ink-hi'), inkMid:css('--ink-mid'), inkLow:css('--ink-low'),
+  sun:css('--sunlight'), moon:css('--moonlight'),
+  night:'#122A49', shadow:'#0A1C33'
+};
+
+const cv = document.getElementById('sky');
+const cx = cv.getContext('2d');
+let W=0,H=0,R=0,DPR=1;
+
+function fit(){
+  const m = cv.parentElement.getBoundingClientRect();
+  const s = Math.floor(Math.min(m.width, m.height));
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = s*DPR; cv.height = s*DPR;
+  cv.style.width = s+'px'; cv.style.height = s+'px';
+  W = H = s*DPR; R = W*0.5*0.92;
+}
+addEventListener('resize', ()=>{fit(); draw();});
+
+/* ————— sky math (approximate) ————— */
+const jd = d => d.getTime()/86400000 + 2440587.5;
+function dayHalf(d){                      // half-day length in hours
+  const del = -0.4091*Math.cos(TAU/365.2422*((jd(d)-2451545.0)+10));
+  const x = -Math.tan(LAT)*Math.tan(del);
+  return Math.acos(Math.min(1,Math.max(-1,x)))/TAU*24;
+}
+const localHour = d => d.getHours()+d.getMinutes()/60+d.getSeconds()/3600;
+const moonAge = d => ((jd(d)-NEWMOON_JD)%SYNODIC+SYNODIC)%SYNODIC;
+function gmstDeg(d){ return (280.46062 + 360.98565*(jd(d)-2451545.0))%360; }
+
+/* dial: hour → canvas angle. Solar noon at top, midnight at bottom. */
+const hourAngle = h => (h/24)*TAU + Math.PI/2;
+
+/* ————— seeded star field (still, like a print — never shimmers) ————— */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;
+  let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;
+  return ((t^t>>>14)>>>0)/4294967296}}
+const rnd = mulberry32(1826);            // Herschel's cyanotype era, why not
+const STARS = Array.from({length:110},()=>({
+  a:rnd()*TAU, r:0.42+rnd()*0.62, s:rnd()<0.12?1.7:0.9, o:0.25+rnd()*0.5
+}));
+
+/* ————— drawing ————— */
+function line(w,color,alpha=1){cx.lineWidth=w*DPR;cx.strokeStyle=color;cx.globalAlpha=alpha}
+function ring(r){cx.beginPath();cx.arc(0,0,r,0,TAU);cx.stroke()}
+
+function drawStars(){
+  for(const s of STARS){
+    const x=Math.cos(s.a)*s.r*R*1.06, y=Math.sin(s.a)*s.r*R*1.06;
+    cx.globalAlpha=s.o; cx.fillStyle=C.inkMid;
+    cx.beginPath(); cx.arc(x,y,s.s*DPR*0.7,0,TAU); cx.fill();
+  }
+  cx.globalAlpha=1;
+}
+
+function drawDial(d){
+  const half=dayHalf(d), rise=12-half, set=12+half;
+  const rOut=R*0.985, rIn=R*0.875, rMid=(rOut+rIn)/2;
+
+  line(1,C.inkLow,0.9); ring(rOut); ring(rIn);
+
+  /* night arc then day arc across the band */
+  cx.lineWidth=(rOut-rIn); cx.lineCap='butt';
+  cx.strokeStyle=C.night; cx.globalAlpha=0.55;
+  cx.beginPath(); cx.arc(0,0,rMid,hourAngle(set),hourAngle(rise+24)); cx.stroke();
+  cx.strokeStyle=C.sun; cx.globalAlpha=0.16;
+  cx.beginPath(); cx.arc(0,0,rMid,hourAngle(rise),hourAngle(set)); cx.stroke();
+  cx.globalAlpha=1;
+
+  /* ticks + numerals */
+  cx.font=`300 ${Math.round(R*0.052)}px ${'IBM Plex Mono'},monospace`;
+  cx.textAlign='center'; cx.textBaseline='middle';
+  for(let h=0;h<24;h++){
+    const a=hourAngle(h), big=h%6===0;
+    const t1=big?rIn-R*0.012:rIn, t2=rOut;
+    line(big?1.4:0.7, big?C.inkHi:C.inkMid, big?0.95:0.55);
+    cx.beginPath();
+    cx.moveTo(Math.cos(a)*t1,Math.sin(a)*t1);
+    cx.lineTo(Math.cos(a)*t2,Math.sin(a)*t2);
+    cx.stroke();
+    if(big){
+      cx.globalAlpha=0.9; cx.fillStyle=C.inkMid;
+      const rn=rIn-R*0.055;
+      cx.fillText(String(h).padStart(2,'0'),Math.cos(a)*rn,Math.sin(a)*rn);
+    }
+  }
+  cx.globalAlpha=1;
+  return {rise,set,rMid};
+}
+
+function drawSidereal(d){
+  const r=R*0.575, rot=-gmstDeg(d)/360*TAU;
+  cx.save(); cx.rotate(rot);
+  line(0.7,C.inkLow,0.8); ring(r);
+  for(let i=0;i<72;i++){
+    const a=i/72*TAU, big=i%6===0;
+    line(0.7,C.inkLow,big?0.9:0.45);
+    cx.beginPath();
+    cx.moveTo(Math.cos(a)*(r-(big?R*0.018:R*0.009)),Math.sin(a)*(r-(big?R*0.018:R*0.009)));
+    cx.lineTo(Math.cos(a)*(r+(big?R*0.018:R*0.009)),Math.sin(a)*(r+(big?R*0.018:R*0.009)));
+    cx.stroke();
+  }
+  /* four chart-star glyphs riding the sidereal ring */
+  for(let i=0;i<4;i++){
+    const a=i/4*TAU+0.42;
+    const x=Math.cos(a)*r, y=Math.sin(a)*r, s=R*0.016;
+    line(0.9,C.inkMid,0.9);
+    cx.beginPath();
+    cx.moveTo(x-s,y);cx.lineTo(x+s,y);cx.moveTo(x,y-s);cx.lineTo(x,y+s);
+    cx.stroke();
+  }
+  cx.restore(); cx.globalAlpha=1;
+}
+
+function drawEarth(d){
+  const r=R*0.30;
+  /* orthographic graticule sphere */
+  line(1.1,C.inkHi,0.95); ring(r);
+  line(0.7,C.inkLow,0.9);
+  cx.beginPath(); cx.moveTo(-r,0); cx.lineTo(r,0); cx.stroke();      /* equator */
+  cx.beginPath(); cx.moveTo(0,-r); cx.lineTo(0,r); cx.stroke();      /* meridian */
+  for(const f of [0.38,0.72]){
+    cx.beginPath(); cx.ellipse(0,0,r*f,r,0,0,TAU); cx.stroke();      /* meridians */
+    cx.beginPath(); cx.ellipse(0,0,r,r*f,0,0,TAU); cx.stroke();      /* parallels */
+  }
+  /* night hemisphere: opposite the sun's dial position */
+  const a=hourAngle(localHour(d))+Math.PI;
+  cx.save();
+  cx.beginPath(); cx.arc(0,0,r,0,TAU); cx.clip();
+  cx.rotate(a);
+  cx.fillStyle=C.shadow; cx.globalAlpha=0.72;
+  cx.beginPath(); cx.arc(0,0,r,-Math.PI/2,Math.PI/2); cx.closePath(); cx.fill();
+  cx.globalAlpha=0.35;
+  cx.beginPath(); cx.ellipse(0,0,r*0.22,r,0,0,TAU); cx.fill();       /* soft terminator */
+  cx.restore(); cx.globalAlpha=1;
+}
+
+function drawSun(d,dial){
+  const a=hourAngle(localHour(d)), rr=dial.rMid;
+  const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+  line(0.7,C.inkLow,0.5);                                            /* annotation radial */
+  cx.beginPath(); cx.moveTo(Math.cos(a)*R*0.32,Math.sin(a)*R*0.32); cx.lineTo(x,y); cx.stroke();
+  cx.globalAlpha=1;
+  const g=cx.createRadialGradient(x,y,0,x,y,R*0.085);
+  g.addColorStop(0,'rgba(242,212,155,0.5)'); g.addColorStop(1,'rgba(242,212,155,0)');
+  cx.fillStyle=g; cx.beginPath(); cx.arc(x,y,R*0.085,0,TAU); cx.fill();
+  cx.fillStyle=C.sun; cx.beginPath(); cx.arc(x,y,R*0.030,0,TAU); cx.fill();
+  line(1,C.inkHi,0.9); cx.beginPath(); cx.arc(x,y,R*0.030,0,TAU); cx.stroke();
+  cx.globalAlpha=1;
+}
+
+function drawMoon(d){
+  const age=moonAge(d), phase=age/SYNODIC;
+  const h=(localHour(d)+phase*24)%24;                                /* lags the sun */
+  const a=hourAngle(h), rr=R*0.72, r=R*0.075;
+  line(0.7,C.inkLow,0.55); ring(rr);                                 /* its orbit line */
+  const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+
+  cx.save(); cx.translate(x,y);
+  cx.fillStyle=C.shadow;                                             /* dark disc */
+  cx.beginPath(); cx.arc(0,0,r,0,TAU); cx.fill();
+  cx.fillStyle=C.moon; cx.globalAlpha=0.09;                          /* earthshine */
+  cx.beginPath(); cx.arc(0,0,r,0,TAU); cx.fill();
+  cx.globalAlpha=1;
+  /* lit portion: semicircle + terminator ellipse (waxing lights the right) */
+  const k=Math.cos(phase*TAU);                                       /* +1 new → −1 full → +1 */
+  const waxing=phase<0.5, side=waxing?1:-1;
+  cx.fillStyle=C.moon;
+  cx.beginPath();
+  cx.arc(0,0,r,-Math.PI/2,Math.PI/2, !waxing);                       /* lit semicircle */
+  cx.ellipse(0,0,Math.abs(k)*r,r,0,Math.PI/2,-Math.PI/2, (k*side)>0);
+  cx.fill();
+  line(1,C.inkHi,0.9); cx.beginPath(); cx.arc(0,0,r,0,TAU); cx.stroke();
+  cx.restore(); cx.globalAlpha=1;
+  return age;
+}
+
+const PHASES=['new moon','waxing crescent','first quarter','waxing gibbous',
+              'full moon','waning gibbous','last quarter','waning crescent'];
+const phaseName = age => PHASES[Math.floor(((age/SYNODIC)*8+0.5))%8];
+
+function hhmm(h){
+  h=(h%24+24)%24;
+  const H=Math.floor(h), M=Math.floor((h-H)*60);
+  return String(H).padStart(2,'0')+':'+String(M).padStart(2,'0');
+}
+
+function draw(){
+  const d=new Date();
+  cx.setTransform(1,0,0,1,0,0);
+  cx.clearRect(0,0,W,H);
+  cx.translate(W/2,H/2);
+
+  drawStars();
+  const dial=drawDial(d);
+  drawSidereal(d);
+  drawEarth(d);
+  const age=drawMoon(d);
+  drawSun(d,dial);
+
+  /* readouts */
+  document.getElementById('rise').innerHTML = hhmm(dial.rise)+' <span class="u">SOLAR</span>';
+  document.getElementById('set').innerHTML  = hhmm(dial.set)+' <span class="u">SOLAR</span>';
+  document.getElementById('moon').innerHTML = age.toFixed(1)+'<span class="u">d</span> '+phaseName(age);
+  document.getElementById('station').innerHTML = '40.0°N <span class="u">ASSUMED</span>';
+  document.getElementById('dateline').textContent =
+    d.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'}).toUpperCase();
+  document.getElementById('timeline').textContent =
+    d.toLocaleTimeString('en-GB',{hour12:false});
+}
+
+fit();
+draw();
+setInterval(draw, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+interface:
+  display_name: Plan Engineering
+  short_description: Route skills and build executable visual plans
+  default_prompt: Use $plan-engineering to route available skills and turn this change
+    into a validated, implementation-ready plan.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

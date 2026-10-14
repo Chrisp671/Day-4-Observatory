@@ -1,0 +1,213 @@
+/**
+ * The 24-hour dial band: ticks, numerals, and the real day/night arcs.
+ *
+ * Paints SceneBand's rise and set hours and nothing else. It knows no
+ * timestamp, no station and no sun: the Scene has already turned the sky
+ * into dial hours (SEAM-003), so this file is a thin drawing layer over
+ * clockface.ts geometry. Polar day and night arrive as null and leave the
+ * band unshaded.
+ */
+import { FACE, hourToAngle, pointOnCircle, TAU } from "./clockface";
+import { goldLeaf, THEME } from "./theme";
+import type { SceneBand } from "../app/scene";
+
+/** The three tick ranks, longest first. Rank by length and weight, not opacity. */
+export type TickRank = "major" | "hourly" | "minor";
+
+/**
+ * A human clock, not a military one (REQ-012): midnight and noon are both
+ * twelve, and the two sixes carry which half of the day they are. These four
+ * strings are the only words the dial is allowed, per DEC-038's dial-text rule.
+ */
+export function dialNumeral(h: number): string {
+  if (h === 0 || h === 12) return "12";
+  return h === 6 ? "6 AM" : "6 PM";
+}
+
+/** Six-hour majors, then the hours, then the half-hours. */
+export function tickRank(h: number): TickRank {
+  if (h % 6 === 0) return "major";
+  return Number.isInteger(h) ? "hourly" : "minor";
+}
+
+/** How far in from the band's outer edge each rank starts, as a fraction of the
+ * band's own width. Length is the primary rank signal (DESIGN-CONSOLIDATED #4),
+ * so this table is a contract and not a drawing detail — it is what lets the
+ * faintest ink stay faint without the three ranks becoming one. The majors are
+ * absent because they overshoot the inner edge instead; see `tickGeometry`. */
+const TICK_INSET = {
+  hourly: 0.5,
+  minor: 0.25,
+} as const;
+
+/** Stroke weight per rank, in CSS px before the device ratio. */
+const TICK_WEIGHT: Readonly<Record<TickRank, number>> = {
+  major: 1.4,
+  hourly: 1.0,
+  minor: 0.75,
+};
+
+/** Drawn length and weight of one tick, given the band it hangs on. */
+export function tickGeometry(
+  rank: TickRank,
+  rOut: number,
+  rIn: number,
+  R: number,
+): { length: number; weight: number } {
+  const bandW = rOut - rIn;
+  // The major overshoots the band's inner edge by a fixed fraction of the FACE
+  // rather than of the band, so it reads as crossing the whole band and past it.
+  const innerR = rank === "major" ? rIn - R * 0.012 : rOut - bandW * TICK_INSET[rank];
+  return { length: rOut - innerR, weight: TICK_WEIGHT[rank] };
+}
+
+/** Which ink each rank is drawn in. The ladder's *rank* never depends on it —
+ * see `tickGeometry`, which is the assertion `contrast.test.ts` leans on. */
+export function tickInk(rank: TickRank): "gold" | "ink" | "faint" {
+  if (rank === "major") return "gold";
+  return rank === "hourly" ? "ink" : "faint";
+}
+
+/** Drawn alpha per rank. The faintest ink is drawn *opaquely*: rank is carried
+ * by length and weight, never by how much ink is on the page. */
+export function tickAlpha(rank: TickRank): number {
+  if (rank === "major") return 0.95;
+  return rank === "hourly" ? 0.9 : 1;
+}
+
+/**
+ * The two band arcs, in dial hours: the lit day from rise to set, and the dark
+ * night from set round to the next rise.
+ *
+ * The night arc ends at `riseHours + 24` on purpose. `ctx.arc` sweeps clockwise
+ * and wraps at a full turn, so a night that begins at 20:00 and ends at 05:00 is
+ * correctly drawn as a sweep from 20:00 all the way to 29:00. **Normalising the
+ * end back below the start would draw the long way round and be wrong** — which
+ * is also why a body's rise and set can legitimately arrive with the set reading
+ * earlier in the day than the rise (see `ringSweepHours` in planetarcs).
+ */
+export function bandArcs(band: {
+  riseHours: number | null;
+  setHours: number | null;
+}): { dayFrom: number; dayTo: number; nightFrom: number; nightTo: number } | null {
+  const { riseHours, setHours } = band;
+  if (riseHours === null || setHours === null) return null;
+  return { dayFrom: riseHours, dayTo: setHours, nightFrom: setHours, nightTo: riseHours + 24 };
+}
+
+export function drawDial(
+  ctx: CanvasRenderingContext2D,
+  R: number,
+  dpr: number,
+  band: SceneBand,
+): void {
+  const rOut = R * FACE.dialOuter;
+  const rIn = R * FACE.dialInner;
+  const rMid = (rOut + rIn) / 2;
+
+  ctx.lineWidth = 1.3 * dpr;
+  ctx.strokeStyle = goldLeaf(ctx, -rOut, rOut);
+  ctx.globalAlpha = 0.95;
+  for (const r of [rOut, rIn]) {
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, TAU);
+    ctx.stroke();
+  }
+
+  // Night arc as ambience; rise/set encoded by SHAPE — full-band boundary
+  // ticks — never by tint alone (DESIGN-CONSOLIDATED #2/#3: gold day-wash
+  // deleted; the sun disc itself is the day indicator).
+  const arcs = bandArcs(band);
+  if (arcs !== null) {
+    const { riseHours, setHours } = band as { riseHours: number; setHours: number };
+    ctx.lineWidth = rOut - rIn;
+    ctx.lineCap = "butt";
+    // Night is DARKER than the field, day is LIGHTER: a value ladder, so the
+    // day/night read survives without spending a hue on it.
+    ctx.strokeStyle = THEME.shadow;
+    ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.arc(0, 0, rMid, hourToAngle(arcs.nightFrom), hourToAngle(arcs.nightTo));
+    ctx.stroke();
+    ctx.strokeStyle = THEME.inkHi;
+    ctx.globalAlpha = 0.08;
+    ctx.beginPath();
+    ctx.arc(0, 0, rMid, hourToAngle(arcs.dayFrom), hourToAngle(arcs.dayTo));
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Twilight (DEC-009): the band warms through amber around each boundary
+    // — the sky's actual dawn/dusk colors, and the Prussian blue's
+    // complementary partner. Alpha peaks at the boundary and fades over
+    // ~75 minutes each side.
+    const TWILIGHT_SPAN_HOURS = 1.25;
+    const TWILIGHT_STEPS = 24;
+    ctx.lineWidth = rOut - rIn;
+    ctx.strokeStyle = THEME.dawn;
+    for (const boundary of [riseHours, setHours]) {
+      for (let i = 0; i < TWILIGHT_STEPS; i++) {
+        const t0 = -1 + (2 * i) / TWILIGHT_STEPS;
+        const t1 = -1 + (2 * (i + 1)) / TWILIGHT_STEPS;
+        const mid = (t0 + t1) / 2;
+        ctx.globalAlpha = 0.38 * (1 - Math.abs(mid)) ** 1.5;
+        ctx.beginPath();
+        ctx.arc(
+          0, 0, rMid,
+          hourToAngle(boundary + t0 * TWILIGHT_SPAN_HOURS),
+          hourToAngle(boundary + t1 * TWILIGHT_SPAN_HOURS),
+        );
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+    for (const h of [riseHours, setHours]) {
+      const a = hourToAngle(h);
+      const inner = pointOnCircle(a, rIn - R * 0.012);
+      const outer = pointOnCircle(a, rOut);
+      ctx.lineWidth = 1.8 * dpr;
+      ctx.strokeStyle = goldLeaf(ctx, -rOut, rOut);
+      ctx.globalAlpha = 1;
+      ctx.beginPath();
+      ctx.moveTo(inner.x, inner.y);
+      ctx.lineTo(outer.x, outer.y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Three-level cadence (DESIGN-CONSOLIDATED #4): 6h major / hour / 30-min
+  // minor at ≥2:1 length steps — rank by length and weight before opacity.
+  // The band yields the rim to the rete, so its numerals keep their size by
+  // taking a larger share of the (smaller) face radius.
+  ctx.font = `600 ${Math.round(R * 0.072)}px ${THEME.fontCaps}`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  for (let i = 0; i < 48; i++) {
+    const h = i / 2;
+    const a = hourToAngle(h);
+    const rank = tickRank(h);
+    const geo = tickGeometry(rank, rOut, rIn, R);
+    const ink = tickInk(rank);
+    const inner = pointOnCircle(a, rOut - geo.length);
+    const outer = pointOnCircle(a, rOut);
+    ctx.lineWidth = geo.weight * dpr;
+    ctx.strokeStyle =
+      ink === "gold" ? goldLeaf(ctx, -rOut, rOut)
+        : ink === "ink" ? THEME.inkMid
+          : THEME.inkLow;
+    ctx.globalAlpha = tickAlpha(rank);
+    ctx.beginPath();
+    ctx.moveTo(inner.x, inner.y);
+    ctx.lineTo(outer.x, outer.y);
+    ctx.stroke();
+    if (ink === "gold") {
+      ctx.globalAlpha = 1;
+      const p = pointOnCircle(a, rIn - R * 0.062);
+      ctx.fillStyle = goldLeaf(ctx, p.y - R * 0.04, p.y + R * 0.04);
+      ctx.fillText(dialNumeral(h), p.x, p.y);
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+

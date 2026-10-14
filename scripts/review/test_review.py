@@ -284,6 +284,103 @@ class ContractTests(unittest.TestCase):
             api.model_request('opencode-go', 'mimo-v2.5-pro', 'test-key', 'policy', 'evidence', {})
         transport.assert_not_called()
 
+    def test_opencode_free_models_post_chat_completions_and_qwen_stays_on_messages(self):
+        images = {name: b'image' for name in IMAGES}
+        encoded = base64.b64encode(b'image').decode()
+        chat = {'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': '{}'}}]}
+        for model in ('step-5-preview-free', 'longcat-2.5-preview-free'):
+            with self.subTest(model=model), patch('api.request', return_value=json.dumps(chat).encode()) as transport:
+                self.assertEqual(api.model_request('opencode-go', model, 'test-key', 'policy', 'evidence', images), '{}')
+                url, headers, body = transport.call_args.args[:3]
+                self.assertEqual(url, 'https://opencode.ai/zen/go/v1/chat/completions')
+                self.assertEqual(headers['Authorization'], 'Bearer test-key')
+                self.assertEqual(headers['User-Agent'], 'day4-review/1.0')
+                self.assertEqual(headers['Content-Type'], 'application/json')
+                self.assertTrue(headers['x-opencode-session'].startswith('day4-'))
+                self.assertEqual(body['model'], model)
+                self.assertEqual(body['max_tokens'], 12000)
+                self.assertNotIn('tools', body)
+                self.assertNotIn('test-key', json.dumps(body))
+                self.assertEqual([m['role'] for m in body['messages']], ['system', 'user'])
+                self.assertEqual(body['messages'][0]['content'], 'policy')
+                parts = body['messages'][1]['content']
+                self.assertEqual(parts[0], {'type': 'text', 'text': 'evidence'})
+                self.assertEqual([p['text'] for p in parts[1::2]], list(IMAGES))
+                pictures = [p for p in parts if p['type'] == 'image_url']
+                self.assertEqual(len(pictures), len(IMAGES))
+                self.assertEqual({p['image_url']['url'] for p in pictures}, {f'data:image/png;base64,{encoded}'})
+            # A transport failure on the chat path still carries the request shape, never the key.
+            failure = Incomplete('Provider request failed (HTTP 429, application/json): GoUsageLimitError')
+            with patch('api.request', side_effect=failure), self.assertRaises(Incomplete) as caught:
+                api.model_request('opencode-go', model, 'test-key', 'policy', 'evidence', images)
+            self.assertIn('GoUsageLimitError [request ', str(caught.exception))
+            self.assertIn(f'{len(IMAGES)} images', str(caught.exception))
+        messages = {'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': '{}'}]}
+        with patch('api.request', return_value=json.dumps(messages).encode()) as transport:
+            self.assertEqual(api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'policy', 'evidence', images), '{}')
+            url, headers, body = transport.call_args.args[:3]
+            self.assertEqual(url, 'https://opencode.ai/zen/go/v1/messages')
+            self.assertEqual(headers['x-api-key'], 'test-key')
+            self.assertNotIn('Authorization', headers)
+            self.assertEqual(body['system'], 'policy')
+            self.assertEqual(len([c for c in body['messages'][0]['content'] if c['type'] == 'image']), len(IMAGES))
+        with patch('api.request', return_value=json.dumps(chat).encode()), self.assertRaises(Incomplete):
+            api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'policy', 'evidence', images)
+
+    def test_opencode_chat_completions_rejects_truncation_tool_calls_and_non_text(self):
+        def choice(**message):
+            return {'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': '{}', **message}}
+        for response in (
+            {'choices': [{'finish_reason': 'length', 'message': {'role': 'assistant', 'content': '{}'}}]},
+            {'choices': [{'finish_reason': 'tool_calls', 'message': {'role': 'assistant', 'content': '{}'}}]},
+            {'choices': [{'finish_reason': 'content_filter', 'message': {'role': 'assistant', 'content': '{}'}}]},
+            {'choices': [{'message': {'role': 'assistant', 'content': '{}'}}]},
+            {'choices': [choice(tool_calls=[{'id': 'call', 'type': 'function', 'function': {'name': 'x', 'arguments': '{}'}}])]},
+            {'choices': [choice(function_call={'name': 'x', 'arguments': '{}'})]},
+            {'choices': [choice(content='')]},
+            {'choices': [choice(content=None)]},
+            {'choices': [choice(content=[{'type': 'text', 'text': '{}'}])]},
+            {'choices': [choice(), choice()]},
+            {'choices': []},
+            {'choices': [choice(refusal='I cannot review this.')]},
+            {'choices': [{'finish_reason': 'stop', 'message': None}]},
+            {'stop_reason': 'end_turn', 'content': [{'type': 'text', 'text': '{}'}]},
+        ):
+            for model in ('step-5-preview-free', 'longcat-2.5-preview-free'):
+                with self.subTest(model=model, response=response):
+                    with patch('api.request', return_value=json.dumps(response).encode()), self.assertRaises(Incomplete) as caught:
+                        api.model_request('opencode-go', model, 'test-key', 'policy', 'evidence', {})
+                    self.assertNotIn('I cannot review this.', str(caught.exception))
+
+    def test_free_go_models_are_approved_for_every_builder_family(self):
+        for model, family in (('step-5-preview-free', 'stepfun'), ('longcat-2.5-preview-free', 'meituan')):
+            self.assertEqual(contract.OPENCODE_GO_MODELS[model], family)
+            self.assertNotIn(family, BUILDER_FAMILIES)
+            for builder in BUILDER_FAMILIES:
+                with self.subTest(model=model, builder=builder):
+                    self.assertEqual(provider_config('opencode-go', model, f'Builder-Model-Family: {builder.upper()}\nCHK-004'), builder)
+            self.assertEqual(provider_config('opencode-go', model, f'Builder-Model-Family: {ROUTED_UNKNOWN}'), ROUTED_UNKNOWN)
+            with self.assertRaises(Incomplete):
+                provider_config('opencode-go', model, f'Builder-Model-Family: {family}')
+        for model in ('mimo-v2.5-pro', 'step-5-preview', 'longcat-2.0', 'Step-5-Preview-Free', 'longcat-2.5-preview-free2'):
+            with self.subTest(model=model), self.assertRaises(Incomplete):
+                provider_config('opencode-go', model, 'Builder-Model-Family: openai')
+        with self.assertRaises(Incomplete) as caught:
+            provider_config('opencode-go', 'mimo-v2.5-pro', 'Builder-Model-Family: openai')
+        for approved in ('qwen3.7-plus', 'step-5-preview-free', 'longcat-2.5-preview-free'):
+            self.assertIn(approved, str(caught.exception))
+
+    def test_well_formed_chat_completion_yields_a_review_the_validator_accepts(self):
+        response = {'id': 'chatcmpl-1', 'object': 'chat.completion', 'usage': {'prompt_tokens': 1, 'completion_tokens': 1},
+                    'choices': [{'index': 0, 'finish_reason': 'stop', 'logprobs': None,
+                                 'message': {'role': 'assistant', 'content': json.dumps(good_review()), 'refusal': None}}]}
+        with patch('api.request', return_value=json.dumps(response).encode()):
+            text = api.model_request('opencode-go', 'longcat-2.5-preview-free', 'test-key', 'policy', 'evidence', {})
+        accepted = validate_review(text, {})
+        self.assertTrue(accepted['complete'])
+        self.assertEqual(accepted['findings'], [])
+        self.assertEqual({shot['file'] for shot in accepted['screenshots']}, set(IMAGES))
+
     def test_artifact_redirect_never_forwards_auth_and_rejects_foreign_host(self):
         github = api.GitHub('Chrisp671/Day-4-Observatory', 'test-key')
         with patch.object(github, 'pages', return_value=[{'name': 'web-review-evidence', 'id': 1,

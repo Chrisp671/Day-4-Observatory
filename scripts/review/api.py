@@ -8,7 +8,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from contract import Incomplete, OPENCODE_GO_MODELS, SCHEMA, require, strict_json
+from contract import Incomplete, opencode_go_family, SCHEMA, require, strict_json
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -22,6 +22,10 @@ MAX_TEXT_BYTES = 600_000
 # gateway payload limit. Eight 1x PNGs of this app base64-encode to about
 # 4.8 MB, leaving room for 600,000 bytes of text.
 MAX_REQUEST_BYTES = 6_000_000
+# OpenCode Go serves its free-tier models only on the OpenAI-compatible
+# chat-completions endpoint; every other approved Go model stays on
+# /v1/messages. Membership here never bypasses the contract's allowlist.
+OPENCODE_GO_CHAT_MODELS = frozenset({'step-5-preview-free', 'longcat-2.5-preview-free'})
 
 
 def provider_error_excerpt(raw, headers):
@@ -138,8 +142,21 @@ def model_request(provider, model, key, instructions, evidence, images):
         headers = {'x-api-key': key, 'anthropic-version': '2023-06-01'}
         body = {'model': model, 'system': instructions, 'max_tokens': 12000,
                 'messages': [{'role': 'user', 'content': content}]}
+    elif provider == 'opencode-go' and model in OPENCODE_GO_CHAT_MODELS:
+        opencode_go_family(model)
+        # Instructions ride as the system message, as on every other adapter;
+        # the evidence and every screenshot are parts of one user message.
+        content = [{'type': 'text', 'text': evidence}]
+        for name, data in encoded:
+            content.extend([{'type': 'text', 'text': name},
+                            {'type': 'image_url', 'image_url': {'url': f'data:image/png;base64,{data}'}}])
+        url = 'https://opencode.ai/zen/go/v1/chat/completions'
+        headers = {'Authorization': f'Bearer {key}', 'User-Agent': 'day4-review/1.0',
+                   'x-opencode-session': 'day4-' + hashlib.sha256((instructions + '\0' + evidence).encode()).hexdigest()}
+        body = {'model': model, 'max_tokens': 12000,
+                'messages': [{'role': 'system', 'content': instructions}, {'role': 'user', 'content': content}]}
     elif provider == 'opencode-go':
-        require(model in OPENCODE_GO_MODELS, 'OpenCode Go reviewer must be an approved vision model: qwen3.7-plus.')
+        opencode_go_family(model)
         content = [{'type': 'text', 'text': evidence}]
         for name, data in encoded:
             content.extend([{'type': 'text', 'text': name}, {'type': 'image', 'source':
@@ -178,6 +195,16 @@ def model_request(provider, model, key, instructions, evidence, images):
     elif provider == 'anthropic':
         require(response.get('stop_reason') == 'end_turn', 'Anthropic response was incomplete or refused.')
         text = ''.join(c.get('text', '') for c in response.get('content', []) if c.get('type') == 'text')
+    elif provider == 'opencode-go' and model in OPENCODE_GO_CHAT_MODELS:
+        choices = response.get('choices')
+        require(type(choices) is list and len(choices) == 1 and type(choices[0]) is dict,
+                'OpenCode Go response was incomplete or refused.')
+        message = choices[0].get('message')
+        require(choices[0].get('finish_reason') == 'stop' and type(message) is dict
+                and not message.get('tool_calls') and not message.get('function_call') and not message.get('refusal'),
+                'OpenCode Go response was incomplete or refused.')
+        text = message.get('content')
+        require(type(text) is str and bool(text), 'OpenCode Go returned non-text content instead of a review.')
     elif provider == 'opencode-go':
         require(response.get('stop_reason') == 'end_turn', 'OpenCode Go response was incomplete or refused.')
         blocks = response.get('content')

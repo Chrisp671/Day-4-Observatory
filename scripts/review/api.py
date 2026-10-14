@@ -29,6 +29,11 @@ OPENCODE_GO_CHAT_MODELS = frozenset({'step-5-preview-free', 'longcat-2.5-preview
 # The free models reason before they answer, and on chat-completions the
 # reasoning tokens count against max_tokens; the other adapters keep 12000.
 OPENCODE_GO_CHAT_MAX_TOKENS = 32000
+# A chat-completions answer can carry the reasoning text beside the review, so
+# 32000 output tokens may exceed the 200 KB read cap the other adapters use;
+# a size-limit failure would hide the diagnostic below.
+MODEL_RESPONSE_LIMIT = 200_000
+OPENCODE_GO_CHAT_RESPONSE_LIMIT = 1_000_000
 # The only provider value a chat-completions diagnostic may echo verbatim.
 FINISH_REASON_WORD = re.compile(r'[a-z_]{1,32}')
 
@@ -238,8 +243,10 @@ def model_request(provider, model, key, instructions, evidence, images):
     # The shape of a refused request is safe to publish and is what a replay
     # needs first: how big it was, how many images, how much text.
     shape = f'request {request_bytes:,} bytes, {len(encoded)} images, {text_bytes:,} text bytes'
+    chat = provider == 'opencode-go' and model in OPENCODE_GO_CHAT_MODELS
+    limit = OPENCODE_GO_CHAT_RESPONSE_LIMIT if chat else MODEL_RESPONSE_LIMIT
     try:
-        response = strict_json(request(url, headers, body, timeout=240, limit=200_000, provider_error=True))
+        response = strict_json(request(url, headers, body, timeout=240, limit=limit, provider_error=True))
     except Incomplete as failure:
         raise Incomplete(f'{failure} [{shape}]') from None
     if provider == 'openai':

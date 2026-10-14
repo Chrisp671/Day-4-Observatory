@@ -299,6 +299,8 @@ class ContractTests(unittest.TestCase):
                 self.assertTrue(headers['x-opencode-session'].startswith('day4-'))
                 self.assertEqual(body['model'], model)
                 self.assertEqual(body['max_tokens'], 32000)
+                # Reasoning can ride beside the review, so the chat path reads up to 1 MB.
+                self.assertEqual(transport.call_args.kwargs['limit'], 1_000_000)
                 self.assertNotIn('tools', body)
                 self.assertNotIn('test-key', json.dumps(body))
                 self.assertEqual([m['role'] for m in body['messages']], ['system', 'user'])
@@ -324,6 +326,7 @@ class ContractTests(unittest.TestCase):
             self.assertNotIn('Authorization', headers)
             self.assertEqual(body['system'], 'policy')
             self.assertEqual(body['max_tokens'], 12000)
+            self.assertEqual(transport.call_args.kwargs['limit'], 200_000)
             self.assertEqual(len([c for c in body['messages'][0]['content'] if c['type'] == 'image']), len(IMAGES))
         with patch('api.request', return_value=json.dumps(chat).encode()), self.assertRaises(Incomplete):
             api.model_request('opencode-go', 'qwen3.7-plus', 'test-key', 'policy', 'evidence', images)

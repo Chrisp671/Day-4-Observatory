@@ -205,6 +205,7 @@ export function drawDial(
       const p = pointOnCircle(a, rIn - R * 0.062);
       ctx.fillStyle = goldLeaf(ctx, p.y - R * 0.04, p.y + R * 0.04);
       ctx.fillText(dialNumeral(h), p.x, p.y);
+      if (h === 6) ctx.fillText("DAWN", p.x, p.y + R * 0.06);
     }
   }
   ctx.globalAlpha = 1;

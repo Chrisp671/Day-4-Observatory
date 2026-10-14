@@ -162,10 +162,14 @@ def publish_status(github, sha, state, description, run_url):
     `required_status_checks` resolves against `/statuses` only. Publishing one
     without the other leaves main blocked with no way to satisfy the gate, so
     the verdict is written to both. GitHub caps description at 140 characters.
+    GitHub shows the description as plain text, not Markdown, so it is never
+    Markdown-escaped (that put literal backslashes on the PR page); control
+    characters and line breaks collapse to single spaces instead.
     """
+    plain = ' '.join(re.sub(r'[\x00-\x1f\x7f]', ' ', str(description)).split())
     try:
         github.call(f'/statuses/{sha}', {'state': state, 'context': CHECK,
-                    'description': safe_text(description)[:140], 'target_url': run_url}, 'POST')
+                    'description': plain[:140], 'target_url': run_url}, 'POST')
         return True
     except Exception:
         # Both call sites sit outside the outer try/except, so propagating here would
@@ -196,12 +200,15 @@ def run_review(github, event):
         'external_id': external, 'details_url': run_url})
     if check['status'] == 'completed' or run['status'] != 'completed':
         return 0
+    skipped = False  # True when no changed file is relevant: a pass without a review.
+    incomplete = False  # True when no verdict was reached: an outage is not a finding.
     try:
         changed = github.pages(f'/pulls/{pr["number"]}/files', max_pages=30)
         require(len(changed) == pr['changed_files'], 'PR file list was truncated.')
         if not any(relevant(f['filename']) or relevant(f.get('previous_filename', '')) for f in changed):
             message = f'{MARKER}\n## Web review\n\nNo web or review-pipeline changes in `{run["head_sha"]}`.'
             conclusion = 'success'
+            skipped = True
         else:
             require(run['conclusion'] == 'success', 'Build, tests or screenshot capture failed. See the build run.')
             jobs = github.pages(f'/actions/runs/{run["id"]}/attempts/{run["run_attempt"]}/jobs', 'jobs')
@@ -242,11 +249,11 @@ def run_review(github, event):
             conclusion = 'failure' if any(f['severity'] == 'BLOCKING' for f in review['findings']) else 'success'
     except Incomplete as error:
         message = f'{MARKER}\n## Web review incomplete\n\nCommit: `{run["head_sha"]}`\n\n{safe_text(str(error))}\n\n[Build and evidence]({run_url})'
-        conclusion = 'failure'
+        conclusion = 'failure'; incomplete = True
     except Exception:
         # Never dump provider bodies, signed URLs, PR content or credential-bearing traces.
         message = f'{MARKER}\n## Web review incomplete\n\nUnexpected evidence or API shape. Commit: `{run["head_sha"]}`. [Run]({run_url}).'
-        conclusion = 'failure'
+        conclusion = 'failure'; incomplete = True
     if not current(github, run, pr):
         github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': 'cancelled',
                     'output': {'title': 'Superseded review', 'summary': 'PR metadata, base or head changed; rerun the build.'}}, 'PATCH')
@@ -255,11 +262,20 @@ def run_review(github, event):
         publish_status(github, run['head_sha'], 'pending', 'Superseded review; a newer attempt decides.', run_url)
         return 0
     update_comment(github, pr, message)
+    # A skipped review must not read as an approval anywhere it is shown: the status
+    # description (which branch protection reads), the check-run title and the PR
+    # comment. The check-run name stays CHECK because branch protection keys on it.
     github.call(f'/check-runs/{check["id"]}', {'status': 'completed', 'conclusion': conclusion,
-                'output': {'title': CHECK, 'summary': message}}, 'PATCH')
-    publish_status(github, run['head_sha'], 'success' if conclusion == 'success' else 'failure',
-                   'Review passed; see the review comment.' if conclusion == 'success'
-                   else 'Review found blocking findings; see the review comment.', run_url)
+                'output': {'title': f'{CHECK} skipped' if skipped else CHECK, 'summary': message}}, 'PATCH')
+    if skipped:
+        description = 'No web or review-pipeline changes; review skipped.'
+    elif incomplete:
+        description = 'Review incomplete, no verdict; see the review comment.'
+    elif conclusion == 'success':
+        description = 'Review passed; see the review comment.'
+    else:
+        description = 'Review found blocking findings; see the review comment.'
+    publish_status(github, run['head_sha'], 'success' if conclusion == 'success' else 'failure', description, run_url)
     print(f'{CHECK}: {conclusion}')
     return 0 if conclusion == 'success' else 1
 

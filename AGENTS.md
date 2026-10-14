@@ -49,6 +49,14 @@ The gate reads commit statuses, not check runs, and the reviewer publishes to
 allowed. A fix to the reporter itself is the one case that needs an admin merge,
 because the reporter runs from the default branch.
 
+The reviewer is chosen by the repository variables `REVIEW_PROVIDER=opencode-go`
+and `REVIEW_MODEL`, sharing one `REVIEW_API_KEY`: `qwen3.7-plus` normally, or
+`step-5-preview-free` / `longcat-2.5-preview-free` when Go answers HTTP 429
+(`GoUsageLimitError`, its usage limit). To retry a review after changing the
+variable or after a provider failure, re-run the PR's **Web review evidence**
+run, never the reporter run: the reporter dedups on evidence run id and attempt,
+so re-running it alone is a silent no-op.
+
 Browser drivers for layout, keyboard and rendering work, after
 `npx vite preview --port 4173 --strictPort --host 127.0.0.1`:
 `node scripts/modes.mjs|planets.mjs|constellations.mjs|freeze.mjs|trouble.mjs <url>`.

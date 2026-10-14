@@ -50,6 +50,20 @@ builders, use a reviewer provider different from all of them and document the
 contributors; the current machine-readable field records the lead builder only.
 Model provenance is declared, not cryptographically verified.
 
+Two more Go models are allowlisted for the reviewer: `step-5-preview-free`
+(StepFun, family `stepfun`) and `longcat-2.5-preview-free` (Meituan, family
+`meituan`). Both accept images and use the same `REVIEW_API_KEY`, so switching
+needs only a change to `REVIEW_MODEL` and a re-run of **Web review evidence**. Go
+serves them on its OpenAI-compatible `chat/completions` endpoint rather than
+`messages`; the adapter accepts exactly one choice that finished with `stop`,
+carries string content, and has no tool call or refusal. OpenCode says the free
+models stay usable after the Go account reaches its usage limit, so they are the
+fallback when `qwen3.7-plus` answers HTTP 429 (`GoUsageLimitError`). OpenCode
+calls them unlimited "for a limited time", so they may be withdrawn or renamed
+without notice; when one disappears, set `REVIEW_MODEL` back to `qwen3.7-plus`
+or add the replacement with its family after review. Neither family is a builder
+family, so every named builder keeps the independence check.
+
 One more value is accepted, `routed-unknown`, meaning the builder ran as a routed
 model served through a gateway and its underlying model family could not be
 established from inside the session. Use it instead of guessing: a plausible

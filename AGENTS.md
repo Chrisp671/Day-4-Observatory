@@ -59,7 +59,8 @@ The reviewer is chosen by the repository variables `REVIEW_PROVIDER=opencode-go`
 and `REVIEW_MODEL`, sharing one `REVIEW_API_KEY`: `qwen3.7-plus` normally, or
 `step-5-preview-free` / `longcat-2.5-preview-free` when Go answers HTTP 429
 (`GoUsageLimitError`, its usage limit). Step 5 is the verified fallback (a
-complete live review on 2026-10-14); switch back to `qwen3.7-plus` once the paid
+clean live review, and a planted dial-text defect caught as BLOCKING, on
+2026-10-14); switch back to `qwen3.7-plus` once the paid
 quota resets. PLAN.md RSK-008 records the outage policy. To retry a review after changing the
 variable or after a provider failure, re-run the PR's **Web review evidence**
 run, never the reporter run: the reporter dedups on evidence run id and attempt,

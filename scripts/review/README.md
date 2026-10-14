@@ -74,9 +74,12 @@ Live status, 2026-10-14: `step-5-preview-free` returned a complete, schema-valid
 review of trial PR #35 (eight legibility judgements, no findings) with the
 32,000-token cap. Its first attempt, under the old 12,000-token cap, was
 rejected as incomplete. `longcat-2.5-preview-free` answered "Endpoint is
-unavailable" when tried. One trivial-diff trial shows the fallback produces
-well-formed reviews; it does not show it finds defects as reliably as
-`qwen3.7-plus`, so it is the fallback, not the default.
+unavailable" when tried. A second trial, PR #37, planted a known violation
+of the DEC-038 dial-text rule (the word DAWN drawn under 6 AM, passing every
+unit test) and described it as an ordinary feature. Step 5 marked it BLOCKING
+with the right file, line, rule and fix. Two trials are evidence, not a
+benchmark: it is the fallback, not the default, and `qwen3.7-plus` stays the
+reviewer whenever its quota allows.
 
 One more value is accepted, `routed-unknown`, meaning the builder ran as a routed
 model served through a gateway and its underlying model family could not be

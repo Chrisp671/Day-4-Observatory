@@ -35,7 +35,9 @@ proved text-only. Qwen3.7 Plus is served by the same existing Go account and acc
 images. The new adapter uses only the fixed HTTPS endpoint
 `https://opencode.ai/zen/go/v1/messages`; it does not accept arbitrary
 OpenAI-compatible base URLs. The allowlist initially contains only `qwen3.7-plus`,
-mapped to the underlying `qwen` family. A proxy's provider name is not a
+mapped to the underlying `qwen` family. Since #33 it also holds the free fallbacks
+`step-5-preview-free` and `longcat-2.5-preview-free`, which Go serves on the
+fixed `chat/completions` endpoint instead (see README and SECURITY-REVIEW). A proxy's provider name is not a
 model family and cannot evade independence checks. Unknown/text-only models fail
 before a paid request. Credentials remain step-scoped and no new dependency is
 introduced. Responses must end normally. Only text and reasoning blocks are accepted;

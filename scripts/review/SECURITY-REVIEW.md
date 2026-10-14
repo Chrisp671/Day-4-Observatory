@@ -41,6 +41,17 @@ tests pass, including the added adapter and family cases. The follow-up's local
 pattern-based secret scan returned no findings. Remote Rafter remains deferred
 by the owner; this is not a remote SAST/SCA certification.
 
+Addendum 2026-10-14 (#33, #34): the allowlist now also holds two free Go models,
+`step-5-preview-free` (family `stepfun`) and `longcat-2.5-preview-free` (family
+`meituan`), served on the fixed endpoint
+`https://opencode.ai/zen/go/v1/chat/completions` with the same key and session
+header. Their adapter fails closed on the same conditions (exactly one choice,
+`finish_reason` of `stop`, string content, no tool call, function call or
+refusal), never accepts a reasoning field as the review, and reports a rejected
+response only through a fixed vocabulary with no provider text. Output is capped
+at 32,000 tokens and the response read at 1 MB on that path only. `rafter
+secrets` found nothing new; remote `rafter run` was not available.
+
 Live OpenCode Go validation used `qwen3.7-plus` with the existing account key,
 235,421 characters of diff/source/rubric evidence and all eight real PNGs. The
 response passed the strict schema and source-line validator: eight judgements,

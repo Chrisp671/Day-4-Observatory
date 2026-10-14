@@ -215,3 +215,5 @@ and validation limits.
 - [Qwen vision inputs](https://www.alibabacloud.com/help/en/model-studio/vision-model/)
 
 Keep browser and action pins current through separately reviewed dependency updates.
+
+<!-- Trial marker for a one-off live review with step-5-preview-free. This PR is never merged. -->

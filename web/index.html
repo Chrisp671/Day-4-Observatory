@@ -131,13 +131,21 @@
     /* ————— stage: the dial, alone ————— */
     .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;
       padding:clamp(8px,1.4vh,16px) var(--pad) clamp(4px,0.8vh,8px)}
+    /* Phone taps: two quick taps anywhere are a double-tap-to-zoom in iOS
+       Safari unless the element says otherwise. PR #39 said so for the
+       controls only, and Parker (iPhone, Safari) then found that a quick tap
+       that missed the button still zoomed: the verse, a heading, a ledger
+       gap, the stage around the dial were all still `auto`. The browser
+       intersects the touched element's touch-action with its ancestors' up
+       to the nearest scroll container, and the body is one on a phone and in
+       Constellations, so the rule is every element, not a list of controls.
+       `manipulation` keeps pinch and pan and drops only the double-tap
+       gesture, so fast stepping steps and a missed tap does nothing. The
+       page itself stays zoomable: the viewport meta sets no maximum-scale.
+       The dial and the chart own their gestures and stay `none`
+       (scripts/zoom.mjs samples every 8px of every view to hold this). */
+    *{touch-action:manipulation}
     canvas{display:block;touch-action:none}
-    /* Phone taps: two quick taps on a control are a double-tap-to-zoom in iOS
-       Safari unless the control says otherwise. `manipulation` keeps pinch and
-       pan and drops only the double-tap gesture, so fast stepping steps. The
-       page itself stays zoomable: the viewport meta sets no maximum-scale. */
-    button,input,textarea,a,[role="button"],[role="tab"],
-    .rail,.cell,.modes,.stationbar,.ledger-h,.cols{touch-action:manipulation}
 
     /* ————— the plinth: everything below the dial is one carved base —————
        One gilded rule, three bays, one rail, one ledger. Nothing here may

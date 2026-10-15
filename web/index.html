@@ -86,8 +86,13 @@
     .modes button{font-family:var(--caps);font-weight:700;font-size:9.5px;
       letter-spacing:.3em;text-transform:uppercase;color:var(--ink-mid);
       background:transparent;border:none;cursor:pointer;padding:4px 1px 5px;
-      border-bottom:1px solid transparent;
+      border-bottom:1px solid transparent;position:relative;
       text-shadow:0 1px 10px rgba(4,10,22,.8)}
+    /* A thumb's target is 44px; the word is 22px. The slop reaches up into the
+       header's text, which is not a control, and not down: the stage below is
+       positioned and would paint over it. */
+    .modes button::after{content:"";position:absolute;left:-8px;right:-8px;
+      top:-22px;bottom:0}
     .modes button:hover{color:var(--ink-hi)}
     .modes button[aria-selected="true"]{color:var(--gold-soft);
       border-bottom-color:var(--gold-soft)}
@@ -124,6 +129,12 @@
     .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;
       padding:clamp(8px,1.4vh,16px) var(--pad) clamp(4px,0.8vh,8px)}
     canvas{display:block;touch-action:none}
+    /* Phone taps: two quick taps on a control are a double-tap-to-zoom in iOS
+       Safari unless the control says otherwise. `manipulation` keeps pinch and
+       pan and drops only the double-tap gesture, so fast stepping steps. The
+       page itself stays zoomable: the viewport meta sets no maximum-scale. */
+    button,input,textarea,a,[role="button"],[role="tab"],
+    .rail,.cell,.modes,.stationbar,.ledger-h,.cols{touch-action:manipulation}
 
     /* ————— the plinth: everything below the dial is one carved base —————
        One gilded rule, three bays, one rail, one ledger. Nothing here may
@@ -158,6 +169,8 @@
       cursor:pointer;padding:0;text-align:left;width:100%;color:inherit;
       border-bottom:1px dotted transparent}
     .station-toggle:hover{border-bottom-color:var(--ink-mid)}
+    #station-bay{position:relative}
+    .station-toggle::after{content:"";position:absolute;left:0;right:0;top:0;height:44px}
     .stationbar{display:none;gap:4px;margin-top:7px;flex-wrap:wrap}
     .bay.open .stationbar{display:flex}
     .stationbar input{font-family:var(--mono);font-size:11px;width:66px;text-align:right;
@@ -166,7 +179,9 @@
     .stationbar input:focus{border-color:var(--ink-mid);outline:none}
     .stationbar button{font-family:var(--caps);font-weight:600;font-size:9px;
       letter-spacing:.14em;color:var(--ink-mid);background:transparent;
-      border:1px solid var(--ink-low);padding:3px 7px;cursor:pointer}
+      border:1px solid var(--ink-low);padding:3px 7px;cursor:pointer;position:relative}
+    /* Offsets count from the padding box, so -3px is 2px past the 1px border. */
+    .stationbar button::after{content:"";position:absolute;inset:-3px}
     .stationbar button:hover{color:var(--ink-hi);border-color:var(--ink-mid)}
     #station-status{display:block;margin-top:5px;font-size:9px;letter-spacing:.1em;
       color:var(--sunlight)}
@@ -174,14 +189,23 @@
 
     /* the rail: time travel as one row of cells */
     .rail{display:flex;align-items:stretch;border-top:1px solid var(--hair)}
-    .cell{flex:1;display:flex;align-items:center;justify-content:center;min-width:0}
+    /* 44px tall: a thumb's minimum. NOW and HOLD stretch to the cells' height. */
+    .cell{flex:1;display:flex;align-items:stretch;justify-content:center;min-width:0;
+      min-height:44px;position:relative}
     .cell button{font-family:var(--mono);font-size:14px;line-height:1;
       color:var(--ink-mid);background:transparent;border:none;
       padding:9px 8px;cursor:pointer;font-weight:300}
     .cell button:hover{color:var(--ink-hi)}
     .cell span{font-family:var(--caps);font-weight:600;font-size:9px;
       letter-spacing:.16em;color:var(--ink-mid);text-align:center;
-      min-width:40px}
+      min-width:40px;align-self:center}
+    /* The arrows were 16px wide on a phone and the rail has no width to spare,
+       so each stepper's hit box is its half of the cell, the label's half
+       included: a transparent box placed against the cell, not the button,
+       so the glyph sits exactly where it did. Back owns the left half. */
+    .cell button::before{content:"";position:absolute;top:0;bottom:0;width:50%}
+    .cell button:first-child::before{left:0}
+    .cell button:last-child::before{right:0}
     #now{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:9.5px;
       letter-spacing:.22em;color:var(--gold-soft);background:transparent;
       border:0;padding:9px 14px;cursor:pointer}
@@ -201,7 +225,10 @@
     .ledger-h{display:flex;align-items:baseline;gap:10px}
     .ledger-h button{font-family:var(--caps);font-weight:700;font-size:9.5px;
       letter-spacing:.3em;color:var(--ink-mid);background:transparent;border:none;
-      cursor:pointer;padding:0;border-bottom:1px dotted transparent}
+      cursor:pointer;padding:0;border-bottom:1px dotted transparent;position:relative}
+    /* 22px is what the ledger allows: the row above is the rail, the rows below
+       are the planets' own buttons, and a slop over either would steal their taps. */
+    .ledger-h button::after{content:"";position:absolute;left:-4px;right:-4px;top:-8px;bottom:-1px}
     .ledger-h button:hover{border-bottom-color:var(--ink-mid)}
     .ledger-h em{font-family:var(--serif);font-style:italic;font-weight:600;
       font-size:12px;color:var(--ink-mid)}

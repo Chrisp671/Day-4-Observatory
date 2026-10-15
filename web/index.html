@@ -88,9 +88,12 @@
       background:transparent;border:none;cursor:pointer;padding:4px 1px 5px;
       border-bottom:1px solid transparent;position:relative;
       text-shadow:0 1px 10px rgba(4,10,22,.8)}
-    /* A thumb's target is 44px; the word is 22px. The slop reaches up into the
-       header's text, which is not a control, and not down: the stage below is
-       positioned and would paint over it. */
+    /* A thumb's target is 44px; the word is 22px. The slop reaches 22px up over
+       the hero and verse text, and not down: the stage below is positioned and
+       would paint over it. The trade-off, taken on purpose: a tap on the
+       bottom of the hero lands on a tab. Nothing is lost by it, because the
+       hero and the verse are not controls (touch.mjs probes every point of
+       the slop for anything interactive beneath it). */
     .modes button::after{content:"";position:absolute;left:-8px;right:-8px;
       top:-22px;bottom:0}
     .modes button:hover{color:var(--ink-hi)}
@@ -406,8 +409,15 @@
       .bay .v{font-size:13.5px}
       #station-bay .v{font-size:12.5px}
       .bay .s{font-size:10px}
-      .cell button{padding:9px 4px}
-      .cell span{min-width:0;font-size:8.5px;letter-spacing:.12em}
+      /* The rail is 358px wide at 390 and MONTH is its widest word: equal
+         cells put MONTH's forward arrow on the H. Each cell takes the width
+         its own label needs plus an equal share of what is left, floored at
+         58px so each arrow's half stays 28px wide (touch.mjs holds both).
+         The glyph's 2px padding is the label's clearance, all the rail can
+         afford; the tracking gives back the last 3px. */
+      .cell{flex:1 1 auto;min-width:58px}
+      .cell button{padding:9px 2px}
+      .cell span{min-width:0;font-size:8.5px;letter-spacing:.1em}
       #now{padding:9px 10px}
       .modes{margin-top:12px;gap:20px}
       .modes button{font-size:9px;letter-spacing:.26em}

@@ -8,7 +8,11 @@
 //     the documented floor where the plinth has no room for 44, and no control's
 //     hit box steals from a neighbour's visible box;
 //   - five quick taps on a step button advance exactly five steps — none
-//     swallowed, none doubled — including taps on the label's half of the cell.
+//     swallowed, none doubled — including taps on the label's half of the cell;
+//   - every rail label (HOUR, DAY, PHASE, MONTH) sits clear of both its arrows:
+//     at 390px the MONTH cell's forward arrow once stood on the H;
+//   - the slop above the view tabs covers nothing interactive: it reaches up
+//     over the hero and verse text, which are not controls.
 // The hit box is measured, not read from CSS: `elementFromPoint` is probed
 // outward from each control's centre until the browser hands the point to
 // something else. Screenshots the rail at phone and tablet sizes.
@@ -38,18 +42,38 @@ const VIEWPORTS = [
 ];
 /** Apple's minimum for a thumb, in CSS px. */
 const THUMB = 44;
+/** The narrowest a stepper's half of a cell may get, in CSS px: the hit box
+ *  PR #39 gave the arrows. The phone rail floors its cells at 58px to keep it. */
+const STEPPER = 28;
+/** How far a rail label's ink must sit from each of its arrows, in CSS px: the
+ *  glyph's padding on a phone, which is all the 390px rail can afford. */
+const CLEARANCE = 2;
+/** Every control the page must show, at every viewport (the page is the same
+ *  stack on a phone and a tablet), by the label `measure` reports: aria-label,
+ *  else id. A missing one fails by name, and so does one not listed here, so a
+ *  new control has to say what floor it reaches. The tonight rows are not
+ *  listed: how many planets are up depends on the date, so they are matched
+ *  by class, and there must be at least one. */
+const EXPECTED = [
+  "tab-day4", "tab-constellations", "tab-planets",
+  "station", "Latitude", "Longitude", "set-station", "locate",
+  ...["hour", "day", "phase", "month"].flatMap((unit) => [`Back one ${unit}`, `Forward one ${unit}`]),
+  "Return to the present", "Hold the clock where it is",
+  "tonight-toggle",
+];
+const isRow = (c) => c.classes.includes("lrow");
 /** Where the plinth has no 44px to give, the floor each control must still
  *  reach, and why. Everything not listed here must reach THUMB both ways. */
 const FLOORS = [
-  { match: (c) => c.cell !== null, width: (c) => Math.floor(c.cell / 2) - 1, height: THUMB,
-    why: "a stepper owns its half of a cell, and the rail has no width to spare on a phone" },
+  { match: (c) => c.cell !== null, width: (c) => Math.max(STEPPER, Math.floor(c.cell / 2) - 1), height: THUMB,
+    why: `a stepper owns its half of a cell, never under ${STEPPER}px, and the rail has no width to spare on a phone` },
   { match: (c) => c.id === "tonight-toggle", width: THUMB, height: 22,
     why: "the rail is above and the planets' own rows are directly below" },
   { match: (c) => c.id === "set-station" || c.id === "locate", width: 40, height: 24,
     why: "the station editor stacks its fields 4px apart" },
   { match: (c) => c.tag === "input", width: THUMB, height: 22,
     why: "the station editor's fields are 22px tall and 4px apart" },
-  { match: (c) => c.classes.includes("lrow"), width: THUMB, height: 28,
+  { match: isRow, width: THUMB, height: 28,
     why: "the tonight rows stack with no room between them" },
 ];
 
@@ -117,13 +141,54 @@ const measure = (page) => page.evaluate((STEP) => {
     const el = document.querySelector(sel);
     if (el !== null) containers[sel] = getComputedStyle(el).touchAction;
   }
-  return { controls, containers, viewportMeta: document.querySelector("meta[name=viewport]")?.getAttribute("content") ?? "" };
+  // The ink, not the element: a label's text box and each arrow's glyph box,
+  // from a Range over the text, so an overflowing word is caught where it
+  // overflows and not where its span happens to end.
+  const ink = (el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const r = range.getBoundingClientRect();
+    return { left: r.left, right: r.right };
+  };
+  const rail = [...document.querySelectorAll(".cell")].map((cell) => {
+    const [back, label, fwd] = cell.children;
+    return { label: label.textContent, cell: cell.getBoundingClientRect().width,
+      back: ink(back), text: ink(label), fwd: ink(fwd) };
+  });
+  // Everything under the tabs' slop, top to bottom, at a grid of points over
+  // the slop's own box (the ::after above each tab, 8px either side).
+  const CONTROL = "button, [role=button], [role=tab], input, a";
+  const slops = [...document.querySelectorAll(".modes [role=tab]")].map((tab) => {
+    const r = tab.getBoundingClientRect();
+    const after = getComputedStyle(tab, "::after");
+    const top = r.top + parseFloat(after.top), left = r.left + parseFloat(after.left);
+    const right = r.right - parseFloat(after.right);
+    const under = [];
+    let points = 0;
+    for (let y = top + 1; y < r.top; y += 3) {
+      for (let x = left + 1; x < right; x += 4) {
+        points++;
+        for (const el of document.elementsFromPoint(x, y)) {
+          if (el !== tab && el.matches(CONTROL)) under.push(el.id || el.textContent.trim().slice(0, 16));
+        }
+        if (!tab.contains(document.elementFromPoint(x, y))) under.push("(not the tab itself)");
+      }
+    }
+    return { tab: tab.id, slop: r.top - top, points, under: [...new Set(under)] };
+  });
+  return { controls, containers, rail, slops,
+    viewportMeta: document.querySelector("meta[name=viewport]")?.getAttribute("content") ?? "" };
 }, 0.5);
 
 const fmt = (n) => n.toFixed(1);
 const check = (vp, measured) => {
-  const { controls, containers, viewportMeta } = measured;
-  assert(controls.length >= 16, `${vp}: expected the rail, tabs, station and ledger controls, found ${controls.length}`);
+  const { controls, containers, rail, slops, viewportMeta } = measured;
+  const labels = controls.filter((c) => !isRow(c)).map((c) => c.label);
+  const missing = EXPECTED.filter((name) => !labels.includes(name));
+  assert.deepEqual(missing, [], `${vp}: controls missing: ${missing.join(", ")}`);
+  const unlisted = labels.filter((name) => !EXPECTED.includes(name));
+  assert.deepEqual(unlisted, [], `${vp}: controls not in EXPECTED, so with no floor of their own: ${unlisted.join(", ")}`);
+  assert(controls.some(isRow), `${vp}: no tonight rows`);
 
   // The page stays zoomable; only the double-tap gesture goes.
   assert.match(viewportMeta, /width=device-width/, `${vp}: the viewport meta no longer fits the device`);
@@ -158,6 +223,28 @@ const check = (vp, measured) => {
       assert(!(w > 0.5 && h > 0.5),
         `${vp}: "${controls[i].label}" and "${controls[j].label}" overlap by ${fmt(w)}×${fmt(h)}`);
     }
+  }
+
+  // Each rail label sits clear of both its arrows.
+  console.log(`touch: ${vp} — rail labels, ink to arrow (CSS px)`);
+  assert.deepEqual(rail.map((r) => r.label), ["HOUR", "DAY", "PHASE", "MONTH"], `${vp}: the rail's cells`);
+  for (const r of rail) {
+    const before = r.text.left - r.back.right, after = r.fwd.left - r.text.right;
+    console.log(`  ${r.label.padEnd(6)} cell ${fmt(r.cell).padStart(5)}   ‹ ${fmt(before).padStart(5)} | ${fmt(after).padStart(5)} ›`);
+    assert(before + 0.05 >= CLEARANCE,
+      `${vp}: "${r.label}" runs into its back arrow (${fmt(before)}px clear, needs ${CLEARANCE})`);
+    assert(after + 0.05 >= CLEARANCE,
+      `${vp}: "${r.label}" runs into its forward arrow (${fmt(after)}px clear, needs ${CLEARANCE})`);
+  }
+
+  // The tabs' slop is a trade-off, not a theft: it reaches up over the hero,
+  // and nothing interactive lies anywhere under it.
+  assert.equal(slops.length, 3, `${vp}: expected three view tabs, found ${slops.length}`);
+  for (const s of slops) {
+    assert(s.slop > 0 && s.points > 0, `${vp}: "${s.tab}" has no slop above it to check`);
+    assert.deepEqual(s.under, [],
+      `${vp}: the slop above "${s.tab}" lies over another control: ${s.under.join(", ")}`);
+    console.log(`  ${s.tab.padEnd(18)} slop ${fmt(s.slop)}px up, ${s.points} points, nothing interactive beneath`);
   }
   return controls;
 };

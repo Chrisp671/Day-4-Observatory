@@ -69,6 +69,13 @@ so re-running it alone is a silent no-op.
 Browser drivers for layout, keyboard and rendering work, after
 `npx vite preview --port 4173 --strictPort --host 127.0.0.1`:
 `node scripts/modes.mjs|planets.mjs|constellations.mjs|freeze.mjs|trouble.mjs <url>`.
+Phone touch behaviour has three more: `touch.mjs` (44 px hit boxes, rapid
+stepping), and `zoom.mjs` plus the independently written `zoom-spec.mjs`
+(no point on screen may allow double-tap zoom; desktop browsers cannot
+reproduce iOS Safari's zoom, so they assert the CSS that prevents it). When
+more than one worktree or agent runs a preview, give each its own port and
+grep the served page for something unique to your build before trusting a
+driver: a shared 4173 once ran a check against another worktree's build.
 To reproduce the GitHub Pages mount (assets resolve wrong at the origin root
 otherwise): `node scripts/serve-mounted.mjs Day-4-Observatory 4174`. Pixel
 comparison: `node scripts/review/capture.mjs` then

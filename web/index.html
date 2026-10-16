@@ -401,8 +401,10 @@
       color:var(--ink-mid);text-wrap:pretty}
     .pnotice{display:block;font-style:italic;font-weight:600;color:var(--scripture)}
     .ptitle{display:block;margin-top:2px}
+    /* DEC-053: a one-line credit was an 18px-tall link. Vertical padding takes its
+       hit area past 24px without moving the text. */
     .pcredit{color:var(--gold-soft);text-decoration:underline;text-underline-offset:2px;
-      text-decoration-color:rgba(231,190,90,.5)}
+      text-decoration-color:rgba(231,190,90,.5);padding-block:4px}
     .pcredit:hover,.pcredit:focus-visible{color:var(--sunlight);outline-offset:2px}
     .stage[hidden]{display:none!important}
     /* On a tablet the Planets view is a viewport-locked column, and with a row

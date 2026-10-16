@@ -79,6 +79,10 @@ const inspect = (page) => page.evaluate(() => {
   for (const el of controls) {
     if (!visible(el)) continue;
     const r = el.getBoundingClientRect();
+    // Judge a target only when it is wholly on screen: one cut by the viewport edge
+    // would read as a sliver. Every control is wholly on screen in some scroll state,
+    // and the top and bottom states between them cover the page.
+    const whole = r.top >= 0 && r.bottom <= innerHeight && r.left >= 0 && r.right <= innerWidth;
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     const left = Math.max(0, Math.floor((r.left - 24) / 2) * 2);
     const right = Math.min(innerWidth - 1, Math.ceil((r.right + 24) / 2) * 2);
@@ -93,7 +97,8 @@ const inspect = (page) => page.evaluate(() => {
     }
     const width = Number.isFinite(minX) ? maxX - minX + 2 : 0;
     const height = Number.isFinite(minY) ? maxY - minY + 2 : 0;
-    if (width < 24 || height < 24) add("TARGET", el, `hit area ${width}x${height}px < 24x24px`);
+    if (!whole) { /* judged in the scroll state where it is wholly visible */ }
+    else if (width < 24 || height < 24) add("TARGET", el, `hit area ${width}x${height}px < 24x24px`);
     else if (width < 44 || height < 44) add("TARGET", el, `hit area ${width}x${height}px < 44x44px`, "WARN");
     if (el.tabIndex >= 0 && !el.disabled) {
       const s = getComputedStyle(el);
@@ -109,7 +114,10 @@ const inspectFocus = async (page, focus) => {
   const findings = [];
   await page.evaluate(() => { document.body.tabIndex = -1; document.body.focus(); });
   const seen = new Set();
-  for (let n = 0; n < focus.length + 8; n++) {
+  // Tab also stops on controls outside this state's list (off screen, other views),
+  // so budget for every tabbable control in the document, not just the listed ones.
+  const tabbable = await page.evaluate(() => [...document.querySelectorAll('button, input, a[href], [tabindex]')].filter((e) => e.tabIndex >= 0 && !e.disabled).length);
+  for (let n = 0; n < tabbable + focus.length + 8; n++) {
     await page.keyboard.press("Tab");
     const result = await page.evaluate(() => {
       const el = document.activeElement;
@@ -120,7 +128,9 @@ const inspectFocus = async (page, focus) => {
     if (!result || seen.has(result.index)) continue;
     seen.add(result.index);
     const item = focus[result.index];
-    const outlineVisible = result.outlineWidth > 0 && result.outlineColor !== "transparent" && !/rgba\([^)]*,\s*0\)/.test(result.outlineColor) && result.outline !== item.baseline.outline;
+    // A focused control shows its focus if it draws a real outline now; comparing with a
+    // stored baseline misread controls whose unfocused value was captured mid-state.
+    const outlineVisible = result.outlineWidth > 0 && !/\bnone\b/.test(result.outline) && result.outlineColor !== "transparent" && !/rgba\([^)]*,\s*0\)/.test(result.outlineColor);
     const changed = outlineVisible || (result.shadow !== "none" && result.shadow !== item.baseline.shadow) || result.border !== item.baseline.border;
     if (!changed) findings.push({ severity: "FAIL", rule: "FOCUS", element: item.element, value: `no visible focus change; outline ${result.outline}; shadow ${result.shadow}; border ${result.border}` });
     if (seen.size === focus.length) break;

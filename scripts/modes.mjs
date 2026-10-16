@@ -82,6 +82,16 @@ try {
     // 1. First visit opens Day 4, and only Day 4 is in the layout.
     assert.equal(await selectedTab(page), "Stargazer", "first visit should open Stargazer");
     assert.deepEqual(await visibleViews(page), ["view-day4"]);
+    // One main landmark holds the stage and all three views, and the page has
+    // one heading, the seal (DEC-053): a screen reader lands somewhere.
+    const landmarks = await page.evaluate(() => ({
+      mains: document.querySelectorAll("main").length,
+      inMain: ["stage", "view-day4", "view-constellations", "view-planets"].every((id) => document.getElementById(id)?.closest("main") !== null),
+      h1: [...document.querySelectorAll("h1")].map((h) => h.querySelector("img")?.alt ?? h.textContent.trim()),
+    }));
+    assert.equal(landmarks.mains, 1, "one main landmark");
+    assert.equal(landmarks.inMain, true, "the stage and the three views are inside main");
+    assert.deepEqual(landmarks.h1, ["Day4 Astronomy Observatory"], "one h1, named by the seal");
     assert.equal(await page.evaluate(() => localStorage.getItem("day4.mode")), null, "nothing saved until chosen");
     const dialBefore = await dialCssWidth(page);
     assert(dialBefore > 200, `dial should be sized on Day 4 (got ${dialBefore})`);

@@ -22,13 +22,21 @@ export const THEME = {
 
 /** The planets' sky colours, muted — colour only where the sky provides it
  * (DEC-008): Mercury dusk-grey, Venus brilliant white, Mars rust, Jupiter
- * cream, Saturn pale gold. Shared by the rete and the ledger's swatches. */
+ * cream, Saturn gold. Shared by the rete, the ledger's swatches and the photo
+ * band: one token, never two.
+ *
+ * Two moved for a 60-year-old's eyes (DEC-053), measured in contrast.test.ts:
+ * Saturn deepened from #D9C27E toward ochre so it stands apart from Jupiter's
+ * cream for a colour-blind viewer (worst adjacent-pair ΔE 6.3 → 9.1) while its
+ * bright ring still clears 3:1 against the daylight sky; Mars lifted from
+ * #C97B5A, whose lit ring measured 2.56:1 by day, to a rust that clears 3:1
+ * at both the lit and the bright weight. Faint and dim rings are decorative. */
 export const PLANET_COLORS: Readonly<Record<string, string>> = {
   Mercury: "#9FA6B8",
   Venus: "#EDEFF4",
-  Mars: "#C97B5A",
+  Mars: "#E29B7E",
   Jupiter: "#E3D3AE",
-  Saturn: "#D9C27E",
+  Saturn: "#C9A84C",
 };
 
 /**

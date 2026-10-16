@@ -206,6 +206,11 @@ try {
       assert.equal(req.length, 1, `${name}: its photo was fetched exactly once`);
       assert.equal(req[0].status, 200);
       assert(req[0].bytes < 200 * 1024, `${name}: photo under 200 KB (got ${req[0].bytes})`);
+      // The shared dial stays an instrument with the row open (DEC-053): on a
+      // tablet it once shrank to about 210px under the photo; the page scrolls
+      // instead and the dial keeps at least 320px.
+      const dialPx = await page.evaluate(() => document.getElementById("sky")?.getBoundingClientRect().width ?? 0);
+      assert(dialPx >= (vp.width >= 721 ? 320 : 200), `${name}: the dial is ${dialPx}px wide with the row open`);
       await shot(page, `${vp.name}-planets-${name.toLowerCase()}.png`);
     }
     assert.equal(photoRequests.length, 5, "five photos fetched, one per row, none twice");

@@ -25,6 +25,16 @@ export function compassAbbrev(azimuthDeg: number): string {
   return POINTS[idx] as string;
 }
 
+/** The ring the viewer lit, as the dial draws it: which planet, whether it is
+ * up at this instant, and the hours its ring spans. Null when no ring is lit
+ * or the lit planet has no ring to draw today. */
+export interface LitRing {
+  readonly name: string;
+  readonly up: boolean;
+  readonly riseHHMM: string;
+  readonly setHHMM: string;
+}
+
 export interface TranscriptState {
   readonly sunAltitudeDeg: number;
   readonly sunAzimuthDeg: number;
@@ -33,6 +43,18 @@ export interface TranscriptState {
   /** "05:12" or null in polar conditions. */
   readonly riseHHMM: string | null;
   readonly setHHMM: string | null;
+  /** The lit ring, or null; absent means the same as null. */
+  readonly lit?: LitRing | null;
+}
+
+/** "Saturn's ring is lit, up until 3:00 am." — the rete's one sentence
+ * (DEC-053): the dial's most-loved element was the one thing its spoken
+ * description never named. A ring not yet risen says when it will be. */
+export function litRingSentence(lit: LitRing | null | undefined): string {
+  if (lit === null || lit === undefined) return "";
+  return lit.up
+    ? `${lit.name}'s ring is lit, up until ${lit.setHHMM}.`
+    : `${lit.name}'s ring is lit, up from ${lit.riseHHMM} until ${lit.setHHMM}.`;
 }
 
 /** One paragraph a screen reader can speak about the sky right now. */
@@ -48,5 +70,6 @@ export function transcript(s: TranscriptState): string {
       ? "There is no sunrise or sunset at this station today."
       : `Sunrise at ${s.riseHHMM}, sunset at ${s.setHHMM}.`;
   const moon = `The moon is a ${s.moonPhaseName}, ${s.moonAgeDays.toFixed(1)} days old.`;
-  return `${sun} ${light} ${moon}`;
+  const ring = litRingSentence(s.lit);
+  return ring === "" ? `${sun} ${light} ${moon}` : `${sun} ${light} ${moon} ${ring}`;
 }

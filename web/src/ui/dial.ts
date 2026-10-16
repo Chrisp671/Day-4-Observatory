@@ -75,6 +75,22 @@ export function tickAlpha(rank: TickRank): number {
   return rank === "hourly" ? 0.9 : 1;
 }
 
+/** The smallest a dial numeral may be, in CSS px: a 60-year-old reads it at
+ * arm's length on a phone (DEC-053). */
+export const NUMERAL_FLOOR_PX = 12;
+
+/**
+ * The numerals' font size in canvas px: 7.2% of the face radius, which is the
+ * proportion the design was drawn at, floored at NUMERAL_FLOOR_PX CSS px. On a
+ * 390px phone the face radius is about 133px, and 7.2% of it is under 10px —
+ * the floor is what binds there; on a tablet the proportion does. `dpr` is the
+ * device pixel ratio the canvas was sized by, so the floor is in the reader's
+ * pixels and not the device's.
+ */
+export function numeralFontPx(R: number, dpr: number): number {
+  return Math.max(Math.round(NUMERAL_FLOOR_PX * dpr), Math.round(R * 0.072));
+}
+
 /**
  * The two band arcs, in dial hours: the lit day from rise to set, and the dark
  * night from set round to the next rise.
@@ -179,7 +195,7 @@ export function drawDial(
   // minor at ≥2:1 length steps — rank by length and weight before opacity.
   // The band yields the rim to the rete, so its numerals keep their size by
   // taking a larger share of the (smaller) face radius.
-  ctx.font = `600 ${Math.round(R * 0.072)}px ${THEME.fontCaps}`;
+  ctx.font = `600 ${numeralFontPx(R, dpr)}px ${THEME.fontCaps}`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   for (let i = 0; i < 48; i++) {

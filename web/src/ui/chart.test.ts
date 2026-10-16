@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { parseChart, type Chart } from "../app/charts";
-import { chartProjection, starRadius } from "./chart";
+import { chartProjection, COMPASS_PX, starRadius } from "./chart";
 
 const FILES = import.meta.glob("../../public/charts/*.json", { eager: true, import: "default" });
 const load = (abbr: string): Chart => parseChart(FILES[`../../public/charts/${abbr}.json`]) as Chart;
@@ -44,5 +44,13 @@ describe("chartProjection", () => {
     expect(starRadius(0)).toBeGreaterThan(starRadius(2));
     expect(starRadius(2)).toBeGreaterThan(starRadius(5));
     expect(starRadius(6.5)).toBeGreaterThanOrEqual(1.1);
+  });
+});
+
+describe("the compass letters (DEC-053)", () => {
+  it("are set at the content floor, where a 60-year-old can orient the chart", () => {
+    // constellations.mjs holds the drawn size in the browser; this holds the
+    // number the painter asks for.
+    expect(COMPASS_PX).toBeGreaterThanOrEqual(12);
   });
 });

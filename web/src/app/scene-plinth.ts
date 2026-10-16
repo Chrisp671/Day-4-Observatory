@@ -37,7 +37,7 @@ import type {
   SceneTonight,
 } from "./scene";
 import { isTravelled, moonDayFor } from "./scene-core";
-import { compassAbbrev, compassPoint, transcript } from "./transcript";
+import { compassAbbrev, compassPoint, transcript, type LitRing } from "./transcript";
 import { VERSE_VERSION, verseOfDay } from "./verse";
 
 export interface PlinthInput {
@@ -587,7 +587,7 @@ export function sceneConstellation(input: PlinthInput): SceneConstellation | nul
 /** The dial in one plain paragraph, for aria-describedby (DEC-029). */
 export function sceneSpoken(input: PlinthInput): string {
   return safely(() => {
-    const { frame: s } = input;
+    const { frame: s, request: r } = input;
     return transcript({
       sunAltitudeDeg: s.sun.altitudeDeg,
       sunAzimuthDeg: s.sun.azimuthDeg,
@@ -595,6 +595,23 @@ export function sceneSpoken(input: PlinthInput): string {
       moonAgeDays: s.moon.ageDays,
       riseHHMM: s.sun.nextRiseUnixMillis === null ? null : fmt12(s.sun.nextRiseUnixMillis),
       setHHMM: s.sun.nextSetUnixMillis === null ? null : fmt12(s.sun.nextSetUnixMillis),
+      lit: litRingNow(r),
     });
   }, "");
+}
+
+/** The lit ring as the rete draws it (DEC-053): the same day-anchored rise
+ * and set the arc is drawn from, so the words and the picture agree. Null
+ * when nothing is lit, or the lit planet has no arc on this date. */
+function litRingNow(r: SceneRequest): LitRing | null {
+  if (r.lit === null) return null;
+  const day = planetDaysNow(r).find((d) => d.name === r.lit);
+  if (day === undefined || day.riseUnixMillis === null || day.setUnixMillis === null) return null;
+  const now = planetsNow(r).find((p) => p.name === r.lit);
+  return {
+    name: day.name,
+    up: now?.upNow ?? false,
+    riseHHMM: fmt12(day.riseUnixMillis),
+    setHHMM: fmt12(day.setUnixMillis),
+  };
 }

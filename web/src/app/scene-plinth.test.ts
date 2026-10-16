@@ -132,6 +132,27 @@ describe("sceneSpoken", () => {
     expect(spoken.length).toBeGreaterThan(0);
     expect(spoken).toContain("moon");
   });
+
+  it("names the lit ring, and only when one is lit (DEC-053)", () => {
+    expect(sceneSpoken(input(NIGHT, null))).not.toContain("ring");
+    const spoken = sceneSpoken(input(NIGHT, "Saturn"));
+    expect(spoken).toMatch(/Saturn's ring is lit, up (until|from .+ until) \d{1,2}:\d{2} [ap]m\.$/);
+  });
+
+  it("agrees with the rete: the sentence's set is the lit arc's set, or there is no sentence", () => {
+    for (const name of RING_ORDER) {
+      const ring = sceneRete(input(NIGHT, name)).find((r) => r.weight === "lit");
+      const spoken = sceneSpoken(input(NIGHT, name));
+      if (ring === undefined) {
+        expect(spoken).not.toContain("ring");
+      } else {
+        const setHours = Math.floor(ring.setHours);
+        const h12 = setHours % 12 === 0 ? 12 : setHours % 12;
+        expect(spoken).toContain(`${name}'s ring is lit`);
+        expect(spoken).toMatch(new RegExp(`until ${h12}:\\d{2} ${setHours < 12 ? "am" : "pm"}\\.$`));
+      }
+    }
+  });
 });
 
 describe("scenePlanets (REQ-014)", () => {

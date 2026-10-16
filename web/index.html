@@ -25,6 +25,16 @@
       --gild:linear-gradient(90deg,transparent,#D9A62B 22%,#F7DE93 50%,#D9A62B 78%,transparent);
     }
     *{box-sizing:border-box;margin:0;padding:0}
+    /* ————— the legibility floors (DEC-053): do what is best for someone who is 60 —————
+       No visible text under 11px; readouts and content (times, names, rows,
+       detail text) under 12px; the dial's numerals under 12px on a 390px phone
+       (ui/dial.ts). Targets 44px wherever the layout allows and never under
+       24px; the ones that cannot reach 44 are named in scripts/touch.mjs with
+       their reason. Nothing may be cut off with an ellipsis or clipped at 320,
+       360, 390, 430 or 820: a readout that wraps is a readout, a readout that
+       ends in "…" is a wrong one. Scale, do not redesign: the hierarchy is
+       still logo, verse, countdown, dial, plinth. legibility.test.ts reads this
+       stylesheet and fails on any size under the floors or any ellipsis. */
     #firmament{position:fixed;inset:0;width:100vw;height:100dvh;z-index:-1;
       pointer-events:none}
     html,body{height:100%}
@@ -53,7 +63,7 @@
       font-size:clamp(18px,2.7vh,25px);line-height:1.3;color:var(--scripture);
       max-width:52ch;margin:0 auto;text-wrap:balance;padding:0 6px;
       text-shadow:0 1px 14px rgba(4,10,22,.85)}
-    .verse-ref{font-family:var(--caps);font-weight:700;font-size:10px;
+    .verse-ref{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.34em;text-transform:uppercase;color:var(--gold-soft);
       margin-top:clamp(6px,1vh,10px);text-shadow:0 1px 10px rgba(4,10,22,.8);
       display:flex;align-items:center;justify-content:center;gap:10px}
@@ -83,7 +93,7 @@
        when chosen and stand on the same station and clock. */
     .modes{display:flex;justify-content:center;align-items:baseline;
       gap:clamp(18px,3.4vw,32px);margin-top:clamp(10px,1.6vh,16px)}
-    .modes button{font-family:var(--caps);font-weight:700;font-size:9.5px;
+    .modes button{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.3em;text-transform:uppercase;color:var(--ink-mid);
       background:transparent;border:none;cursor:pointer;padding:4px 1px 5px;
       border-bottom:1px solid transparent;position:relative;
@@ -100,6 +110,10 @@
     .modes button[aria-selected="true"]{color:var(--gold-soft);
       border-bottom-color:var(--gold-soft)}
     .view[hidden],.focus-context[hidden]{display:none!important}
+    /* One main landmark holds the dial and the three views (DEC-053). It is a
+       flex column like the body, so the stage's share of the height and the
+       views' own sizes are what they were when they stood in the body. */
+    main{display:flex;flex-direction:column;flex:1 1 auto;min-height:0}
     /* Day 4 is the stage and the plinth as they were: the wrapper adds no box. */
     #view-day4{display:contents}
     .focus{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;
@@ -125,8 +139,8 @@
       background:linear-gradient(180deg,rgba(8,22,39,0) 0%,rgba(8,22,39,.82) 36px,rgba(8,22,39,.9) 100%)}
     .focus-context b{font-weight:500}
     .focus-context b.shifted{color:var(--sunlight)}
-    .focus-context .zone{font-family:var(--caps);font-weight:600;font-size:.85em;letter-spacing:.14em;
-      color:var(--ink-mid)}
+    .focus-context .zone{font-family:var(--caps);font-weight:600;font-size:12px;letter-spacing:.14em;
+      color:var(--ink-mid);white-space:nowrap}
 
     /* ————— stage: the dial, alone ————— */
     .stage{position:relative;flex:1;min-height:0;display:grid;place-items:center;
@@ -164,15 +178,21 @@
     .bays{display:grid;grid-template-columns:1fr 1.3fr 1fr;padding:clamp(8px,1.2vh,12px) 0}
     .bay{padding:0 12px;border-left:1px solid var(--hair);min-width:0}
     .bay:first-child{border-left:none;padding-left:2px}
-    .bay .k{font-family:var(--caps);font-weight:700;font-size:9px;
+    .bay .k{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.24em;color:var(--ink-mid)}
+    /* A readout wraps at a space rather than ending in an ellipsis (DEC-053):
+       "40.0°N 74.0°W" becomes two lines in a 320px station bay, and the moon's
+       "↑11:41p · ↓1:41p Thu" breaks only at its separator — the shell renders
+       each part between separators as a nowrap span (app/glyphs.ts). */
     .bay .v{font-size:clamp(13.5px,1.9vh,17px);line-height:1.4;color:var(--ink-hi);margin-top:4px;
-      font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .bay .s{font-size:clamp(10px,1.4vh,12px);line-height:1.5;color:var(--ink-mid);margin-top:1px;
-      font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .bay .s b{font-weight:500;color:var(--ink-hi)}
+      font-variant-numeric:tabular-nums}
+    .bay .s{font-size:12px;line-height:1.5;color:var(--ink-mid);margin-top:1px;
+      font-variant-numeric:tabular-nums}
+    .part{white-space:nowrap}
+    .bay .s b{font-weight:500;color:var(--ink-hi);white-space:nowrap}
     .bay .s b.shifted{color:var(--sunlight)}
-    .bay .s .zone{font-family:var(--caps);font-weight:600;font-size:.85em;letter-spacing:.14em}
+    .bay .s .zone{font-family:var(--caps);font-weight:600;font-size:12px;letter-spacing:.14em;
+      white-space:nowrap}
 
     /* Station entry hides behind the coordinates: the readout is the
        control (DEC-028). Tap the coordinates to open it; it closes on success. */
@@ -184,17 +204,22 @@
     .station-toggle::after{content:"";position:absolute;left:0;right:0;top:0;height:44px}
     .stationbar{display:none;gap:4px;margin-top:7px;flex-wrap:wrap}
     .bay.open .stationbar{display:flex}
-    .stationbar input{font-family:var(--mono);font-size:11px;width:66px;text-align:right;
+    /* The fields and their two buttons stand 32px tall (DEC-053): the editor
+       shares a bay with the moon's readout, so 44px here would push the rail
+       down every time it opens; 32 clears the 24px floor with room. A focused
+       field keeps the page's gold focus ring — the old `outline:none` left a
+       keyboard user with only a border changing shade. */
+    .stationbar input{font-family:var(--mono);font-size:12px;width:66px;text-align:right;
       color:var(--ink-hi);background:transparent;border:1px solid var(--ink-low);
-      padding:3px 5px}
-    .stationbar input:focus{border-color:var(--ink-mid);outline:none}
-    .stationbar button{font-family:var(--caps);font-weight:600;font-size:9px;
+      padding:8px 6px}
+    .stationbar input:focus{border-color:var(--ink-mid)}
+    .stationbar button{font-family:var(--caps);font-weight:600;font-size:11px;
       letter-spacing:.14em;color:var(--ink-mid);background:transparent;
-      border:1px solid var(--ink-low);padding:3px 7px;cursor:pointer;position:relative}
+      border:1px solid var(--ink-low);padding:8px 8px;cursor:pointer;position:relative}
     /* Offsets count from the padding box, so -3px is 2px past the 1px border. */
     .stationbar button::after{content:"";position:absolute;inset:-3px}
     .stationbar button:hover{color:var(--ink-hi);border-color:var(--ink-mid)}
-    #station-status{display:block;margin-top:5px;font-size:9px;letter-spacing:.1em;
+    #station-status{display:block;margin-top:5px;font-size:11px;letter-spacing:.1em;
       color:var(--sunlight)}
     #station-status:empty{display:none}
 
@@ -207,7 +232,7 @@
       color:var(--ink-mid);background:transparent;border:none;
       padding:9px 8px;cursor:pointer;font-weight:300}
     .cell button:hover{color:var(--ink-hi)}
-    .cell span{font-family:var(--caps);font-weight:600;font-size:9px;
+    .cell span{font-family:var(--caps);font-weight:600;font-size:11px;
       letter-spacing:.16em;color:var(--ink-mid);text-align:center;
       min-width:40px;align-self:center}
     /* The arrows were 16px wide on a phone and the rail has no width to spare,
@@ -217,7 +242,11 @@
     .cell button::before{content:"";position:absolute;top:0;bottom:0;width:50%}
     .cell button:first-child::before{left:0}
     .cell button:last-child::before{right:0}
-    #now{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:9.5px;
+    /* NOW and HOLD travel as one group so that, where the rail is too narrow
+       for six words at 11px, they take a second row together (see the phone
+       rules below) rather than HOLD alone being cut off at the edge. */
+    .rail-acts{display:flex;flex:0 0 auto;align-items:stretch;min-height:44px}
+    #now{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--gold-soft);background:transparent;
       border:0;padding:9px 14px;cursor:pointer}
     #now:hover{color:var(--scripture)}
@@ -225,43 +254,51 @@
     /* Freeze-time (DEC-051): dressed as the rail's own word, because it is one
        of its controls. A pressed state that reads in gold and says so, rather
        than a tint on the button alone. */
-    #freeze{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:9.5px;
+    #freeze{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--ink-mid);background:transparent;
       border:0;border-left:1px solid var(--hair-soft);padding:9px 14px;cursor:pointer}
     #freeze:hover{color:var(--ink-hi)}
     #freeze[aria-pressed="true"]{color:var(--sunlight)}
 
     /* the ledger: tonight's program */
-    .ledger{border-top:1px solid var(--hair);padding:8px 2px 0}
-    .ledger-h{display:flex;align-items:baseline;gap:10px}
-    .ledger-h button{font-family:var(--caps);font-weight:700;font-size:9.5px;
+    .ledger{border-top:1px solid var(--hair);padding:10px 2px 0}
+    .ledger-h{display:flex;align-items:baseline;gap:10px;padding-bottom:3px}
+    .ledger-h button{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.3em;color:var(--ink-mid);background:transparent;border:none;
       cursor:pointer;padding:0;border-bottom:1px dotted transparent;position:relative}
-    /* 22px is what the ledger allows: the row above is the rail, the rows below
-       are the planets' own buttons, and a slop over either would steal their taps. */
-    .ledger-h button::after{content:"";position:absolute;left:-4px;right:-4px;top:-8px;bottom:-1px}
+    /* About 28px is what the ledger allows (DEC-053): the row above is the
+       rail, whose buttons fill their cells, and the rows below are the
+       planets' own buttons, so the slop reaches exactly the ledger's own
+       padding above the word and the header's padding below it, and no
+       further — a slop over either neighbour would steal their taps. */
+    .ledger-h button::after{content:"";position:absolute;left:-4px;right:-4px;top:-10px;bottom:-3px}
     .ledger-h button:hover{border-bottom-color:var(--ink-mid)}
     .ledger-h em{font-family:var(--serif);font-style:italic;font-weight:600;
       font-size:12px;color:var(--ink-mid)}
     .ledger-h .rule{flex:1;height:1px;background:var(--hair-soft);align-self:center}
+    /* 32px rows (DEC-053): three glance rows at 44px would push the ledger
+       off a 390×844 fold with the dial; 32 clears the 24px floor and the rows
+       stack with nothing between them to borrow. */
     .lrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
-      padding:5px 2px;border-bottom:1px solid var(--hair-soft)}
+      padding:8px 2px;border-bottom:1px solid var(--hair-soft)}
     /* A planet row is a real button (REQ-014) dressed exactly as the row it was. */
     button.lrow{width:100%;background:transparent;border:0;border-bottom:1px solid var(--hair-soft);
       font:inherit;color:inherit;text-align:left;cursor:pointer;
       -webkit-appearance:none;appearance:none;border-radius:0}
     .lrow:last-child{border-bottom:none}
     .lrow[hidden]{display:none}
-    .lrow .n{font-family:var(--caps);font-weight:600;font-size:10.5px;
+    .lrow .n{font-family:var(--caps);font-weight:600;font-size:12px;
       letter-spacing:.14em;color:var(--ink-mid);white-space:nowrap;flex-shrink:0}
-    .lrow .d{font-size:clamp(11px,1.5vh,12.5px);color:var(--ink-hi);
-      font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;
-      text-overflow:ellipsis}
+    /* The line wraps at its separators when the row is too narrow for it
+       (Jupiter's "rises in 9h 10m · season from Dec 22" at 360px), set
+       ragged-left so the times stay on the ledger's right edge. */
+    .lrow .d{font-size:clamp(12px,1.5vh,12.5px);color:var(--ink-hi);
+      font-variant-numeric:tabular-nums;min-width:0;text-align:right}
     .lrow.is-up .n{color:var(--scripture)}
     .lrow[data-planet]:not([data-planet=""]){cursor:pointer}
     .lrow.chosen .n{color:var(--sunlight)!important}
     .lrow.chosen .d{color:var(--scripture)}
-    .lrow .sw{display:inline-block;width:14px;height:2px;vertical-align:middle;
+    .lrow .sw{display:inline-block;width:16px;height:3px;vertical-align:middle;
       margin-right:7px;border-radius:1px}
     .lrow .season{color:var(--gold-soft)}
 
@@ -273,7 +310,7 @@
       text-align:center}
     .trouble-note{font-family:var(--serif);font-style:italic;font-weight:600;
       font-size:12.5px;color:var(--scripture);margin-bottom:4px}
-    #trouble-open{font-family:var(--caps);font-weight:700;font-size:9px;
+    #trouble-open{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--gold-soft);background:transparent;
       border:1px solid var(--hair);padding:6px 12px;cursor:pointer}
     #trouble-open:hover,#trouble-open[aria-expanded="true"]{color:var(--sunlight)}
@@ -284,22 +321,22 @@
        not compete for the same emphasis. */
     .trouble-ask{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
       justify-content:center}
-    #trouble-dismiss{font-family:var(--mono);font-size:9px;letter-spacing:.16em;
+    #trouble-dismiss{font-family:var(--mono);font-size:11px;letter-spacing:.16em;
       color:var(--ink-mid);background:transparent;border:0;padding:6px 4px;
       cursor:pointer;text-decoration:underline;
       text-underline-offset:2px;text-decoration-color:var(--hair)}
     #trouble-dismiss:hover{color:var(--ink-hi)}
-    #trouble-text{width:100%;max-width:52ch;font-family:var(--mono);font-size:10.5px;
+    #trouble-text{width:100%;max-width:52ch;font-family:var(--mono);font-size:12px;
       line-height:1.45;color:var(--ink-hi);background:var(--print-0);
       border:1px solid var(--hair);border-radius:3px;padding:7px 8px;
       text-align:left;white-space:pre;overflow-wrap:normal;overflow-x:auto;
       resize:vertical}
     .trouble-actions{display:flex;align-items:center;gap:10px}
-    #trouble-copy{font-family:var(--caps);font-weight:700;font-size:9px;
+    #trouble-copy{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--gold-soft);background:transparent;
       border:1px solid var(--hair);padding:5px 14px;cursor:pointer}
     #trouble-copy:hover{color:var(--sunlight)}
-    #trouble-copied{font-family:var(--mono);font-size:9.5px;color:var(--ink-mid)}
+    #trouble-copied{font-family:var(--mono);font-size:11px;color:var(--ink-mid)}
     .trouble-hint{font-family:var(--serif);font-style:italic;font-size:12px;
       color:var(--ink-mid);max-width:46ch;text-wrap:pretty}
 
@@ -308,31 +345,35 @@
     .tonight.open .tonight-all{display:block}
     .tonight-all{display:none}
     .section{display:flex;align-items:center;gap:10px;margin:12px 0 2px}
-    .section .t{font-family:var(--caps);font-weight:700;font-size:8.5px;
+    .section .t{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.28em;color:var(--gold-soft)}
     .section .rule{flex:1;height:1px;background:var(--hair-soft)}
-    .section .c{font-family:var(--mono);font-size:9px;color:var(--ink-mid)}
-    .cols{columns:2;column-gap:18px}
-    @media (min-width:900px){.cols{columns:4}}
-    .crow{display:flex;justify-content:space-between;gap:8px;padding:3px 0;
+    .section .c{font-family:var(--mono);font-size:11px;color:var(--ink-mid)}
+    /* One column until two fit (DEC-053): the widest row, "Corona Australis ★
+       rises in 11h 20m" at 12px, is about 255px, so two columns need 530px of
+       plinth and four would need more than the plinth's 820px ever gives. */
+    .cols{columns:1;column-gap:18px}
+    @media (min-width:600px){.cols{columns:2}}
+    .crow{display:flex;justify-content:space-between;gap:8px;padding:5px 0;
       break-inside:avoid;border-bottom:1px solid var(--hair-soft)}
-    .crow .n{font-family:var(--caps);font-weight:600;font-size:9px;
+    .crow .n{font-family:var(--caps);font-weight:600;font-size:12px;
       letter-spacing:.03em;color:var(--ink-mid);white-space:nowrap;flex-shrink:0}
     .crow.is-up .n{color:var(--scripture)}
-    .crow .d{font-family:var(--mono);font-size:9.5px;color:var(--ink-mid);
-      white-space:nowrap;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+    .crow .d{font-family:var(--mono);font-size:12px;color:var(--ink-mid);
+      white-space:nowrap;font-variant-numeric:tabular-nums}
     .crow.is-up .d{color:var(--ink-hi)}
-    .crow .mz{color:var(--gold-soft);font-size:8px;margin-left:4px}
+    .crow .mz{color:var(--gold-soft);font-size:11px;margin-left:4px}
     .tonight-foot{font-family:var(--serif);font-style:italic;font-size:12px;
       color:var(--gold-soft);text-align:center;margin-top:10px}
 
     /* ————— the Planets view: five rows, the chosen one opened (REQ-014) ————— */
-    .planets .lh{font-family:var(--caps);font-weight:700;font-size:9.5px;
+    .planets .lh{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.3em;color:var(--ink-mid)}
     .prow{border-bottom:1px solid var(--hair-soft)}
     .prow:last-child{border-bottom:none}
-    .prow .pbtn{border-bottom:none;padding:8px 2px}
-    .prow .pbtn .n{font-size:11px}
+    /* Five rows, so each can be a full 44px thumb target (DEC-053). */
+    .prow .pbtn{border-bottom:none;padding:12px 2px;min-height:44px}
+    .prow .pbtn .n{font-size:12px}
     .prow.is-up .n{color:var(--scripture)}
     .prow.chosen .n{color:var(--sunlight)!important}
     .prow.chosen .d{color:var(--scripture)}
@@ -340,7 +381,7 @@
     .pdetail[hidden]{display:none}
     .ptimes{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:13px;color:var(--ink-hi);
       font-variant-numeric:tabular-nums}
-    .ptimes em{font-family:var(--caps);font-style:normal;font-weight:700;font-size:8.5px;
+    .ptimes em{font-family:var(--caps);font-style:normal;font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--ink-mid);margin-right:7px}
     .ptimes b{font-weight:500}
     .pwhere{margin-top:7px;font-size:12.5px;color:var(--ink-hi);font-variant-numeric:tabular-nums}
@@ -364,6 +405,23 @@
       text-decoration-color:rgba(231,190,90,.5)}
     .pcredit:hover,.pcredit:focus-visible{color:var(--sunlight);outline-offset:2px}
     .stage[hidden]{display:none!important}
+    /* On a tablet the Planets view is a viewport-locked column, and with a row
+       open its photo and words squeezed the shared dial to about 210px — a
+       thumbnail, its numerals unreadable. The dial keeps 320px (DEC-053) and
+       the page scrolls instead, as Constellations already does. */
+    @media (min-width:721px){
+      html[data-mode="planets"] body{overflow-y:auto;height:auto;min-height:100dvh}
+      /* `contain:size` so the stage is sized by the column and not by the
+         canvas it holds — otherwise the dial's last size becomes the stage's
+         content height, the column grows around it, and nothing ever shrinks. */
+      html[data-mode="planets"] .stage{min-height:344px;contain:size}
+      /* The open TONIGHT fold is the same shape: seventy rows under a locked
+         viewport were simply cut off at the bottom of a tablet, unreachable
+         by any scroll. Kept as separate rules: a browser without :has() drops
+         the whole list a selector it cannot parse appears in. */
+      body:has(.tonight.open){overflow-y:auto;height:auto;min-height:100dvh}
+      body:has(.tonight.open) .stage{min-height:344px;contain:size}
+    }
 
     /* ————— the Constellations view: one chart, then the sky to choose from (REQ-015) —————
        The lists are long, so this view scrolls on every screen and the chart
@@ -384,14 +442,16 @@
       color:var(--scripture);margin:6px auto 0;max-width:46ch;text-wrap:pretty}
     .chart-note{font-family:var(--serif);font-style:italic;font-size:12.5px;color:var(--gold-soft);
       margin:6px auto 0;max-width:46ch}
-    .chart-load{font-family:var(--caps);font-weight:600;font-size:9px;letter-spacing:.2em;
+    .chart-load{font-family:var(--caps);font-weight:600;font-size:11px;letter-spacing:.2em;
       color:var(--ink-mid);margin-top:6px}
     .chart-where:empty,.chart-note:empty,.chart-load:empty,.chart-sub span:empty{display:none}
-    .skylist .lh{font-family:var(--caps);font-weight:700;font-size:9.5px;letter-spacing:.3em;color:var(--ink-mid)}
+    .skylist .lh{font-family:var(--caps);font-weight:700;font-size:11px;letter-spacing:.3em;color:var(--ink-mid)}
     .skylist .ledger-h{margin-top:8px}
     .skylist .cols{padding-top:2px}
     /* A constellation row is a real button dressed as the column row it was. */
-    button.crow{width:100%;background:transparent;border:0;border-bottom:1px solid var(--hair-soft);
+    /* Seventy-odd buttons, each a full 44px thumb target (DEC-053): the list
+       scrolls anyway, so height costs nothing here that it would cost the fold. */
+    button.crow{width:100%;min-height:44px;align-items:center;background:transparent;border:0;border-bottom:1px solid var(--hair-soft);
       font:inherit;color:inherit;text-align:left;cursor:pointer;-webkit-appearance:none;appearance:none;border-radius:0}
     button.crow:hover .n{color:var(--ink-hi)}
     .crow.chosen .n{color:var(--sunlight)!important}
@@ -405,7 +465,7 @@
       .brand{height:40px}
       .brand img{height:26px}
       .verse{font-size:19px;line-height:1.3;max-width:34ch}
-      .verse-ref{font-size:9.5px;letter-spacing:.3em}
+      .verse-ref{font-size:11px;letter-spacing:.3em}
       .hero{margin-top:14px}
       .hero span{font-size:24px}
       .hero b{font-size:22px}
@@ -413,22 +473,33 @@
       .plinth{padding:0 16px 14px}
       .bays{grid-template-columns:.95fr 1.3fr 1.1fr;padding:10px 0 9px}
       .bay{padding:0 8px}
-      .bay .k{font-size:8.5px}
+      .bay .k{font-size:11px}
       .bay .v{font-size:13.5px}
       #station-bay .v{font-size:12.5px}
-      .bay .s{font-size:10px}
+      .bay .s{font-size:12px}
       /* The rail is 358px wide at 390 and MONTH is its widest word: equal
          cells put MONTH's forward arrow on the H. Each cell takes the width
          its own label needs plus an equal share of what is left, floored at
          58px so each arrow's half stays 28px wide (touch.mjs holds both).
-         The glyph's 2px padding is the label's clearance, all the rail can
-         afford; the tracking gives back the last 3px. */
+         The glyph's 2px padding is the label's clearance. At 11px the four
+         cells and the two words no longer share one row (they measure about
+         386px), so NOW and HOLD take a second row together, each half the
+         rail wide and the full 44px tall (DEC-053) — a 320px phone used to
+         show HOLD as an "H" at the edge. */
+      .rail{flex-wrap:wrap}
       .cell{flex:1 1 auto;min-width:58px}
       .cell button{padding:9px 2px}
-      .cell span{min-width:0;font-size:8.5px;letter-spacing:.1em}
-      #now{padding:9px 10px}
-      .modes{margin-top:12px;gap:20px}
-      .modes button{font-size:9px;letter-spacing:.26em}
+      .cell span{min-width:0;font-size:11px;letter-spacing:.1em}
+      .rail-acts{flex:1 1 100%;border-top:1px solid var(--hair-soft);min-height:45px}
+      #now,#freeze{flex:1 1 0;padding:9px 10px}
+      .lrow .d{font-size:12px}
+      /* Three tabs at 11px and .1em tracking measure 264px; a 320px phone
+         has 288px for them, so the gap gives way before the letters do. */
+      .modes{margin-top:12px;gap:clamp(10px,3vw,20px)}
+      .modes button{font-size:11px;letter-spacing:.1em}
+      /* The slop reaches 4px sideways, under half the smallest gap, so the
+         tabs' hit boxes never meet (touch.mjs holds this at 320). */
+      .modes button::after{left:-4px;right:-4px}
       /* The focused views stand where the dial would: the page keeps its height. */
       .focus{min-height:52vh;padding:24px 16px}
       .focus-lead{font-size:19px}
@@ -510,9 +581,11 @@
 <body>
   <canvas id="firmament" aria-hidden="true"></canvas>
   <header>
-    <div class="brand">
+    <!-- The seal is the page's one heading (DEC-053): a reader lands on the
+         brand's name, and the picture is unchanged. -->
+    <h1 class="brand">
       <img src="day4-logo-dark.png" alt="Day4 Astronomy Observatory">
-    </div>
+    </h1>
     <div class="masthead">
       <p class="verse">&ldquo;<span id="verse-text">And let them be for signs and for seasons, and for days and years.</span>&rdquo;</p>
       <div class="verse-ref" id="verse-ref">Genesis 1:14 &middot; ESV</div>
@@ -524,7 +597,9 @@
   </header>
 
   <!-- The dial is shared by Day 4 and Planets (the rete is the planets'
-       own element, DEC-036); Constellations has its own view. -->
+       own element, DEC-036); Constellations has its own view. Everything a
+       visitor came for sits in one main landmark (DEC-053). -->
+  <main>
   <div class="stage" id="stage">
     <canvas id="sky" role="img" aria-describedby="sky-transcript"
       aria-label="Live astronomical dial: the sun rides a 24-hour ring showing day, night, and the current time"></canvas>
@@ -562,8 +637,10 @@
       </div>
       <div class="rail" role="group" aria-label="Time travel">
         <div id="steppers" style="display:contents"></div>
-        <button id="now" aria-label="Return to the present">NOW</button>
-        <button id="freeze" aria-pressed="false" aria-label="Hold the clock where it is">HOLD</button>
+        <div class="rail-acts">
+          <button id="now" aria-label="Return to the present">NOW</button>
+          <button id="freeze" aria-pressed="false" aria-label="Hold the clock where it is">HOLD</button>
+        </div>
       </div>
       <section class="ledger tonight" aria-label="Constellations tonight">
         <div class="ledger-h">
@@ -659,6 +736,7 @@
   <p class="focus-context" id="focus-context" hidden>
     <span id="focus-station"></span> &middot; <b id="focus-clock"></b> <span class="zone" id="focus-zone"></span>
   </p>
+  </main>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

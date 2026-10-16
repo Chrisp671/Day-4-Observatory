@@ -20,7 +20,11 @@ import { hourToAngle, pointOnCircle } from "./clockface";
 import { goldLeaf } from "./theme";
 import type { RingWeight, SceneRing } from "../app/scene";
 
-const KEEL = "rgba(4,10,22,0.55)";
+/** The dark bed under every ring, as colour and alpha, so the contrast gate
+ * (DEC-053, contrast.test.ts) measures a ring on the bed it is actually drawn
+ * on and not on the bare sky. `KEEL` below is the same number as a CSS string. */
+export const RING_KEEL = { color: "#040A16", alpha: 0.55 } as const;
+const KEEL = `rgba(4,10,22,${RING_KEEL.alpha})`;
 const KEEL_DEEP = "rgba(4,10,22,0.8)";
 
 const STROKE: Readonly<Record<RingWeight, { readonly width: number; readonly alpha: number }>> = {

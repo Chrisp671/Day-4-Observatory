@@ -44,6 +44,8 @@ const target = new URL(url);
 assert(["localhost", "127.0.0.1"].includes(target.hostname) && target.protocol === "http:", "drive a local preview only");
 const out = resolve(process.argv[3] ?? "web/.shots/touch");
 const FIXED_TIME = "2026-09-02T23:00:00.000Z";
+/** Noon in New York on a day with no moonrise at 40N 74W (the moon bay is worded). */
+const NO_MOONRISE_TIME = "2026-10-04T16:00:00.000Z";
 const VIEWPORTS = [
   { name: "phone-320", width: 320, height: 640, isMobile: true },
   { name: "phone-360", width: 360, height: 780, isMobile: true },
@@ -464,6 +466,44 @@ try {
     assert.deepEqual(errors, [], `${vp.name}: browser errors`);
     await context.close();
     console.log(`touch: ${vp.name} OK`);
+  }
+
+  // A worded readout on a narrow phone. On 2026-10-04 at 40N 74W there is no
+  // moonrise, so the moon bay reads "no moonrise today": one part with no time
+  // glyph. Found by an independent review of #42: kept unbreakable, it spilled
+  // ~28px into STATION at 320. Prose parts must wrap at their spaces.
+  for (const vp of VIEWPORTS.filter((v) => v.width <= 390)) {
+    const context = await browser.newContext({
+      viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1,
+      hasTouch: true, isMobile: vp.isMobile,
+      locale: "en-US", timezoneId: "America/New_York", reducedMotion: "reduce", serviceWorkers: "block",
+    });
+    const page = await context.newPage();
+    page.setDefaultTimeout(15000);
+    await page.clock.setFixedTime(new Date(NO_MOONRISE_TIME));
+    await page.addInitScript(() => {
+      localStorage.clear();
+      localStorage.setItem("day4-observatory.station", JSON.stringify({ lat: 40, lon: -74 }));
+    });
+    await page.goto(target.href, { waitUntil: "networkidle" });
+    await settle(page);
+    const moon = await page.evaluate(() => {
+      const el = document.getElementById("moon-times");
+      const bay = el?.closest(".bay");
+      if (!el || !bay) return null;
+      const right = bay.getBoundingClientRect().right - parseFloat(getComputedStyle(bay).paddingRight);
+      const parts = [...el.querySelectorAll(".part")].map((p) => {
+        const range = document.createRange(); range.selectNodeContents(p);
+        return Math.max(...[...range.getClientRects()].map((r) => r.right));
+      });
+      return { text: el.textContent.trim(), spill: Math.max(0, ...parts.map((r) => r - right)), over: el.scrollWidth - el.clientWidth };
+    });
+    assert(moon, `${vp.name}: no moon bay found`);
+    assert.match(moon.text, /no moonrise/, `${vp.name}: ${NO_MOONRISE_TIME} should have no moonrise, read "${moon.text}"`);
+    assert(moon.spill <= 0.5 && moon.over <= 1,
+      `${vp.name}: "${moon.text}" spills ${fmt(moon.spill)}px past its bay (scroll overflow ${moon.over}px)`);
+    console.log(`touch: ${vp.name} "${moon.text}" fits its bay`);
+    await context.close();
   }
 } finally {
   await browser.close();

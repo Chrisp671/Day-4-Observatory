@@ -9,7 +9,23 @@
  * side of the dial. This file exists so that refactor cannot land unnoticed.
  */
 import { describe, expect, it } from "vitest";
-import { RING_STROKE, ringSweepHours } from "./planetarcs";
+import { keelChannels, RING_KEEL, RING_STROKE, ringSweepHours } from "./planetarcs";
+
+/** The painter's own source, read the same way contrast.test.ts reads index.html. */
+const painterSource = import.meta.glob("./planetarcs.ts", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+})["./planetarcs.ts"] as string;
+
+describe("the keel the gate measures is the keel the painter draws (DEC-053)", () => {
+  it("derives both keels from RING_KEEL instead of repeating the colour", () => {
+    expect(keelChannels(RING_KEEL.color)).toBe("4,10,22");
+    // An independent review of #42 found the painter hard-coding these channels,
+    // so a changed RING_KEEL would move the gate's bed but not the drawn one.
+    expect(painterSource).not.toMatch(/rgba\(\s*4\s*,\s*10\s*,\s*22/);
+  });
+});
 
 describe("ringSweepHours", () => {
   it("measures a ring that stays inside one day", () => {

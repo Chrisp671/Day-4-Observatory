@@ -849,7 +849,9 @@ function lineFragment(doc: Document, line: string, spoken: boolean): DocumentFra
   lineParts(line).forEach((part, i) => {
     if (i > 0) frag.append(doc.createTextNode(" "));
     const span = doc.createElement("span");
-    span.className = "part";
+    // A part holding a time glyph ("↑6:12a") stays whole; a worded part ("no
+    // moonrise today") may wrap at its spaces, or it spills past a narrow bay.
+    span.className = part.some((t) => t.kind !== "text") ? "part" : "part prose";
     for (const t of part) {
       if (t.kind === "text") {
         span.append(doc.createTextNode(t.text));

@@ -1064,6 +1064,24 @@ class ManualPublishTests(unittest.TestCase):
         validator.assert_not_called(); evidence.assert_not_called()
         self.assertEqual(github.writes, [])
 
+    def test_evidence_that_changes_during_validation_is_never_published(self):
+        # Found by an independent review: a re-run of the evidence workflow that fails
+        # while publish validates must not be overtaken by a success built on the older
+        # attempt. A newer attempt that passes is refused too: it was not the one judged.
+        for conclusion in ('failure', 'success'):
+            with self.subTest(newer_attempt=conclusion):
+                github = FakeGitHub()
+                def rerun_mid_validation(*_args, **_kwargs):
+                    # A fresh object, as the API returns: the publisher's own copy of
+                    # the judged run must not change underneath it.
+                    github.run = dict(github.run, run_attempt=2, conclusion=conclusion)
+                    github.runs = [github.run]  # The workflow-runs listing the recheck reads.
+                    return {'web/src/a.ts': 'one line'}
+                with patch('manual_publish.source_context', side_effect=rerun_mid_validation), \
+                        self.assertRaises(Incomplete):
+                    manual_publish.publish(github, self.inputs(), self.RUN_URL, 'chrisp671')
+                self.assertEqual(github.writes, [])
+
     def test_oversized_review_is_refused_before_it_is_parsed(self):
         github = FakeGitHub()
         with patch('manual_publish.validate_review') as validator, self.assertRaises(Incomplete):

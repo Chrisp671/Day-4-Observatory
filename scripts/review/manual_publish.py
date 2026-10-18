@@ -60,6 +60,13 @@ def publish(github, inputs, run_url, actor=''):
     require(fresh['state'] == 'open' and fresh['head']['sha'] == sha and fresh['body'] == pr['body']
             and fresh['base']['sha'] == pr['base']['sha'],
             'PR head, base or body changed while validating; dispatch again against the current head.')
+    # The evidence can move too: a re-run of the evidence workflow that fails while
+    # this publish validates must not be overtaken by a success built on the older
+    # attempt (found by an independent review of this change). Re-resolve it last,
+    # immediately before any write, and require the very run and attempt judged.
+    latest = evidence_run(github, pr)
+    require((latest['id'], latest['run_attempt']) == (run['id'], run['run_attempt']),
+            'The evidence run changed while validating; prepare and review again.')
     update_comment(github, pr, message)
     # Complete the reporter's waiting check run when there is one, else create
     # the check run the reporter would have completed. Branch protection reads

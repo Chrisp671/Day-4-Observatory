@@ -159,7 +159,8 @@ The exact procedure, from a checkout of `main`:
    findings (manual); see the review comment."); the reporter's waiting check
    run is completed, or one is created. A rejected input writes nothing and the
    run log holds only the pipeline's fixed message, never the input.
-4. Confirm the gate: `gh api -R ... repos/Chrisp671/Day-4-Observatory/commits/<sha>/status`
+4. Confirm the gate: `gh api repos/Chrisp671/Day-4-Observatory/commits/<sha>/status`
+   (`gh api` takes the repository in the path; it has no `-R` flag)
    must list a `Web review` context in state `success` with the manual
    description. A green `gh pr checks` alone is not proof (RSK-007).
 

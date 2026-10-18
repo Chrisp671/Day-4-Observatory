@@ -18,16 +18,19 @@ import { tickAlpha, tickGeometry, tickRank } from "./dial";
 import {
   ALTITUDE_SWEEP,
   SCRIM,
+  composite,
   contrastRatio,
   mastheadBackground,
   plinthBackground,
   skyBackground,
   skyAt,
+  sweepPoints,
   worstContrast,
   type ContrastFloor,
 } from "./contrast";
+import { RING_KEEL, RING_STROKE } from "./planetarcs";
 import { skyPalette } from "./sky";
-import { THEME } from "./theme";
+import { PLANET_COLORS, THEME } from "./theme";
 
 /** WCAG 2.2 minimum for text, and for text under 18.66px bold / 24px. */
 const AA_TEXT = 4.5;
@@ -231,6 +234,68 @@ describe("inkLow is exempt from 3:1, and the exemption is paid for in geometry",
       expect(geo.weight).toBeGreaterThan(0);
       expect(tickAlpha(rank)).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("the rete's rings, on the keel they are drawn on (DEC-053)", () => {
+  // A ring is the planet's colour at its weight's alpha, laid over the keel,
+  // laid over the sky — and it is read against the sky beside it. DEC-049
+  // measured Mars at 2.56:1 and recorded it as the owner's call; DEC-053 makes
+  // the call: the two weights a viewer is meant to read, lit and bright, clear
+  // 1.4.11's 3:1 at every altitude. Faint (a daytime object) and dim (every
+  // other ring while one is lit) are declared decorative, like inkLow: the
+  // ledger rows carry the same facts in text, and the lit ring is the cue.
+  const ringOnSky = (color: string, alpha: number) => (sunAltitudeDeg: number): string =>
+    composite(color, alpha, composite(RING_KEEL.color, RING_KEEL.alpha, skyAt(sunAltitudeDeg)));
+  const ringContrast = (color: string, alpha: number): ContrastFloor => {
+    let worst = Infinity;
+    let atAltitude: number = ALTITUDE_SWEEP.from;
+    for (let i = 0; i < sweepPoints(); i++) {
+      const alt = ALTITUDE_SWEEP.from + i * ALTITUDE_SWEEP.step;
+      const ratio = contrastRatio(ringOnSky(color, alpha)(alt), skyAt(alt));
+      if (ratio < worst) {
+        worst = ratio;
+        atAltitude = alt;
+      }
+    }
+    return { worst, atAltitude };
+  };
+
+  it("measures five planets and nothing else", () => {
+    expect(Object.keys(PLANET_COLORS).sort()).toEqual(["Jupiter", "Mars", "Mercury", "Saturn", "Venus"]);
+  });
+
+  it("keeps every lit and bright ring above the graphic floor at every altitude", () => {
+    for (const [name, color] of Object.entries(PLANET_COLORS)) {
+      for (const weight of ["lit", "bright"] as const) {
+        expectAtLeast(ringContrast(color, RING_STROKE[weight].alpha), AA_GRAPHIC, `${name}'s ${weight} ring`);
+      }
+    }
+  });
+
+  it("says plainly that faint and dim rings are decorative, and keeps them so", () => {
+    // Recorded like inkLow's 1.36:1: a number that fails, held so nobody can
+    // claim the dim rings carry the identity. If a palette change ever lifts
+    // them past 3:1 the exemption is no longer needed and this should go.
+    for (const [name, color] of Object.entries(PLANET_COLORS)) {
+      expect(ringContrast(color, RING_STROKE.dim.alpha).worst, `${name} dim`).toBeLessThan(AA_GRAPHIC);
+      expect(ringContrast(color, RING_STROKE.faint.alpha).worst, `${name} faint`).toBeLessThan(AA_GRAPHIC);
+    }
+  });
+
+  it("keeps the ledger swatch — the legend — at AA on the plinth", () => {
+    for (const [name, color] of Object.entries(PLANET_COLORS)) {
+      expectAtLeast(worstContrast(color, plinthBackground), AA_TEXT, `${name}'s swatch on the plinth`);
+    }
+  });
+
+  it("holds Saturn at the ochre that stands apart from Jupiter, and Mars at a rust that clears by day", () => {
+    // The two tokens DEC-053 moved, pinned by value so a revert fails here by
+    // name: #D9C27E (Saturn) was 6.3 ΔE from Jupiter's cream under deutan
+    // vision, #C97B5A (Mars) was 2.56:1 lit by day.
+    expect(PLANET_COLORS["Saturn"]).toBe("#C9A84C");
+    expect(PLANET_COLORS["Mars"]).toBe("#E29B7E");
+    expect(ringContrast("#C97B5A", RING_STROKE.lit.alpha).worst).toBeLessThan(AA_GRAPHIC);
   });
 });
 

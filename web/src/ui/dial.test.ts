@@ -7,7 +7,7 @@
  * rubric say "no unapproved dial words" and be right.
  */
 import { describe, expect, it } from "vitest";
-import { bandArcs, dialNumeral, tickRank } from "./dial";
+import { bandArcs, dialNumeral, NUMERAL_FLOOR_PX, numeralFontPx, tickRank } from "./dial";
 
 describe("dialNumeral — a human clock, not a military one (REQ-012)", () => {
   it("reads midnight and noon as twelve on the right side of the day", () => {
@@ -84,5 +84,30 @@ describe("bandArcs", () => {
       const night = (arcs?.nightTo ?? 0) - (arcs?.nightFrom ?? 0);
       expect(day + night).toBeCloseTo(24, 12);
     }
+  });
+});
+
+describe("numeralFontPx — the numerals' floor (DEC-053)", () => {
+  // A 390px phone: the stage is 358px wide, the band yields the rim to the
+  // rete, so the face radius is 358 / 2 × 0.985 / 1.328 ≈ 132.8 CSS px.
+  const PHONE_R = (358 / 2) * 0.985 / (1.14 + 4 * 0.042 + 0.02);
+
+  it("never draws a numeral under 12 CSS px on a 390px phone, at any pixel ratio", () => {
+    for (const dpr of [1, 2, 3]) {
+      expect(numeralFontPx(PHONE_R * dpr, dpr) / dpr).toBeGreaterThanOrEqual(NUMERAL_FLOOR_PX);
+    }
+  });
+
+  it("is the floor that binds on a phone, not the proportion", () => {
+    // 7.2% of the phone's radius is under 10px: without the floor the numerals
+    // would be the smallest text on the page.
+    expect(Math.round(PHONE_R * 0.072)).toBeLessThan(NUMERAL_FLOOR_PX);
+    expect(numeralFontPx(PHONE_R, 1)).toBe(NUMERAL_FLOOR_PX);
+  });
+
+  it("keeps the design's proportion once the face is large enough for it", () => {
+    // A tablet's face (R ≈ 260 at 1×) is drawn at 7.2% as it always was.
+    expect(numeralFontPx(260, 1)).toBe(Math.round(260 * 0.072));
+    expect(numeralFontPx(520, 2)).toBe(Math.round(520 * 0.072));
   });
 });

@@ -25,6 +25,7 @@ import { MODES, stepMode, type Mode } from "./mode";
 import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
 import { FACE } from "../ui/clockface";
+import { lineParts } from "./glyphs";
 import { buildGrain } from "../ui/grain";
 import { photoAlt, photoCaption, photoFor } from "../ui/photos";
 
@@ -237,6 +238,17 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     const e = els[role];
     if (e !== undefined) e.textContent = text;
   };
+  /** A readout line with glyphs and separators (DEC-053): rendered as parts
+   * that wrap only at a separator, each glyph carrying its spoken word. The
+   * element's textContent is the line, byte for byte. Rebuilt only when the
+   * line changes, since the shell paints every tick. */
+  const lineMemo = new WeakMap<HTMLElement, string>();
+  const renderLine = (el: HTMLElement | undefined, line: string, spoken = true): void => {
+    if (el === undefined || lineMemo.get(el) === line) return;
+    lineMemo.set(el, line);
+    el.replaceChildren(lineFragment(doc, line, spoken));
+  };
+  const setLine = (role: Role, line: string): void => renderLine(els[role], line);
 
   /* ————— fit ————— */
   /** The largest square a stage's CONTENT box holds (a canvas sized to the
@@ -339,11 +351,12 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       slot.row.hidden = false;
       slot.row.classList.toggle("is-up", row.up);
       slot.label.textContent = row.name;
-      slot.line.textContent = row.line;
+      renderLine(slot.line, row.line);
       if (kind === "planet") {
         slot.row.classList.toggle("chosen", row.lit);
         slot.row.setAttribute("aria-pressed", String(row.lit));
         slot.row.dataset["planet"] = row.name;
+        slot.row.setAttribute("aria-description", ringDescription(row.name));
         // The swatch is the legend for the rings on the rete (DEC-034).
         slot.swatch.style.background = row.color ?? "";
         slot.label.style.color = row.color ?? "";
@@ -373,11 +386,13 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       slot.swatch.style.background = p.color;
       slot.label.style.color = p.color;
       slot.label.textContent = p.name;
-      slot.line.textContent = p.line;
+      renderLine(slot.line, p.line);
       slot.detail.hidden = !p.lit;
-      slot.rise.textContent = p.rise;
-      slot.peak.textContent = p.peak;
-      slot.set.textContent = p.set;
+      // The RISE / PEAK / SET keys beside these already say the word, so the
+      // glyphs here are hidden from a reader rather than spoken twice.
+      renderLine(slot.rise, p.rise, false);
+      renderLine(slot.peak, p.peak, false);
+      renderLine(slot.set, p.set, false);
       slot.where.textContent = p.where;
       slot.visibility.textContent = p.visibility;
       slot.arcNote.textContent = p.arcNote;
@@ -452,10 +467,10 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     setText("travelled", r.travelledDate);
     setText("zoneNote", r.zoneNote);
     setText("passion", r.passion);
-    setText("sunRise", r.sunRise);
-    setText("sunSet", r.sunSet);
+    setLine("sunRise", r.sunRise);
+    setLine("sunSet", r.sunSet);
     setText("moonPhase", r.moonPhase);
-    setText("moonTimes", r.moonTimes);
+    setLine("moonTimes", r.moonTimes);
     setText("station", r.station);
     setText("clock", r.clock);
     setText("zone", r.zone);
@@ -477,7 +492,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
 
     // The chosen constellation, and the two lists to choose from.
     const c = scene.constellation;
-    setText("chartTitle", c === null ? "Choose a constellation" : `${c.starred ? "★ " : ""}${c.name}`);
+    renderLine(els.chartTitle, c === null ? "Choose a constellation" : `${c.starred ? "★ " : ""}${c.name}`);
     setText("chartStatus", c?.status ?? "");
     setText("chartTracked", c?.tracked ?? "");
     setText("chartWhere", c?.where ?? "");
@@ -814,6 +829,58 @@ function sectionHeader(doc: Document, title: string, count: number): HTMLElement
   return section;
 }
 
+/** What pressing a planet row does, for a reader who cannot see the ring
+ * light (DEC-053): the row's name says "Saturn rises in 1h 48m", pressed;
+ * this says pressed *what*. */
+function ringDescription(name: string, opens = false): string {
+  return opens
+    ? `Lights ${name}'s ring on the dial and opens its details`
+    : `Lights ${name}'s ring on the dial`;
+}
+
+/**
+ * A line of readout as DOM (DEC-053): one `span.part` per unbreakable part,
+ * a plain space between parts (the only place it may wrap), and each glyph
+ * in a `span.glyph` that a screen reader speaks as a word — or, when the
+ * word is already written beside it, skips. The fragment's text is the line.
+ */
+function lineFragment(doc: Document, line: string, spoken: boolean): DocumentFragment {
+  const frag = doc.createDocumentFragment();
+  lineParts(line).forEach((part, i) => {
+    if (i > 0) frag.append(doc.createTextNode(" "));
+    const span = doc.createElement("span");
+    // A part holding a time glyph ("↑6:12a") stays whole; a worded part ("no
+    // moonrise today") may wrap at its spaces, or it spills past a narrow bay.
+    span.className = part.some((t) => t.kind !== "text") ? "part" : "part prose";
+    for (const t of part) {
+      if (t.kind === "text") {
+        span.append(doc.createTextNode(t.text));
+        continue;
+      }
+      const g = doc.createElement("span");
+      g.className = "glyph";
+      g.textContent = t.text;
+      if (spoken) {
+        g.setAttribute("role", "img");
+        g.setAttribute("aria-label", t.word);
+      } else {
+        g.setAttribute("aria-hidden", "true");
+      }
+      span.append(g);
+    }
+    frag.append(span);
+  });
+  return frag;
+}
+
+/** The Mazzaroth mark beside a constellation's name: the star, and its words. */
+function mazzarothMark(doc: Document): HTMLElement {
+  const mz = doc.createElement("i");
+  mz.className = "mz";
+  mz.append(lineFragment(doc, "★", true));
+  return mz;
+}
+
 /** An empty planet row that is a real button: swatch, coloured name, line. */
 function planetButton(doc: Document): {
   button: HTMLButtonElement; swatch: HTMLElement; label: HTMLElement; line: HTMLElement;
@@ -842,10 +909,11 @@ function ledgerRow(
   b.button.className = `lrow${row.up ? " is-up" : ""}${row.lit ? " chosen" : ""}`;
   b.button.setAttribute("aria-pressed", String(row.lit));
   b.button.dataset["planet"] = row.name;
+  b.button.setAttribute("aria-description", ringDescription(row.name));
   b.label.style.color = row.color ?? "";
   b.swatch.style.background = row.color ?? "";
   b.label.textContent = row.name;
-  b.line.textContent = row.line;
+  b.line.append(lineFragment(doc, row.line, true));
   b.button.addEventListener("click", () => toggleLit(row.name, row.lit));
   return b.button;
 }
@@ -863,6 +931,7 @@ function planetRow(doc: Document, name: string): PlanetSlot {
   detail.hidden = true;
   b.button.setAttribute("aria-controls", detail.id);
   b.button.setAttribute("aria-expanded", "false");
+  b.button.setAttribute("aria-description", ringDescription(name, true));
 
   const times = doc.createElement("div");
   times.className = "ptimes";
@@ -948,15 +1017,10 @@ function skyButton(doc: Document, row: SceneRow, onChart: (name: string) => void
   const name = doc.createElement("span");
   name.className = "n";
   name.textContent = row.name;
-  if (row.starred) {
-    const mz = doc.createElement("i");
-    mz.className = "mz";
-    mz.textContent = "★";
-    name.append(mz);
-  }
+  if (row.starred) name.append(mazzarothMark(doc));
   const line = doc.createElement("span");
   line.className = "d";
-  line.textContent = row.line;
+  line.append(lineFragment(doc, row.line, true));
   b.append(name, line);
   b.addEventListener("click", () => onChart(row.name));
   return b;
@@ -969,15 +1033,10 @@ function columnRow(doc: Document, row: SceneRow): HTMLElement {
   const name = doc.createElement("span");
   name.className = "n";
   name.textContent = row.name;
-  if (row.starred) {
-    const mz = doc.createElement("i");
-    mz.className = "mz";
-    mz.textContent = "★";
-    name.append(mz);
-  }
+  if (row.starred) name.append(mazzarothMark(doc));
   const line = doc.createElement("span");
   line.className = "d";
-  line.textContent = row.line;
+  line.append(lineFragment(doc, row.line, true));
   root.append(name, line);
   return root;
 }

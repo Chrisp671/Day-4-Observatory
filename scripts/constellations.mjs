@@ -118,6 +118,12 @@ try {
     const names = ink.text.filter((t) => !/^[NEW]@/.test(t));
     assert(names.length >= 1, "at least one star name on the chart");
     for (const n of names) assert(parseFloat(n.split("@")[1]) >= 12, `name readable at CSS size: ${n}`);
+    // The compass letters are readouts too (DEC-053): a visitor orients the
+    // chart against the "look southwest" line, so N, E and W are drawn at the
+    // content floor rather than as 9px decoration.
+    const compass = ink.text.filter((t) => /^[NEW]@/.test(t));
+    assert.deepEqual(compass.map((t) => t[0]).sort(), ["E", "N", "W"], "the three compass letters are drawn");
+    for (const c of compass) assert(parseFloat(c.split("@")[1]) >= 12, `compass letter readable at CSS size: ${c}`);
     console.log(`${vp.name} opens on ${firstRow}: ${first.status} | ${first.where} | ${first.vis} | names ${names.join(", ")}`);
     await shot(page, `${vp.name}-constellations-${firstRow.toLowerCase().replace(/\s+/g, "-")}.png`);
 

@@ -16,6 +16,9 @@ import { THEME } from "./theme";
 
 const rad = (deg: number): number => (deg * Math.PI) / 180;
 
+/** The compass letters' size in CSS px: the content floor of DEC-053. */
+export const COMPASS_PX = 12;
+
 export interface ChartPoint {
   readonly x: number;
   readonly y: number;
@@ -153,10 +156,12 @@ export function drawChart(
     ctx.fillText(s.name, x, y);
   }
 
-  // Cardinal reminders in the corners: north up, east left.
-  ctx.font = `600 9px ${THEME.fontCaps}`;
-  ctx.fillStyle = THEME.inkMid;
-  ctx.globalAlpha = 0.8;
+  // Cardinal reminders in the corners: north up, east left. Set in the high
+  // ink at the content floor (DEC-053): a visitor orients the chart against
+  // the "look southwest" line below it, so these are readouts, not decoration.
+  ctx.font = `600 ${COMPASS_PX}px ${THEME.fontCaps}`;
+  ctx.fillStyle = THEME.inkHi;
+  ctx.globalAlpha = 1;
   ctx.textAlign = "center";
   ctx.fillText("N", 0, -size / 2 + 12);
   ctx.textAlign = "left";

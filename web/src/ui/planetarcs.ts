@@ -20,8 +20,16 @@ import { hourToAngle, pointOnCircle } from "./clockface";
 import { goldLeaf } from "./theme";
 import type { RingWeight, SceneRing } from "../app/scene";
 
-const KEEL = "rgba(4,10,22,0.55)";
-const KEEL_DEEP = "rgba(4,10,22,0.8)";
+/** The dark bed under every ring, as colour and alpha, so the contrast gate
+ * (DEC-053, contrast.test.ts) measures a ring on the bed it is actually drawn
+ * on and not on the bare sky. Both keels below are derived from it, so the gate
+ * can never measure a bed the painter does not draw. */
+export const RING_KEEL = { color: "#040A16", alpha: 0.55 } as const;
+/** "#040A16" → "4,10,22": the keel colour as the channels of an rgba(). */
+export const keelChannels = (hex: string): string =>
+  [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(",");
+const KEEL = `rgba(${keelChannels(RING_KEEL.color)},${RING_KEEL.alpha})`;
+const KEEL_DEEP = `rgba(${keelChannels(RING_KEEL.color)},0.8)`;
 
 const STROKE: Readonly<Record<RingWeight, { readonly width: number; readonly alpha: number }>> = {
   lit: { width: 3.2, alpha: 1 },

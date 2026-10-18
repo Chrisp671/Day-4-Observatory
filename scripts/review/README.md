@@ -300,3 +300,5 @@ and validation limits.
 - [Qwen vision inputs](https://www.alibabacloud.com/help/en/model-studio/vision-model/)
 
 Keep browser and action pins current through separately reviewed dependency updates.
+
+<!-- Trial marker for the first live manual GPT-6.1 Sol review (DEC-054). This PR is never merged. -->

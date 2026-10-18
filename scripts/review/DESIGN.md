@@ -158,6 +158,29 @@ model judgements. A post-deploy failure reports a bad release but does not roll 
 back automatically. Repository settings and the full owner profile remain owner
 configuration, not inferred secrets or fabricated policy.
 
+## Manual reviewer amendment (DEC-054)
+
+The gate's reviewer became a model without an API key: GPT-6.1 Sol, reached
+through the owner's Codex session. The shape follows from one fixed fact,
+that branch protection takes the `Web review` status only from GitHub Actions,
+so a human cannot post the verdict directly and the publish step must be a
+workflow. Three pieces, each small: a reporter mode (`REVIEW_PROVIDER=manual`)
+that does the existing gate checks and then publishes `pending` instead of
+calling a model; a local, read-only helper (`manual_prepare.py`) that writes
+the exact instructions and evidence the reporter would have sent, built by the
+new shared `review_request` in `review.py` so the two paths cannot drift; and a
+`workflow_dispatch` publisher (`review-manual.yml` running `manual_publish.py`)
+that validates the pasted reply with the unchanged `validate_review` against
+the same source context, then writes the comment, check run and status. The
+publisher runs trusted default-branch code only, with the reporter's
+permissions and concurrency group, and treats its three inputs as untrusted
+text: exact-match sha against the current open head, bounded review size, no
+writes on rejection, no input echoed to logs. A manual verdict is marked by
+`(manual)` in the status description so the reporter leaves it standing for
+the same head. The trade recorded in RSK-008: the gate now depends on the
+maintainer's machine and on whoever can dispatch the workflow. SECURITY-REVIEW
+holds the design walk and the review results.
+
 ## Planet photo state (WI-033, DEC-039)
 
 The Planets capture state stays one state per viewport: the open row's detail now

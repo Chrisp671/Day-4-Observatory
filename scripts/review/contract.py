@@ -33,6 +33,26 @@ BUILDER_FAMILIES = ('openai', 'anthropic', 'google', 'qwen', 'glm')
 # family. Nothing downstream compensates; the published comment names the
 # builder family so the skipped check is visible rather than silent.
 ROUTED_UNKNOWN = 'routed-unknown'
+# The manual reviewer (DEC-054): GPT-6.1 Sol, reached through the owner's Codex
+# session, with no API key. With REVIEW_PROVIDER set to MANUAL_PROVIDER the
+# reporter calls no model and publishes a pending status; the verdict arrives
+# later through review-manual.yml. The reviewer's family is what the
+# independence check compares the builder against, in the reporter, the
+# prepare helper and the publisher alike, so a PR built by an openai model
+# cannot be reviewed by Sol. MANUAL_MARK is how the reporter recognises a
+# manual verdict on a commit and leaves it standing.
+MANUAL_PROVIDER = 'manual'
+MANUAL_REVIEWER = ('openai', 'gpt-6.1-sol')
+MANUAL_REVIEWER_LABEL = 'gpt-6.1-sol (manual, via Codex)'
+MANUAL_MARK = '(manual)'
+MANUAL_DESCRIPTIONS = {
+    'pending': 'Awaiting GPT-6.1 Sol review; see the review comment.',
+    'success': 'GPT-6.1 Sol review passed (manual); see the review comment.',
+    'failure': 'GPT-6.1 Sol review found blocking findings (manual); see the review comment.',
+}
+# GitHub caps a workflow_dispatch payload at 65,535 characters; the review input
+# is bounded below that before it is parsed.
+MANUAL_REVIEW_LIMIT = 64_000
 
 
 class Incomplete(Exception):
@@ -232,7 +252,8 @@ def strip_generated(diff):
 def relevant(path):
     return path.startswith(('web/', 'scripts/review/')) or path in {
         'PLAN.md', '.github/review-rubric.md', '.github/workflows/review-web.yml',
-        '.github/workflows/review-web-report.yml', '.github/workflows/deploy-web.yml'}
+        '.github/workflows/review-web-report.yml', '.github/workflows/review-manual.yml',
+        '.github/workflows/deploy-web.yml'}
 
 
 def safe_text(value):

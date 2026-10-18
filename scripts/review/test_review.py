@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import struct
+import tempfile
 import unittest
 import urllib.error
 from unittest.mock import patch
@@ -12,9 +13,12 @@ import zipfile
 
 import api
 import contract
+import manual_prepare
+import manual_publish
 import review
-from contract import (is_generated, strip_generated, BUILDER_FAMILIES, CANON, IMAGES, Incomplete, plan_entries,
-                      provider_config, read_artifact, relevant, ROUTED_UNKNOWN, safe_text, strict_json, validate_review)
+from contract import (is_generated, strip_generated, BUILDER_FAMILIES, CANON, IMAGES, Incomplete, MANUAL_DESCRIPTIONS,
+                      MANUAL_REVIEW_LIMIT, plan_entries, provider_config, read_artifact, relevant, ROUTED_UNKNOWN,
+                      safe_text, strict_json, validate_review)
 
 # One reviewer configuration per real family, so every family can be put on the
 # reviewer's side of the independence check (glm has no live reviewer route and
@@ -204,6 +208,8 @@ class ContractTests(unittest.TestCase):
         for body in ('No citations', 'WI-999'):
             with self.assertRaises(Incomplete): plan_entries(plan, body)
         self.assertTrue(relevant('.github/workflows/review-web-report.yml'))
+        self.assertTrue(relevant('.github/workflows/review-manual.yml'))
+        self.assertTrue(relevant('scripts/review/manual_publish.py'))
         self.assertTrue(relevant('PLAN.md'))
         self.assertFalse(relevant('Resources/help.html'))
 
@@ -475,6 +481,8 @@ class FakeGitHub:
                    'body': 'Builder-Model-Family: anthropic\nDEC-036'}
         self.checks = []
         self.comments = []
+        self.statuses = []  # Commit statuses, newest first, as /commits/{sha}/statuses lists them.
+        self.runs = [self.run]
         self.changes = [{'filename': 'web/src/a.ts', 'status': 'modified'}]
         self.writes = []
 
@@ -488,22 +496,28 @@ class FakeGitHub:
             if path == '/check-runs/100': self.checks[0].update(data)
             if path.endswith('/comments'): self.comments.append({'id': 200, 'user': {'login': 'github-actions[bot]'}, **data})
             if path == '/issues/comments/200': self.comments[0].update(data)
+            if path.startswith('/statuses/'):  # Newest first, as the list endpoint reports.
+                self.statuses.insert(0, dict(data, creator={'login': 'github-actions[bot]'}))
             return {}
         if path == '/actions/runs/10': return self.run
         if path == '/pulls/7': return 'diff --git a/web/src/a.ts b/web/src/a.ts' if kwargs.get('accept') else self.pr
         raise AssertionError(path)
 
     def pages(self, path, key=None, **kwargs):
-        if '/workflows/' in path: return [self.run]
+        if '/workflows/' in path: return self.runs
         if '/check-runs?' in path: return self.checks
         if path.endswith('/files'): return self.changes
         if path.endswith('/jobs'): return [{'name': 'Gate and capture', 'conclusion': 'success'}]
         if path.endswith('/comments'): return self.comments
+        if path.startswith('/commits/') and path.endswith('/statuses'): return list(self.statuses)
         raise AssertionError(path)
 
     def artifact(self, run_id): return artifact()
 
-    def file(self, path, ref): return '\n'.join(f'- {key} — canon' for key in sorted(CANON))
+    def file(self, path, ref):
+        if path == review.RUBRIC:
+            return Path(review.RUBRIC).read_text(encoding='utf-8')
+        return '\n'.join(f'- {key} — canon' for key in sorted(CANON))
 
 
 class ReporterTests(unittest.TestCase):
@@ -767,6 +781,331 @@ class SkipWordingContractTests(unittest.TestCase):
         self.execute(github)
         for _, data, _ in self.statuses(github):
             self.assertLessEqual(len(data['description']), 140, f'Rename status description exceeds 140 chars: {data["description"]}')
+
+
+class KeyWatch(dict):
+    """os.environ stand-in that fails the test the moment the reviewer key is read."""
+
+    def _guard(self, key):
+        if key == 'REVIEW_API_KEY':
+            raise AssertionError('manual mode read REVIEW_API_KEY')
+
+    def __getitem__(self, key):
+        self._guard(key); return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self._guard(key); return super().get(key, default)
+
+    def __contains__(self, key):
+        self._guard(key); return super().__contains__(key)
+
+
+def blocking_review(file='web/src/a.ts', line=1):
+    result = good_review()
+    result['findings'] = [{'severity': 'BLOCKING', 'category': 'spec', 'file': file, 'line': line,
+                           'title': 'Defect', 'evidence': 'Wrong output.', 'fix': 'Correct the output.'}]
+    return result
+
+
+class ManualModeTests(unittest.TestCase):
+    """DEC-054: REVIEW_PROVIDER=manual calls no model, reads no key, and holds the gate pending."""
+    statuses = ReporterTests.statuses
+
+    def execute(self, github):
+        env = KeyWatch(os.environ)
+        env.update({'REVIEW_PROVIDER': 'manual', 'REVIEW_MODEL': '', 'REVIEW_API_KEY': 'must-never-be-read'})
+        with patch('review.os.environ', env), patch('review.source_context', return_value={'web/src/a.ts': 'one line'}), \
+             patch('review.model_request') as model:
+            code = review.run_review(github, {'workflow_run': copy.deepcopy(github.run)})
+        return code, model
+
+    def test_manual_mode_publishes_pending_without_model_or_key(self):
+        github = FakeGitHub()
+        code, model = self.execute(github)
+        self.assertEqual(code, 0); model.assert_not_called()
+        (_, status, method), = self.statuses(github)
+        self.assertEqual(method, 'POST')
+        self.assertEqual(status['state'], 'pending')
+        self.assertEqual(status['context'], review.CHECK)
+        self.assertEqual(status['description'], 'Awaiting GPT-6.1 Sol review; see the review comment.')
+        self.assertLessEqual(len(status['description']), 140)
+        check = github.checks[0]
+        self.assertEqual(check['status'], 'in_progress')
+        self.assertNotIn('conclusion', check)
+        self.assertIn('awaiting', check['output']['title'].lower())
+        comment = github.comments[0]['body']
+        self.assertTrue(comment.startswith(review.MARKER))
+        self.assertIn('manual_prepare.py 7 ', comment)
+        self.assertIn(f'-f pr=7 -f sha={"a" * 40} -F review=@reply.json', comment)
+        self.assertIn('Builder family: `anthropic` (independent of the reviewer).', comment)
+        self.assertNotIn('passed', comment.lower())
+
+    def test_skip_path_still_passes_in_manual_mode(self):
+        github = FakeGitHub(); github.changes = [{'filename': 'README.md'}]
+        code, model = self.execute(github)
+        self.assertEqual(code, 0); model.assert_not_called()
+        (_, status, _), = self.statuses(github)
+        self.assertEqual(status['state'], 'success')
+        self.assertEqual(status['description'], 'No web or review-pipeline changes; review skipped.')
+        self.assertEqual(github.checks[0]['conclusion'], 'success')
+        self.assertIn('skipped', github.checks[0]['output']['title'].lower())
+
+    def test_manual_mode_keeps_an_existing_manual_verdict(self):
+        for state in ('success', 'failure'):
+            with self.subTest(state=state):
+                github = FakeGitHub()
+                github.statuses = [{'context': review.CHECK, 'state': state, 'description': MANUAL_DESCRIPTIONS[state],
+                                    'creator': {'login': 'github-actions[bot]'}}]
+                github.comments = [{'id': 200, 'user': {'login': 'github-actions[bot]'}, 'body': review.MARKER + '\nSol verdict'}]
+                github.artifact = lambda _: (_ for _ in ()).throw(AssertionError('artifact fetched'))
+                code, model = self.execute(github)
+                model.assert_not_called()
+                self.assertEqual(code, 0 if state == 'success' else 1)
+                self.assertEqual(self.statuses(github), [])  # The standing verdict is not rewritten.
+                self.assertEqual(github.comments[0]['body'], review.MARKER + '\nSol verdict')
+                self.assertEqual(github.checks[0]['conclusion'], state)
+                self.assertIn('kept', github.checks[0]['output']['title'])
+        # A model-mode verdict, a look-alike posted with a personal token, and a manual
+        # verdict that a newer status has since replaced are not standing manual verdicts.
+        bot = {'login': 'github-actions[bot]'}
+        for standing in ([{'context': review.CHECK, 'state': 'success', 'description': 'Review passed; see the review comment.', 'creator': bot}],
+                         [{'context': review.CHECK, 'state': 'success', 'description': MANUAL_DESCRIPTIONS['success'], 'creator': {'login': 'someone'}}],
+                         [{'context': review.CHECK, 'state': 'pending', 'description': 'Superseded review; a newer attempt decides.', 'creator': bot},
+                          {'context': review.CHECK, 'state': 'success', 'description': MANUAL_DESCRIPTIONS['success'], 'creator': bot}]):
+            with self.subTest(standing=standing):
+                github = FakeGitHub(); github.statuses = standing
+                self.execute(github)
+                self.assertEqual(self.statuses(github)[0][1]['state'], 'pending')
+
+    def test_manual_mode_still_fails_the_gate_as_incomplete(self):
+        for failure in ('gate', 'family', 'declaration', 'artifact'):
+            with self.subTest(failure=failure):
+                github = FakeGitHub()
+                if failure == 'gate': github.run['conclusion'] = 'failure'
+                if failure == 'family': github.pr['body'] = 'Builder-Model-Family: openai\nDEC-036'
+                if failure == 'declaration': github.pr['body'] = 'DEC-036'
+                if failure == 'artifact': github.artifact = lambda _: b'bad zip'
+                code, model = self.execute(github)
+                self.assertEqual(code, 1); model.assert_not_called()
+                (_, status, _), = self.statuses(github)
+                self.assertEqual(status['state'], 'failure')
+                self.assertIn('incomplete', status['description'].lower())
+                self.assertIn('incomplete', github.comments[0]['body'])
+
+
+class ManualPrepareTests(unittest.TestCase):
+    """manual_prepare.py gathers the exact review request, read-only, and refuses stale or ineligible PRs."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.out = Path(self.tmp.name) / 'out'
+
+    def prepare(self, github, out=None):
+        with patch('review.source_context', return_value={'web/src/a.ts': 'one line'}):
+            return manual_prepare.prepare(github, 7, out or self.out)
+
+    def test_prepare_writes_exactly_what_the_reporter_would_send(self):
+        github = FakeGitHub()
+        meta = self.prepare(github)
+        self.assertEqual(github.writes, [])
+        self.assertEqual({p.name for p in self.out.iterdir()}, set(manual_prepare.OUTPUTS))
+        instructions = (self.out / 'instructions.txt').read_bytes().decode('utf-8')
+        evidence_text = (self.out / 'evidence.json').read_bytes().decode('utf-8')
+        evidence = json.loads(evidence_text)
+        self.assertTrue(instructions.startswith('You are an independent, read-only PR reviewer.'))
+        self.assertIn('TRUSTED RUBRIC:\n' + Path(review.RUBRIC).read_text(encoding='utf-8'), instructions)
+        self.assertEqual((evidence['head'], evidence['base'], evidence['builder_family']), ('a' * 40, 'b' * 40, 'anthropic'))
+        self.assertEqual(evidence['source_context'], {'web/src/a.ts': '1: one line'})
+        self.assertEqual((meta['pr'], meta['head'], meta['base'], meta['builder_family']), (7, 'a' * 40, 'b' * 40, 'anthropic'))
+        self.assertIn('/actions/runs/10/attempts/1', meta['evidence_run'])
+        for name, (width, height) in IMAGES.items():
+            self.assertEqual(struct.unpack('>II', (self.out / name).read_bytes()[16:24]), (width, height))
+        self.assertEqual(json.loads((self.out / 'manifest.json').read_bytes())['scale'], 'css')
+        # The two texts are byte-for-byte what the reporter hands a model for the same PR.
+        reporter = FakeGitHub()
+        with patch('review.source_context', return_value={'web/src/a.ts': 'one line'}), \
+             patch('review.model_request', return_value=json.dumps(good_review())) as model, \
+             patch.dict(os.environ, {'REVIEW_PROVIDER': 'google', 'REVIEW_MODEL': 'gemini-example', 'REVIEW_API_KEY': 'k'}):
+            review.run_review(reporter, {'workflow_run': copy.deepcopy(reporter.run)})
+        _, _, _, sent_instructions, sent_evidence, _ = model.call_args.args
+        self.assertEqual(instructions, sent_instructions)
+        self.assertEqual(evidence_text, sent_evidence)
+
+    def test_prepare_refuses_moved_head_missing_evidence_and_bad_builders(self):
+        cases = {
+            'moved head': lambda g: g.run.update(head_sha='c' * 40),
+            'no evidence run': lambda g: setattr(g, 'runs', []),
+            'evidence run of another branch': lambda g: g.run.update(head_branch='other'),
+            'failed evidence run': lambda g: g.run.update(conclusion='failure'),
+            'evidence run still running': lambda g: g.run.update(status='in_progress', conclusion=None),
+            'two builder lines': lambda g: g.pr.update(body='Builder-Model-Family: anthropic\nBuilder-Model-Family: google\nDEC-036'),
+            'no builder line': lambda g: g.pr.update(body='DEC-036'),
+            'builder from the manual reviewer family': lambda g: g.pr.update(body='Builder-Model-Family: openai\nDEC-036'),
+            'closed PR': lambda g: g.pr.update(state='closed'),
+            'docs-only PR': lambda g: setattr(g, 'changes', [{'filename': 'README.md'}]),
+            'bad archive': lambda g: setattr(g, 'artifact', lambda _: b'bad zip'),
+        }
+        for name, change in cases.items():
+            with self.subTest(case=name):
+                github = FakeGitHub(); change(github)
+                out = self.out / name.replace(' ', '-')
+                with self.assertRaises(Incomplete):
+                    self.prepare(github, out)
+                self.assertEqual(github.writes, [])
+                self.assertFalse(out.exists() and any(out.iterdir()))
+        # A head that moves while the evidence is gathered is refused after the fact.
+        github = FakeGitHub()
+        def move(*args):
+            github.pr = dict(github.pr, head={'sha': 'd' * 40, 'ref': 'feature'}); return {'web/src/a.ts': 'one line'}
+        with patch('review.source_context', side_effect=move), self.assertRaises(Incomplete):
+            manual_prepare.prepare(github, 7, self.out / 'moved-meanwhile')
+        self.assertFalse(any((self.out / 'moved-meanwhile').iterdir()))
+        # Nothing is ever overwritten.
+        taken = self.out / 'taken'; taken.mkdir(parents=True); (taken / 'reply.json').write_text('{}')
+        with self.assertRaises(Incomplete):
+            self.prepare(FakeGitHub(), taken)
+        self.assertEqual({p.name for p in taken.iterdir()}, {'reply.json'})
+
+
+class ManualPublishTests(unittest.TestCase):
+    """manual_publish.py publishes only a validated verdict for the current head, through the workflow token."""
+    statuses = ReporterTests.statuses
+    RUN_URL = 'https://github.com/Chrisp671/Day-4-Observatory/actions/runs/99'
+
+    def inputs(self, result=None, **overrides):
+        base = {'pr': '7', 'sha': 'a' * 40, 'review': json.dumps(result or good_review())}
+        base.update(overrides)
+        return base
+
+    def publish(self, github, inputs):
+        with patch('manual_publish.source_context', return_value={'web/src/a.ts': 'one line'}):
+            return manual_publish.publish(github, inputs, self.RUN_URL, 'chrisp671')
+
+    def test_publish_accepts_a_valid_review_and_posts_success(self):
+        github = FakeGitHub()
+        self.assertEqual(self.publish(github, self.inputs()), 0)
+        (_, status, method), = self.statuses(github)
+        self.assertEqual((status['state'], status['context'], method), ('success', review.CHECK, 'POST'))
+        self.assertEqual(status['description'], 'GPT-6.1 Sol review passed (manual); see the review comment.')
+        self.assertEqual(status['target_url'], self.RUN_URL)
+        comment = github.comments[0]['body']
+        self.assertTrue(comment.startswith(review.MARKER))
+        self.assertIn('`openai/gpt-6.1-sol (manual, via Codex)`', comment)
+        self.assertIn('Builder family: `anthropic` (independent of the reviewer).', comment)
+        self.assertIn('chrisp671', comment)
+        self.assertIn('/actions/runs/10/attempts/1', comment)  # The evidence run, not only the publish run.
+        check = github.checks[0]
+        self.assertEqual((check['name'], check['head_sha'], check['status'], check['conclusion']),
+                         (review.CHECK, 'a' * 40, 'completed', 'success'))
+        self.assertIsNotNone(review.manual_verdict(github, 'a' * 40))  # The reporter will leave it standing.
+
+    def test_publish_completes_the_reporters_waiting_check_and_replaces_its_comment(self):
+        github = FakeGitHub()
+        ManualModeTests.execute(self, github)
+        self.assertEqual(github.checks[0]['status'], 'in_progress')
+        self.publish(github, self.inputs())
+        self.assertEqual(len(github.checks), 1)
+        self.assertEqual((github.checks[0]['status'], github.checks[0]['conclusion']), ('completed', 'success'))
+        self.assertEqual(len(github.comments), 1)
+        self.assertIn('(manual, via Codex)', github.comments[0]['body'])
+        self.assertEqual([s['state'] for _, s, _ in self.statuses(github)], ['pending', 'success'])
+        # And a second reporter callback for the same head now keeps the verdict.
+        github.checks = []
+        ManualModeTests.execute(self, github)
+        self.assertEqual([s['state'] for _, s, _ in self.statuses(github)], ['pending', 'success'])
+        self.assertIn('(manual, via Codex)', github.comments[0]['body'])
+
+    def test_publish_posts_failure_for_a_blocking_finding(self):
+        github = FakeGitHub()
+        self.assertEqual(self.publish(github, self.inputs(blocking_review())), 1)
+        (_, status, _), = self.statuses(github)
+        self.assertEqual(status['state'], 'failure')
+        self.assertEqual(status['description'], 'GPT-6.1 Sol review found blocking findings (manual); see the review comment.')
+        self.assertEqual(github.checks[0]['conclusion'], 'failure')
+        self.assertIn('BLOCKING', github.comments[0]['body'])
+
+    def test_publish_rejects_bad_input_without_writing(self):
+        uncertain = good_review(); uncertain['screenshots'][0]['legibility'] = 'UNCERTAIN'
+        incomplete = good_review(); incomplete['complete'] = False
+        extra = good_review(); extra['approved'] = True
+        cases = {
+            'malformed JSON': self.inputs(review='{"complete": true,'),
+            'duplicate keys': self.inputs(review='{"complete":true,"complete":true}'),
+            'prose around JSON': self.inputs(review='Here is my review: ' + json.dumps(good_review())),
+            'nonexistent line': self.inputs(blocking_review(line=2)),
+            'file outside the source context': self.inputs(blocking_review(file='web/src/other.ts')),
+            'uncertain legibility': self.inputs(uncertain),
+            'incomplete review': self.inputs(incomplete),
+            'unknown field': self.inputs(extra),
+            'sha that is not the head': self.inputs(sha='c' * 40),
+            'upper-case sha': self.inputs(sha='A' * 40),
+            'short sha': self.inputs(sha='a' * 12),
+            'oversized review': self.inputs(review=json.dumps(good_review()) + ' ' * MANUAL_REVIEW_LIMIT),
+            'empty review': self.inputs(review=''),
+            'review as an object': {'pr': '7', 'sha': 'a' * 40, 'review': good_review()},
+            'pr with shell text': self.inputs(pr='7; rm -rf /'),
+            'pr as a number': self.inputs(pr=7),
+            'no inputs': None,
+        }
+        for name, inputs in cases.items():
+            with self.subTest(case=name):
+                github = FakeGitHub()
+                with self.assertRaises(Incomplete):
+                    self.publish(github, inputs)
+                self.assertEqual(github.writes, [])
+                self.assertEqual(github.comments, [])
+
+    def test_stale_sha_is_refused_before_the_review_is_examined(self):
+        # The final freshness re-check would also catch a stale sha, but only after the
+        # evidence and the review text had been processed; the head is matched first.
+        github = FakeGitHub()
+        with patch('manual_publish.validate_review') as validator, patch('manual_publish.evidence_run') as evidence,              self.assertRaises(Incomplete):
+            self.publish(github, self.inputs(sha='c' * 40))
+        validator.assert_not_called(); evidence.assert_not_called()
+        self.assertEqual(github.writes, [])
+
+    def test_oversized_review_is_refused_before_it_is_parsed(self):
+        github = FakeGitHub()
+        with patch('manual_publish.validate_review') as validator, self.assertRaises(Incomplete):
+            self.publish(github, self.inputs(review='x' * (MANUAL_REVIEW_LIMIT + 1)))
+        validator.assert_not_called()
+        self.assertEqual(github.writes, [])
+
+    def test_publish_rejects_same_family_builder_missing_evidence_and_a_moving_head(self):
+        for body in ('Builder-Model-Family: openai\nDEC-036', 'DEC-036',
+                     'Builder-Model-Family: anthropic\nBuilder-Model-Family: google\nDEC-036'):
+            with self.subTest(body=body):
+                github = FakeGitHub(); github.pr['body'] = body
+                with self.assertRaises(Incomplete):
+                    self.publish(github, self.inputs())
+                self.assertEqual(github.writes, [])
+        changes = {'failed evidence': lambda g: g.run.update(conclusion='failure'),
+                   'no evidence for this head': lambda g: setattr(g, 'runs', []),
+                   'docs-only PR': lambda g: setattr(g, 'changes', [{'filename': 'README.md'}]),
+                   'closed PR': lambda g: g.pr.update(state='closed'),
+                   'foreign base repository': lambda g: g.pr['base'].update(repo={'full_name': 'other/repo'})}
+        for name, change in changes.items():
+            with self.subTest(case=name):
+                github = FakeGitHub(); change(github)
+                with self.assertRaises(Incomplete):
+                    self.publish(github, self.inputs())
+                self.assertEqual(github.writes, [])
+        github = FakeGitHub()
+        def move(*args):
+            github.pr = dict(github.pr, head={'sha': 'd' * 40, 'ref': 'feature'}); return {'web/src/a.ts': 'one line'}
+        with patch('manual_publish.source_context', side_effect=move), self.assertRaises(Incomplete):
+            manual_publish.publish(github, self.inputs(), self.RUN_URL)
+        self.assertEqual(github.writes, [])
+
+    def test_publish_escapes_review_text_and_names_an_unestablished_builder(self):
+        github = FakeGitHub()
+        result = good_review(); result['summary'] = 'Fine. ![steal](https://evil.example/) @owner'
+        self.publish(github, self.inputs(result))
+        comment = github.comments[0]['body']
+        self.assertNotIn('![steal]', comment); self.assertNotIn('https://evil', comment); self.assertNotIn('@owner', comment)
+        github = FakeGitHub(); github.pr['body'] = f'Builder-Model-Family: {ROUTED_UNKNOWN}\nDEC-036'
+        self.publish(github, self.inputs())
+        self.assertIn(f'Builder family: `{ROUTED_UNKNOWN}` (independence not established).', github.comments[0]['body'])
 
 
 if __name__ == '__main__': unittest.main()

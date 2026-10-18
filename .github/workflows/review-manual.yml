@@ -1,0 +1,59 @@
+name: Publish manual web review
+
+# DEC-054: GPT-6.1 Sol reviews the gate without an API key. The maintainer
+# prepares the evidence locally (scripts/review/manual_prepare.py), obtains
+# Sol's JSON reply through Codex, and dispatches it here. Branch protection
+# accepts the required "Web review" status only from GitHub Actions, so the
+# verdict must be published from inside a run with the workflow token.
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: string
+      sha:
+        description: The PR head commit the review judged (40 hex characters; must still be the head)
+        required: true
+        type: string
+      review:
+        description: The reviewer's JSON reply, verbatim (at most 64,000 bytes)
+        required: true
+        type: string
+
+# The same grants as review-web-report.yml, no more.
+permissions:
+  contents: read
+  actions: read
+  checks: write
+  statuses: write
+  pull-requests: write
+
+# Shares the reporter's group for this commit, so a reporter callback and a
+# manual publish for the same head never interleave.
+concurrency:
+  group: web-review-report-${{ inputs.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Trusted code only: a dispatcher may choose any ref, but only the default
+    # branch's copy of this workflow and of scripts/review is allowed to publish.
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # github.sha is the default-branch commit the dispatch resolved to. Never
+      # replace this with the PR head; no PR code is checked out or executed.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/review
+          sparse-checkout-cone-mode: false
+      # Inputs are read from the event payload, never interpolated into a shell.
+      - name: Validate the review and publish the head-commit verdict
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/review/manual_publish.py

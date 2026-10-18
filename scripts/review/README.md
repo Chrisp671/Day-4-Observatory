@@ -14,7 +14,8 @@ modified by the reviewer.
 2. Under repository Settings > Secrets and variables > Actions, add the secret
    `REVIEW_API_KEY` for your chosen provider. Add repository variables
    `REVIEW_PROVIDER` and `REVIEW_MODEL`. Provider values are `openai`, `anthropic`,
-   `google`, or `opencode-go`; use an approved vision model ID from that provider.
+   `google`, `opencode-go`, or `manual` (no key, no model call; see the manual
+   reviewer section); use an approved vision model ID from that provider.
    The key must belong to that provider. No endpoint URL or key belongs in code.
    The owner's selected reviewer is `REVIEW_PROVIDER=opencode-go` and
    `REVIEW_MODEL=qwen3.7-plus`, using the existing Go account. Qwen is Alibaba's
@@ -98,6 +99,77 @@ unsupported model, timeout, oversized evidence, malformed output, incomplete
 review or uncertain screenshot assessment fails the check as **incomplete**.
 BLOCKING findings fail; ADVISORY-only reviews pass. Non-web PRs receive a success
 without an API call. Changes to PLAN.md or the pipeline also require review.
+
+## Manual reviewer: GPT-6.1 Sol through Codex (DEC-054)
+
+The owner's reviewer is now GPT-6.1 Sol, reached through the owner's own Codex
+(T3) session, with no API key. The paid Go reviewer hit its 5-hour and weekly
+limits repeatedly, the free fallbacks were withdrawn or time out, and Sol
+reviewed #42 and #43 locally and caught a blocking bug the model gate and all
+tests had missed. The design keeps one constraint fixed: branch protection
+requires the `Web review` status from GitHub Actions (app id 15368), so a
+status posted with a personal token does not satisfy it. The verdict is
+therefore published from inside an Actions run with `GITHUB_TOKEN`.
+
+With the repository variable `REVIEW_PROVIDER=manual` the reporter calls no
+model and never reads `REVIEW_API_KEY`. The skip path is unchanged (docs-only
+PRs still pass as "skipped"). Otherwise, after the usual gate checks (build and
+capture succeeded, the evidence archive is present and valid, the body has
+exactly one accepted `Builder-Model-Family` line that is not `openai`, checked
+with the same `provider_config` as a model review), it publishes a **pending**
+status, "Awaiting GPT-6.1 Sol review; see the review comment.", and a comment
+with the procedure. A head that already carries a manual verdict (a status
+whose description says `(manual)`) is left alone; a failed build still
+publishes `failure` as today.
+
+The exact procedure, from a checkout of `main`:
+
+1. `python scripts/review/manual_prepare.py <pr> <empty-folder>` — read-only,
+   using `GITHUB_TOKEN` or `gh auth token`. It refuses a PR whose head has moved
+   past its latest successful **Web review evidence** run, a missing or failed
+   run, a body without exactly one builder line, or a builder from the `openai`
+   family. It writes `instructions.txt` and `evidence.json` (byte-for-byte what
+   the reporter would send a model, built by `review_request` in `review.py`),
+   the eight screenshots, `manifest.json` and `meta.json` (PR, head, base,
+   builder family, evidence run URL). Nothing is written to GitHub.
+2. The orchestrator gives `instructions.txt`, `evidence.json` and the eight
+   screenshots to GPT-6.1 Sol through T3/Codex and saves the JSON reply as
+   `reply.json`. Plain JSON or one whole-response code fence; nothing else.
+3. Publish it from inside Actions (the reply may also be pasted inline with
+   `-f review="$(cat reply.json)"`):
+
+   ```sh
+   gh -R Chrisp671/Day-4-Observatory workflow run review-manual.yml -f pr=<n> -f sha=<sha> -F review=@reply.json
+   ```
+
+   `review-manual.yml` runs only on the default branch, checks out only
+   `scripts/review` at the trusted commit (never PR code) and runs
+   `manual_publish.py`, which treats every input as untrusted: `sha` must be
+   forty hex characters and equal the PR's current open head, the PR's base
+   repository must be this one, `review` is bounded at 64,000 bytes (GitHub
+   caps the dispatch payload at 65,535 characters), parsed with `strict_json`
+   and validated by the same `validate_review` against the same source context
+   the reporter builds for that head, builder independence is recomputed with
+   `provider_config('openai', 'gpt-6.1-sol', body)`, the latest evidence run for
+   the head must have succeeded, and the head is re-read immediately before the
+   writes. The comment is rendered by the existing `render` naming the reviewer
+   `openai/gpt-6.1-sol (manual, via Codex)` and updates the single marker
+   comment; the status is `success` ("GPT-6.1 Sol review passed (manual); see
+   the review comment.") or `failure` ("GPT-6.1 Sol review found blocking
+   findings (manual); see the review comment."); the reporter's waiting check
+   run is completed, or one is created. A rejected input writes nothing and the
+   run log holds only the pipeline's fixed message, never the input.
+4. Confirm the gate: `gh api -R ... repos/Chrisp671/Day-4-Observatory/commits/<sha>/status`
+   must list a `Web review` context in state `success` with the manual
+   description. A green `gh pr checks` alone is not proof (RSK-007).
+
+Setting `REVIEW_PROVIDER=manual` is the owner's switch, made in the repository
+variables after the PR carrying this mode has merged. That PR itself must be
+admin-merged once: `review-manual.yml` can only be dispatched after it exists on
+`main`, and main's current reporter cannot publish a manual verdict (the
+bootstrap case the pipeline's first PR also had). The residual risk is stated
+in RSK-008: the gate now depends on the maintainer's machine and on whoever has
+write access to dispatch the publish workflow.
 
 ## Captures and review evidence
 
@@ -205,7 +277,8 @@ node scripts/review/capture.mjs http://127.0.0.1:4173/ scripts/review/output
 
 Use `npm.cmd` / `npx.cmd` in PowerShell when script execution policy blocks the
 PowerShell shims. The Python tests mock provider requests; they never need a key
-or incur model charges. The live hash test uses a real local HTTP server to check
+or incur model charges. They include the manual mode, the prepare helper and
+the publisher (FakeGitHub style, no network). The live hash test uses a real local HTTP server to check
 matching builds, stale HTML, same-name byte tampering, redirects and propagation.
 The local output directory and dependencies are ignored by git.
 

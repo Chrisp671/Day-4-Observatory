@@ -80,6 +80,11 @@ accepts the status only from GitHub Actions, never from a personal token:
 4. Confirm `/commits/<sha>/status` shows `Web review` success with the
    "(manual)" description; `gh pr checks` alone is not proof.
 
+Branch protection requires two checks, `Web review` and `Gate and capture`
+(the evidence job), both from GitHub Actions. The second is what keeps a
+manual verdict honest: a re-run of the evidence that fails or is still running
+blocks the merge even if a `Web review` success already stands (DEC-054).
+
 `scripts/review/README.md` has the full procedure and the checks. The model
 providers remain available (`opencode-go` with `qwen3.7-plus`, or
 `step-5-preview-free` / `longcat-2.5-preview-free`, one `REVIEW_API_KEY`);

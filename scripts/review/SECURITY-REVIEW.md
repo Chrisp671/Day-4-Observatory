@@ -136,6 +136,8 @@ these observations are not a visual approval of the app.
 
 ## Addendum 2026-10-18: manual GPT-6.1 Sol reviewer (DEC-054)
 
+**Independent review outcome (GPT-6.1 Sol, two rounds).** Round 1 reproduced a race: an evidence re-run that fails while `manual_publish.py` validates could be overtaken by a success built on the older attempt. Round 2 showed the added final re-check narrows but cannot close that window, since the evidence workflow is outside the publisher's concurrency group. Mitigation, applied in branch protection on 2026-10-18: `Gate and capture` (GitHub Actions, app 15368) is a required check beside `Web review`, so failing or pending evidence blocks the merge independently of any manual verdict. The re-check stays as defence in depth, with a regression test.
+
 Walked with `rafter-secure-design` (auth, ingestion, deployment and the STRIDE
 capstone) before any code was written. The change adds one new input boundary
 (a `workflow_dispatch` publish path with write permissions), one read-only local

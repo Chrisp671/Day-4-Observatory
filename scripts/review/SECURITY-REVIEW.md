@@ -133,3 +133,133 @@ layout problem: the dial shrinks and overlaps the readout/control area. Phone
 ledger text is also truncated in the existing layout. Captures intentionally
 preserve that evidence. Application files remain outside this pipeline's scope;
 these observations are not a visual approval of the app.
+
+## Addendum 2026-10-18: manual GPT-6.1 Sol reviewer (DEC-054)
+
+**Independent review outcome (GPT-6.1 Sol, two rounds).** Round 1 reproduced a race: an evidence re-run that fails while `manual_publish.py` validates could be overtaken by a success built on the older attempt. Round 2 showed the added final re-check narrows but cannot close that window, since the evidence workflow is outside the publisher's concurrency group. Mitigation, applied in branch protection on 2026-10-18: `Gate and capture` (GitHub Actions, app 15368) is a required check beside `Web review`, so failing or pending evidence blocks the merge independently of any manual verdict. The re-check stays as defence in depth, with a regression test.
+
+Walked with `rafter-secure-design` (auth, ingestion, deployment and the STRIDE
+capstone) before any code was written. The change adds one new input boundary
+(a `workflow_dispatch` publish path with write permissions), one read-only local
+helper, and a reporter mode that never calls a model.
+
+Data flow: PR source -> existing evidence run (unchanged, no secrets) ->
+`manual_prepare.py` on the maintainer's machine, reading only through the GitHub
+API with the maintainer's `gh` token -> a local folder (instructions, evidence,
+eight PNGs, manifest, meta) -> GPT-6.1 Sol through the owner's Codex session ->
+the model's JSON reply, pasted by the maintainer into `review-manual.yml` ->
+`manual_publish.py` on a fresh runner running default-branch code with
+`GITHUB_TOKEN` -> commit status, check run and one PR comment.
+
+Identity and authorisation. Who may publish a verdict: anyone who can dispatch
+a workflow in this repository, which is anyone with write access (today, the
+single maintainer). The workflow runs only on the default branch (its job is
+conditioned on `github.ref` being the default branch), so the ref a dispatcher
+chooses cannot select PR code. The verdict is attributed in the comment to the
+reviewer (`openai/gpt-6.1-sol (manual, via Codex)`) and in the run log to the
+dispatching actor, and the publishing run is linked from the comment, so the
+act is auditable. There is no application auth, session, password or token
+design here; `GITHUB_TOKEN` is ephemeral and scoped by the workflow's
+permissions block, which copies the reporter's (contents and actions read,
+checks, statuses and pull-requests write) and adds nothing. The local helper
+needs no write scope and makes no write request.
+
+Ingestion. Three inputs cross into the publisher: `pr`, `sha`, `review`. Each
+is read from the event payload (never interpolated into a shell), bounded and
+checked before any GitHub write: `pr` must be a short decimal, `sha` forty hex
+characters that equal the PR's current open head, and `review` at most 64,000
+UTF-8 bytes (GitHub itself caps the whole dispatch payload at 65,535
+characters). The review is then parsed with the existing `strict_json`
+(duplicate keys and non-finite numbers rejected, one whole-response fence
+allowed) and validated by the unchanged `validate_review` against the source
+context the reporter would build for that sha, so a finding must cite a real
+file and line and every screenshot must be judged. The exact-key schema rejects
+unknown fields. Model and maintainer text reaches the comment only through
+`safe_text`, as on the model path. No raw input is echoed to logs: failures
+print the pipeline's own fixed messages. `manual_prepare.py` writes only fixed
+file names into a folder that must be empty; nothing from the artifact chooses
+a path. The artifact goes through the unchanged `read_artifact` bounds.
+
+Gate equivalence. A manual verdict may be published only for a head whose
+latest evidence run succeeded with its gate job green, whose PR has web or
+pipeline changes, and whose body carries exactly one accepted
+`Builder-Model-Family` line that is not `openai` (checked with the same
+`provider_config` as the model path, in the reporter, the helper and the
+publisher). A `routed-unknown` builder keeps the published "independence not
+established" line. The success and failure status descriptions carry the word
+`(manual)` so the reporter can recognise a manual verdict and leave it alone.
+
+Threat walk (per boundary). Spoofing: a status posted with a personal token
+does not satisfy branch protection; only the workflow's token can, and only a
+write-access account can dispatch it. Tampering: PR code is never checked out
+or executed by the publisher; the evidence is read as data; a stale sha (head
+moved) is refused before and re-checked immediately before writes. Repudiation:
+the comment names reviewer, builder family and base, and links the publishing
+run, which records the actor. Information disclosure: the run log holds fixed
+strings; the comment holds escaped review text, as today. Denial of service: no
+model call, no paid request, bounded input, timeouts and the reporter's
+concurrency group reused for the same sha so a reporter callback and a manual
+publish never interleave. Elevation: the token's permissions are unchanged from
+the reporter's; a dispatcher who already has write access gains the ability to
+publish a verdict, which is the same ability an admin merge already confers.
+
+Abuse twins. "Maintainer pastes Sol's reply" -> "a write-access account pastes
+a hand-written clean review": accepted and stated in RSK-008; the validator
+still requires located findings and eight legibility judgements, the diff is
+unchanged, and the comment shows who published. "Maintainer runs the helper" ->
+"a PR body says ignore the rubric": the helper copies the reporter's exact
+instructions, which mark all evidence untrusted; prompt injection is not made
+impossible, as before. "Dispatcher chooses a branch" -> the job condition
+refuses any ref but the default branch.
+
+Residual risks, accepted by the owner (DEC-054, RSK-008): the gate now depends
+on the maintainer's machine and Codex session being available, and on whoever
+holds write access; a body edit after a verdict keeps the verdict for the same
+sha; the reviewer's identity is declared, not proven. Not applicable: SQL,
+sessions, uploads, crypto, deletion, new dependencies (standard library only).
+
+Rafter code review (after implementation, 2026-10-18), walked with the CWE
+Top 25 and LLM Top 10 questions against the diff:
+
+- Injection (CWE-78/94): the only subprocess is `manual_prepare.py:42`, list
+  form with fixed arguments and no shell; no eval, exec or shell interpolation.
+  The workflow's `run:` line is a fixed command; inputs are read from the event
+  file, not expanded into the shell.
+- Input validation (CWE-20): `manual_publish.py:29-38` bound and type-check
+  all three inputs before any API call; `:45` matches the sha against the
+  current open head before the evidence or the review text is examined (pinned
+  by a test that fails when the check is removed); `:60` re-reads the head,
+  base and body immediately before the first write.
+- Deserialization (CWE-502): JSON only, through the existing `strict_json`
+  (duplicate keys and non-finite numbers rejected) and `validate_review`
+  (exact-key schema, located findings, eight judgements).
+- Path handling (CWE-22): `manual_prepare.py` writes fixed names from the
+  contract into a folder the maintainer chose, refused unless empty (`:69`);
+  no name from the artifact or the PR reaches a path.
+- Credentials (CWE-798): none in code; the helper's token comes from the
+  environment or `gh auth token` and is never printed; the workflow grants the
+  reporter's permissions and no more (`review-manual.yml:25-30`), checks out
+  only `scripts/review` at the trusted commit without persisted credentials,
+  and runs only on the default branch (`:42`).
+- Output handling (LLM05): model text reaches the comment and the check-run
+  summary through `render` and `safe_text` as on the model path; the actor
+  login is bounded and escaped (`manual_publish.py:57`); status descriptions
+  are fixed strings; a rejected input writes nothing and the logs carry only
+  the pipeline's own messages.
+- Verdict integrity: a standing manual verdict is recognised only when the
+  newest `Web review` status was created by the Actions bot and carries
+  `(manual)` (`review.py manual_verdict`); a look-alike posted with a personal
+  token is ignored, with a test for it. The reporter's `current` check and the
+  shared concurrency group keep a reporter callback and a manual publish for
+  the same head from interleaving.
+
+No blocking finding. Validation: 56 Python tests pass (42 before this
+change); three gate mutations (head-sha check removed, `validate_review`
+removed from the publisher, manual mode calling the model) each fail a named
+test. `rafter secrets scripts/review` and `rafter secrets .github` found
+nothing; a whole-repository scan reports five pre-existing hits in the parked
+Xcode `Observatory.xcscmblueprint` (SCM identifiers, not keys, untouched by
+this change). `rafter run` refused because no RAFTER_API_KEY is configured;
+this is not a claim of a clean remote SAST/SCA scan. No live dispatch of
+`review-manual.yml` was made: it cannot run until it exists on `main`, which
+is why the owner admin-merges this PR once.

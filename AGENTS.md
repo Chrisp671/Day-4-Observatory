@@ -55,16 +55,43 @@ an admin merge when main's reporter cannot review at all (broken, or its
 reviewer refused); #32, #33 and #34 all changed the reporter and merged through
 the gate.
 
-The reviewer is chosen by the repository variables `REVIEW_PROVIDER=opencode-go`
-and `REVIEW_MODEL`, sharing one `REVIEW_API_KEY`: `qwen3.7-plus` normally, or
-`step-5-preview-free` / `longcat-2.5-preview-free` when Go answers HTTP 429
-(`GoUsageLimitError`, its usage limit). Step 5 is the verified fallback (a
-clean live review, and a planted dial-text defect caught as BLOCKING, on
-2026-10-14); switch back to `qwen3.7-plus` once the paid
-quota resets. PLAN.md RSK-008 records the outage policy. To retry a review after changing the
-variable or after a provider failure, re-run the PR's **Web review evidence**
-run, never the reporter run: the reporter dedups on evidence run id and attempt,
-so re-running it alone is a silent no-op.
+The reviewer is chosen by the repository variables `REVIEW_PROVIDER` and
+`REVIEW_MODEL`. **The owner's reviewer is GPT-6.1 Sol, with no API key**
+(DEC-054): the paid Go reviewer (`qwen3.7-plus`) hit its limits repeatedly and
+the free fallbacks were withdrawn or time out, while Sol, reached through the
+owner's Codex (T3), reviewed #42 and #43 and caught a blocking bug the model
+gate and all tests missed. Setting `REVIEW_PROVIDER=manual` is the owner's
+switch, made after the PR that adds the mode merges; that PR is admin-merged
+once, because `review-manual.yml` must exist on `main` before it can be
+dispatched. In manual mode the reporter calls no model and publishes a
+**pending** `Web review` status once the build, capture and builder line pass;
+the verdict is then published from inside Actions, because branch protection
+accepts the status only from GitHub Actions, never from a personal token:
+
+1. `python scripts/review/manual_prepare.py <pr> <empty-folder>` from a
+   checkout of `main` (read-only; refuses a moved head, a missing or failed
+   evidence run, a bad builder line, or an `openai` builder).
+2. Give `instructions.txt`, `evidence.json` and the eight screenshots to
+   GPT-6.1 Sol through T3/Codex; save its JSON reply as `reply.json`.
+3. `gh -R Chrisp671/Day-4-Observatory workflow run review-manual.yml -f pr=<n>
+   -f sha=<sha> -F review=@reply.json` (or `-f review="$(cat reply.json)"`).
+   The publisher validates the reply exactly as a model's, for the current
+   head only, and writes nothing on rejection.
+4. Confirm `/commits/<sha>/status` shows `Web review` success with the
+   "(manual)" description; `gh pr checks` alone is not proof.
+
+Branch protection requires two checks, `Web review` and `Gate and capture`
+(the evidence job), both from GitHub Actions. The second is what keeps a
+manual verdict honest: a re-run of the evidence that fails or is still running
+blocks the merge even if a `Web review` success already stands (DEC-054).
+
+`scripts/review/README.md` has the full procedure and the checks. The model
+providers remain available (`opencode-go` with `qwen3.7-plus`, or
+`step-5-preview-free` / `longcat-2.5-preview-free`, one `REVIEW_API_KEY`);
+PLAN.md RSK-008 records why they are no longer the policy. To retry a review
+after changing the variable or after a provider failure, re-run the PR's
+**Web review evidence** run, never the reporter run: the reporter dedups on
+evidence run id and attempt, so re-running it alone is a silent no-op.
 
 Browser drivers for layout, keyboard and rendering work, after
 `npx vite preview --port 4173 --strictPort --host 127.0.0.1`:

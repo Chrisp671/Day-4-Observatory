@@ -158,6 +158,12 @@ export interface SceneReadouts {
   readonly zone: string;
   /** "The sixth hour to the ninth · 11:55 am–3:10 pm" only while it passes. */
   readonly passion: string;
+  /** The lit ring, echoed in words under the dial (DEC-055): "Jupiter · up
+   * until 4:35 am", "Mars · up from 11:20 pm until 9:05 am", or "Mercury ·
+   * no ring today" when the lit planet has no arc on this date. "" when
+   * nothing is lit, and the line shows nothing. Built from the same
+   * day-anchored rise and set as the arc and the transcript's sentence. */
+  readonly ringEcho: string;
 }
 
 /** One row of the ledger, glance or programme. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compassPoint, litRingSentence, transcript } from "./transcript";
+import { compassPoint, litRingSentence, ringEchoLine, transcript } from "./transcript";
 
 describe("compassPoint", () => {
   it("names the cardinal winds", () => {
@@ -57,6 +57,26 @@ describe("transcript", () => {
     expect(transcript(base)).toBe(transcript({ ...base, lit: null }));
     expect(transcript({ ...base, lit: null })).not.toMatch(/\s$/);
     expect(transcript({ ...base, lit: null })).not.toContain("ring");
+  });
+});
+
+describe("ringEchoLine (DEC-055)", () => {
+  it("says the planet and when its ring is up until, in the ledger's shape", () => {
+    expect(ringEchoLine("Jupiter", { name: "Jupiter", up: true, riseHHMM: "7:12 pm", setHHMM: "4:35 am" }))
+      .toBe("Jupiter · up until 4:35 am");
+    expect(ringEchoLine("Mars", { name: "Mars", up: false, riseHHMM: "11:20 pm", setHHMM: "9:05 am" }))
+      .toBe("Mars · up from 11:20 pm until 9:05 am");
+  });
+
+  it("says so when the lit planet has no ring today, and nothing when nothing is lit", () => {
+    expect(ringEchoLine("Mercury", null)).toBe("Mercury · no ring today");
+    expect(ringEchoLine(null, null)).toBe("");
+  });
+
+  it("carries the same facts as the spoken sentence", () => {
+    const lit = { name: "Saturn", up: true, riseHHMM: "7:12 pm", setHHMM: "3:00 am" };
+    expect(litRingSentence(lit)).toContain("until 3:00 am");
+    expect(ringEchoLine("Saturn", lit)).toContain("until 3:00 am");
   });
 });
 

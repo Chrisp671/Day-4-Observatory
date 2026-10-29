@@ -10,23 +10,26 @@
  *
  * The shell does three things and no more:
  *   1. bind(): find the elements once, wire input (steppers, NOW, station
- *      entry, the TONIGHT fold, the tappable ledger rows, sun drag) to the
- *      handlers it is given.
+ *      entry, the TONIGHT fold, the tappable ledger rows, the ring key, sun
+ *      drag and the ring tap) to the handlers it is given.
  *   2. paint(scene): write every readout, row, class and attribute from the
  *      Scene. Idempotent; called once per tick.
  *   3. fit(): size the canvases to the stage and report the face radius.
  *
  * It holds no astronomy, no formatting, no caching.
  */
-import type { Scene, SceneMovement, ScenePlanet, SceneRow } from "./scene";
+import type { Scene, SceneMovement, ScenePlanet, SceneRing, SceneRow } from "./scene";
 import { GLANCE_ROWS } from "./scene-consts";
 import { parseCoordinate, type Station } from "./location";
 import { MODES, stepMode, type Mode } from "./mode";
 import { STEP_UNITS, type StepUnit } from "./timecontrol";
 import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
+import { isTap, ringAt } from "./ringtap";
+import { RING_HINT } from "./hint";
 import { FACE } from "../ui/clockface";
 import { lineParts } from "./glyphs";
 import { buildGrain } from "../ui/grain";
+import { drawRingSwatch, SWATCH_H, SWATCH_W, swatchKey } from "../ui/ringkey";
 import { photoAlt, photoCaption, photoFor } from "../ui/photos";
 
 /** Every element the page addresses, by role. Values are the ids in index.html. */
@@ -71,6 +74,10 @@ export const IDS = {
   tonightNote: "tonight-note",
   tonightList: "tonight-list",
   tonightAll: "tonight-all",
+  /* The ring key, the lit ring's echo line and the first-visit hint (DEC-055). */
+  ringKey: "ring-key",
+  ringEcho: "ring-echo",
+  ringHint: "ring-hint",
   /* The three views (DEC-038): the selector, one panel per mode, and the
    * shared station/time line the focused views stand on. */
   modes: "modes",
@@ -111,7 +118,8 @@ export interface ShellHandlers {
   readonly onDismissTrouble: () => void;
   readonly onStation: (station: Station) => void;
   readonly onLocate: () => void;
-  /** The viewer tapped a planet row; null releases the lit ring. */
+  /** The viewer tapped a planet row, a key button or a ring on the dial
+   * (DEC-055); null releases the lit ring. */
   readonly onLit: (name: string | null) => void;
   /** The sun was dragged by this many dial hours (may cross midnight). */
   readonly onScrub: (deltaHours: number) => void;
@@ -164,6 +172,9 @@ export interface Shell {
   showMode(mode: Mode): void;
   /** A one-line note under the chart's words ("loading chart…"); "" clears it. */
   chartStatus(text: string): void;
+  /** The first-visit hint (DEC-055): shown until a planet has been lit or
+   * released once. Viewer state, like the lit ring, so main.ts decides. */
+  showHint(show: boolean): void;
 }
 
 type Role = keyof typeof IDS;
@@ -202,6 +213,13 @@ interface PlanetSlot {
   readonly arcNote: HTMLElement;
   /** The reference photo (WI-033): absent for a planet without one. */
   readonly photo: PhotoSlot | null;
+}
+
+/** One button of the ring key (DEC-055): its swatch and its name. */
+interface KeySlot {
+  readonly button: HTMLButtonElement;
+  readonly swatch: HTMLElement;
+  readonly label: HTMLElement;
 }
 
 /** A planet's reference photo: the band takes the row's colour, and `src`
@@ -246,6 +264,12 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   const renderLine = (el: HTMLElement | undefined, line: string, spoken = true): void => {
     if (el === undefined || lineMemo.get(el) === line) return;
     lineMemo.set(el, line);
+    // An empty line leaves the element empty — no empty span — so a rule like
+    // `.ringecho:empty{display:none}` can take the line out of the layout.
+    if (line === "") {
+      el.replaceChildren();
+      return;
+    }
     el.replaceChildren(lineFragment(doc, line, spoken));
   };
   const setLine = (role: Role, line: string): void => renderLine(els[role], line);
@@ -302,9 +326,53 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     };
   };
 
+  /* ————— the swatches: each a piece of its ring (DEC-055) ————— */
+  /** Paint a row's or a key's swatch as the rete draws the ring, in a canvas
+   * made once; repaints only when what it shows has changed. */
+  const paintSwatch = (host: HTMLElement, name: string, color: string, rete: readonly SceneRing[]): void => {
+    const ring = rete.find((r) => r.name === name) ?? null;
+    const dpr = Math.min(win.devicePixelRatio || 1, 3);
+    const key = swatchKey(ring, color, dpr);
+    if (host.dataset["key"] === key) return;
+    let canvas = host.firstElementChild;
+    if (!(canvas instanceof HTMLCanvasElement)) {
+      canvas = doc.createElement("canvas");
+      canvas.setAttribute("aria-hidden", "true");
+      host.replaceChildren(canvas);
+    }
+    const ctx = (canvas as HTMLCanvasElement).getContext("2d");
+    if (ctx === null) return;
+    host.dataset["key"] = key;
+    (canvas as HTMLCanvasElement).width = Math.round(SWATCH_W * dpr);
+    (canvas as HTMLCanvasElement).height = Math.round(SWATCH_H * dpr);
+    drawRingSwatch(ctx, dpr, ring, color);
+  };
+
   /* ————— the ledger: three glance slots, built once ————— */
   /** A planet row is the control for its ring: tap to light, tap to release. */
   const toggleLit = (name: string, lit: boolean): void => handlers.onLit(lit ? null : name);
+
+  /* ————— the ring key: five buttons in ring order, built once (DEC-055) ————— */
+  const keySlots = new Map<string, KeySlot>();
+  const paintKey = (planets: readonly ScenePlanet[], rete: readonly SceneRing[]): void => {
+    const host = els.ringKey;
+    if (host === undefined) return;
+    for (const p of planets) {
+      let slot = keySlots.get(p.name);
+      if (slot === undefined) {
+        const built = keyButton(doc, p.name);
+        built.button.addEventListener("click", () =>
+          toggleLit(p.name, built.button.getAttribute("aria-pressed") === "true"));
+        host.appendChild(built.button);
+        keySlots.set(p.name, built);
+        slot = built;
+      }
+      slot.button.setAttribute("aria-pressed", String(p.lit));
+      slot.button.classList.toggle("chosen", p.lit);
+      slot.button.classList.toggle("is-up", p.up);
+      paintSwatch(slot.swatch, p.name, p.color, rete);
+    }
+  };
 
   /** A fresh row of the given kind; planet rows are buttons for their ring. */
   const buildRow = (kind: "planet" | "sky"): Omit<Slot, "kind"> => {
@@ -335,7 +403,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }
   }
 
-  const paintGlance = (rows: readonly SceneRow[]): void => {
+  const paintGlance = (rows: readonly SceneRow[], rete: readonly SceneRing[]): void => {
     slots.forEach((slot, i) => {
       const row = rows[i];
       if (row === undefined) {
@@ -357,8 +425,9 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
         slot.row.setAttribute("aria-pressed", String(row.lit));
         slot.row.dataset["planet"] = row.name;
         slot.row.setAttribute("aria-description", ringDescription(row.name));
-        // The swatch is the legend for the rings on the rete (DEC-034).
-        slot.swatch.style.background = row.color ?? "";
+        // The swatch is the legend for the rings on the rete (DEC-034), drawn
+        // as a piece of the ring itself (DEC-055).
+        paintSwatch(slot.swatch, row.name, row.color ?? "", rete);
         slot.label.style.color = row.color ?? "";
       }
     });
@@ -366,7 +435,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
 
   /* ————— the Planets view: five rows, built once, each a real button ————— */
   const planetSlots = new Map<string, PlanetSlot>();
-  const paintPlanets = (planets: readonly ScenePlanet[]): void => {
+  const paintPlanets = (planets: readonly ScenePlanet[], rete: readonly SceneRing[]): void => {
     const host = els.planetsList;
     if (host === undefined) return;
     for (const p of planets) {
@@ -383,7 +452,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       slot.button.classList.toggle("chosen", p.lit);
       slot.button.setAttribute("aria-pressed", String(p.lit));
       slot.button.setAttribute("aria-expanded", String(p.lit));
-      slot.swatch.style.background = p.color;
+      paintSwatch(slot.swatch, p.name, p.color, rete);
       slot.label.style.color = p.color;
       slot.label.textContent = p.name;
       renderLine(slot.line, p.line);
@@ -417,7 +486,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   let programmeKey = "";
 
   const paintProgramme = (
-    programme: readonly SceneMovement[], footnote: string,
+    programme: readonly SceneMovement[], footnote: string, rete: readonly SceneRing[],
   ): void => {
     const host = els.tonightAll;
     if (host === undefined || !isFoldOpen()) return;
@@ -432,7 +501,9 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       frag.append(sectionHeader(doc, movement.title, movement.rows.length));
       // Planets keep the ledger's full row; the constellations fold into columns.
       if (movement.rows.some((r) => r.color !== null)) {
-        for (const row of movement.rows) frag.append(ledgerRow(doc, row, toggleLit));
+        for (const row of movement.rows) {
+          frag.append(ledgerRow(doc, row, toggleLit, (swatch, name, color) => paintSwatch(swatch, name, color, rete)));
+        }
       } else {
         const cols = doc.createElement("div");
         cols.className = "cols";
@@ -474,6 +545,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     setText("station", r.station);
     setText("clock", r.clock);
     setText("zone", r.zone);
+    setLine("ringEcho", r.ringEcho);
     setText("transcript", scene.spoken);
 
     // The whole page follows the light (DEC-010).
@@ -483,11 +555,12 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     els.clock?.classList.toggle("shifted", scene.marks.travelled);
     els.now?.classList.toggle("armed", scene.marks.travelled);
 
-    paintGlance(scene.tonight.glance);
+    paintKey(scene.planets, scene.rete);
+    paintGlance(scene.tonight.glance, scene.rete);
     setText("tonightNote", scene.tonight.note);
-    paintProgramme(scene.tonight.programme, scene.tonight.footnote);
+    paintProgramme(scene.tonight.programme, scene.tonight.footnote, scene.rete);
 
-    paintPlanets(scene.planets);
+    paintPlanets(scene.planets, scene.rete);
     setText("planetsNote", scene.tonight.note);
 
     // The chosen constellation, and the two lists to choose from.
@@ -577,6 +650,12 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     if (els.stage !== undefined) els.stage.hidden = mode === "constellations";
     // The page's own layout rules may differ by view (the Constellations lists scroll).
     doc.documentElement.dataset["mode"] = mode;
+  };
+  const showHint = (show: boolean): void => {
+    const hint = els.ringHint;
+    if (hint === undefined) return;
+    hint.textContent = RING_HINT;
+    hint.hidden = !show;
   };
   const showFrozen = (frozen: boolean): void => {
     // `aria-pressed` is the state; the visual is styled from it (`#freeze
@@ -732,10 +811,16 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   }
   els.locate?.addEventListener("click", () => handlers.onLocate());
 
-  /* ————— drag the sun to scrub time (REQ-005) ————— */
+  /* ————— drag the sun to scrub time (REQ-005); tap a ring to light it (DEC-055) —————
+     The sun is asked first, so a press on the sun is always the start of a
+     drag and never a ring. A press on a ring that then travels past the tap
+     slop is a drag that lights nothing; only a press and release that stay
+     put is a tap. Tapping the lit ring releases it. */
   if (dial !== null) {
     let dragging = false;
     let lastDragHours = 0;
+    let pressedRing: string | null = null;
+    let pressedAt = { x: 0, y: 0 };
     const point = (e: PointerEvent): { x: number; y: number } => {
       const rect = dial.getBoundingClientRect();
       return {
@@ -745,13 +830,24 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     };
     const overSun = (p: { x: number; y: number }): boolean =>
       lastScene !== null && hitSun(p.x, p.y, lastScene.sun.hours, R);
+    const overRing = (p: { x: number; y: number }): string | null =>
+      lastScene === null ? null : ringAt(p.x, p.y, R, lastScene.rete);
     dial.addEventListener("pointerdown", (e) => {
       const p = point(e);
-      if (!overSun(p)) return;
-      dragging = true;
-      lastDragHours = pointToDialHours(p.x, p.y);
+      pressedRing = null;
+      if (overSun(p)) {
+        dragging = true;
+        lastDragHours = pointToDialHours(p.x, p.y);
+        dial.setPointerCapture(e.pointerId);
+        dial.style.cursor = "grabbing";
+        e.preventDefault();
+        return;
+      }
+      const name = overRing(p);
+      if (name === null) return;
+      pressedRing = name;
+      pressedAt = p;
       dial.setPointerCapture(e.pointerId);
-      dial.style.cursor = "grabbing";
       e.preventDefault();
     });
     dial.addEventListener("pointermove", (e) => {
@@ -762,15 +858,27 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
         lastDragHours = cur;
         handlers.onScrub(delta);
       } else {
-        dial.style.cursor = overSun(p) ? "grab" : "default";
+        dial.style.cursor = overSun(p) ? "grab" : overRing(p) !== null ? "pointer" : "default";
       }
     });
-    for (const type of ["pointerup", "pointercancel"] as const) {
-      dial.addEventListener(type, () => {
-        dragging = false;
-        dial.style.cursor = "default";
-      });
-    }
+    dial.addEventListener("pointerup", (e) => {
+      if (pressedRing !== null && lastScene !== null) {
+        const p = point(e);
+        if (isTap(p.x - pressedAt.x, p.y - pressedAt.y, DPR)) {
+          // The lit ring, tapped again, is released; any other ring takes the light.
+          const litNow = lastScene.rete.find((r) => r.weight === "lit")?.name ?? null;
+          handlers.onLit(litNow === pressedRing ? null : pressedRing);
+        }
+      }
+      pressedRing = null;
+      dragging = false;
+      dial.style.cursor = "default";
+    });
+    dial.addEventListener("pointercancel", () => {
+      pressedRing = null;
+      dragging = false;
+      dial.style.cursor = "default";
+    });
   }
 
   /* ————— resize: the window, and the stage on its own ————— */
@@ -788,7 +896,7 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     }).observe(stage);
   }
 
-  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, showFrozen, showTrouble, showReport, reportCopied, chartStatus };
+  return { fit, paint, isFoldOpen, showStation, stationStatus, showMode, showFrozen, showTrouble, showReport, reportCopied, chartStatus, showHint };
 }
 
 /* ————— element lookup and row builders ————— */
@@ -901,9 +1009,11 @@ function planetButton(doc: Document): {
   return { button, swatch, label, line };
 }
 
-/** A planet row in the programme: a button that lights the planet's ring. */
+/** A planet row in the programme: a button that lights the planet's ring;
+ * `swatch` paints its swatch as a piece of the ring (DEC-055). */
 function ledgerRow(
   doc: Document, row: SceneRow, toggleLit: (name: string, lit: boolean) => void,
+  swatch: (host: HTMLElement, name: string, color: string) => void,
 ): HTMLElement {
   const b = planetButton(doc);
   b.button.className = `lrow${row.up ? " is-up" : ""}${row.lit ? " chosen" : ""}`;
@@ -911,11 +1021,29 @@ function ledgerRow(
   b.button.dataset["planet"] = row.name;
   b.button.setAttribute("aria-description", ringDescription(row.name));
   b.label.style.color = row.color ?? "";
-  b.swatch.style.background = row.color ?? "";
+  swatch(b.swatch, row.name, row.color ?? "");
   b.label.textContent = row.name;
   b.line.append(lineFragment(doc, row.line, true));
   b.button.addEventListener("click", () => toggleLit(row.name, row.lit));
   return b.button;
+}
+
+/** One button of the ring key (DEC-055): the swatch over the planet's plain
+ * name, a full 44px target, pressed when its ring is the lit one. */
+function keyButton(doc: Document, name: string): KeySlot {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = "kbtn";
+  button.dataset["planet"] = name;
+  button.setAttribute("aria-pressed", "false");
+  button.setAttribute("aria-description", ringDescription(name));
+  const swatch = doc.createElement("i");
+  swatch.className = "sw";
+  const label = doc.createElement("span");
+  label.className = "kn";
+  label.textContent = name;
+  button.append(swatch, label);
+  return { button, swatch, label };
 }
 
 /** A row of the Planets view: the button, and the details that open under it. */

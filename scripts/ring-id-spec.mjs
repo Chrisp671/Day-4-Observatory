@@ -50,7 +50,10 @@ for (const [width, height] of [[320,640],[360,780],[390,844],[820,844],[820,1180
   check(await hint.count()>0,`${tag}: hint vanished on a timer`);
  }
  if(width===390) {
-  // Read existing ledger colour declarations, never the implementation's geometry.
+  // Locate each ring without the implementation's geometry. The spec stores the
+  // lit planet in day4.lit, so a ring is where the dial changes most between
+  // "this planet lit" and "nothing lit", among pixels close to its colour.
+  // (A colour-only scan matched the moon's orbit and the band inside the face.)
   await page.getByRole("tab", {name:"Planets",exact:true}).click();
   const colors=await page.locator("button.lrow").evaluateAll((rows,names)=>Object.fromEntries(names.map(name=>{
    const row=rows.find(r=>r.textContent.includes(name));
@@ -59,45 +62,92 @@ for (const [width, height] of [[320,640],[360,780],[390,844],[820,844],[820,1180
   })),names);
   console.log("Ledger colours:",colors);
   await page.getByRole("tab", {name:"Stargazer",exact:true}).click();
+  const setLit=async(p,v)=>{await p.evaluate(v=>localStorage.setItem("day4.lit",v),v);await p.reload();await settle(p);};
+  const pixels=(p)=>p.locator("canvas#sky").evaluate(c=>{const d=c.getContext("2d").getImageData(0,0,c.width,c.height).data;let s="";for(let i=0;i<d.length;i+=8192)s+=String.fromCharCode.apply(null,d.subarray(i,i+8192));return btoa(s);});
+  const probe=await context.newPage();
+  await probe.goto(url.href);
+  const other=await context.newPage();
+  await other.goto(url.href);
+  let held=false;
   for(const name of names) {
-   const point=await page.locator("canvas#sky").evaluate((c,color)=>{
+   await setLit(page,"");
+   await setLit(probe,name);
+   // Baseline: another planet lit, so every other ring is drawn the same way in
+   // both pictures and only these two rings differ.
+   await setLit(other,name==="Saturn"?"Mercury":"Saturn");
+   const lit64=await pixels(probe);
+   const point=await other.locator("canvas#sky").evaluate((c,{lit64,color})=>{
     if(!color) return null;
     const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number);
-    const ctx=c.getContext("2d"), {data}=ctx.getImageData(0,0,c.width,c.height);
-    const rect=c.getBoundingClientRect(), cx=c.width/2, cy=c.height/2;
-    // Restrict to concentric arcs; markers cannot win a whole radial band.
-    let best=null;
-    for(let r=Math.floor(c.width*.22);r<c.width*.47;r++) {
-     const hits=[];
-     for(let a=0;a<360;a++) {
-      const x=Math.round(cx+r*Math.cos(a*Math.PI/180)), y=Math.round(cy+r*Math.sin(a*Math.PI/180));
-      const k=(y*c.width+x)*4;
-      if(rgb.every((v,i)=>Math.abs(data[k+i]-v)<25)) hits.push({x,y});
-     }
-     if(hits.length>=8 && (!best || hits.length>best.hits.length)) best={r,hits};
+    const none=c.getContext("2d").getImageData(0,0,c.width,c.height).data;
+    const raw=atob(lit64);
+    // Every pixel that lighting the planet changed and that now shows its
+    // colour. Tap the middle of that arc (the circular mean of their angles,
+    // so the sun at one end of a sweep is not where we tap), on the ring's
+    // centre line: the middle of the changed run along that ray, because the
+    // single most-changed pixel can sit in the glow, nearer a neighbour.
+    const W=c.width, H=c.height, pts=[];
+    for(let k=0;k<none.length;k+=4) {
+     const lit=[raw.charCodeAt(k),raw.charCodeAt(k+1),raw.charCodeAt(k+2)];
+     if(!rgb.every((v,i)=>Math.abs(lit[i]-v)<40)) continue;
+     if(lit.reduce((s,v,i)=>s+Math.abs(v-none[k+i]),0)<150) continue;
+     pts.push([(k/4)%W,Math.floor(k/4/W)]);
     }
-    if(!best)return null;
-    const p=best.hits[Math.floor(best.hits.length/2)];
-    return {x:rect.x+p.x*rect.width/c.width,y:rect.y+p.y*rect.height/c.height};
-   },colors[name]);
-   if(!point){console.log(`SKIP ${name}: no identifiable visible arc at fixed instant`);continue;}
-   console.log(`${name} arc:`,point);
-   // Start unlit using the public row if available; this also exercises parity.
-   if(await fold.count()===1) await fold.click();
-   const row=page.locator("#tonight-list .lrow").filter({hasText:name});
-   if(await row.count() && await row.isVisible()) {await row.click(); if(await page.evaluate(()=>localStorage.getItem("day4.lit"))===name) await row.click();}
-   if(await fold.count()===1) await fold.click();
+    if(pts.length<20) return {skip:`only ${pts.length} changed pixels`};
+    // The changed pixels are an arc: fit its circle (Kasa least squares) for
+    // the dial's centre, rather than assuming where the page put it.
+    let a=[[0,0,0],[0,0,0],[0,0,0]], b=[0,0,0];
+    for(const [x,y] of pts){const v=[x,y,1], z=-(x*x+y*y);for(let i=0;i<3;i++){b[i]+=v[i]*z;for(let j=0;j<3;j++)a[i][j]+=v[i]*v[j];}}
+    const det=(m)=>m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])-m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])+m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+    const sol=[0,1,2].map(col=>det(a.map((row,i)=>row.map((v,j)=>j===col?b[i]:v)))/det(a));
+    const ox=-sol[0]/2, oy=-sol[1]/2;
+    // Tap the middle of the arc (circular mean of the angles, so the sun at
+    // one end of a sweep is not where we tap), on the ring's centre line: the
+    // middle of the changed run along that ray, not its brightest pixel, which
+    // can sit in the glow nearer a neighbour.
+    const changed=new Uint8Array(W*H); let sx=0, sy=0;
+    for(const [x,y] of pts){changed[y*W+x]=1;const d=Math.hypot(x-ox,y-oy);sx+=(x-ox)/d;sy+=(y-oy)/d;}
+    // The middle of an arc is its planet's peak, where the gold diamond covers
+    // the ring; step a little either side of it until the ring shows.
+    const mid=Math.atan2(sy,sx);
+    let ang=mid, run=[];
+    for(const off of [8,-8,14,-14,20,-20]) {
+     ang=mid+off*Math.PI/180; run=[];
+     for(let r=0;r<Math.max(W,H);r+=0.5) {
+      const x=Math.round(ox+r*Math.cos(ang)), y=Math.round(oy+r*Math.sin(ang));
+      if(x<0||y<0||x>=W||y>=H) break;
+      if(changed[y*W+x]) run.push(r);
+     }
+     if(run.length) break;
+    }
+    if(!run.length) return {skip:`no changed pixel near the ray at ${(mid*180/Math.PI).toFixed(0)} deg`};
+    const r=(run[0]+run[run.length-1])/2, rect=c.getBoundingClientRect();
+    return {x:rect.x+(ox+r*Math.cos(ang))*rect.width/W,y:rect.y+(oy+r*Math.sin(ang))*rect.height/H,pixels:pts.length};
+   },{lit64,color:colors[name]});
+   if(!point || point.skip){console.log(`SKIP ${name}: ${point?.skip ?? "no colour"}`);continue;}
+   console.log(`${name} ring:`,point);
+   if(!held) {
+    // No press-and-hold: holding a ring does what a tap does, and nothing more.
+    held=true;
+    await page.mouse.move(point.x,point.y);await page.mouse.down();await page.waitForTimeout(900);await page.mouse.up();await settle(page);
+    check(await page.evaluate(()=>localStorage.getItem("day4.lit"))===name,`hold: holding ${name}'s ring did not simply light it`);
+    await setLit(page,"");
+   }
    await page.mouse.click(point.x,point.y); await settle(page);
    const lit=await page.evaluate(()=>localStorage.getItem("day4.lit"));
    check(lit===name,`ring tap: ${name} did not light/persist`);
    if(lit===name) {
-    check(await page.getByText(new RegExp(`${name}.*(?:up|rise|set|below)`,"i")).filter({visible:true}).count()>0,`plinth: ${name} up-time line missing`);
+    const line=page.getByText(new RegExp(`${name}.*(?:up|rise|set|below|ring)`,"i")).filter({visible:true});
+    check(await line.count()>0,`plinth: ${name} up-time line missing`);
     await page.reload();await settle(page);
     check(await page.evaluate(()=>localStorage.getItem("day4.lit"))===name,`reload: ${name} lost`);
     await page.mouse.click(point.x,point.y);await settle(page);
     check(await page.evaluate(()=>localStorage.getItem("day4.lit"))==="",`ring tap: ${name} did not release`);
+    check(await page.getByText(new RegExp(`^\s*${name}\s*·`)).filter({visible:true}).count()===0,`plinth: ${name} line still shown with nothing lit`);
    }
   }
+  await probe.close();
+  await other.close();
  }
  for(let i=0;i<await key.count();i++) {
   await key.nth(i).click(); await settle(page);

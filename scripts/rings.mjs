@@ -294,6 +294,15 @@ try {
         await page.mouse.up();
         await settle(page);
         assert.equal(await lit(page), "", `${vp.name}: a drag that began on Saturn's ring lit ${await lit(page)}`);
+        // Out past the slop and back again is still a drag (Sol's review of #46):
+        // 30 CSS px away, then release within a pixel of where it began.
+        await page.mouse.move(a.x, a.y);
+        await page.mouse.down();
+        await page.mouse.move(a.x + 30, a.y, { steps: 6 });
+        await page.mouse.move(a.x + 1, a.y, { steps: 6 });
+        await page.mouse.up();
+        await settle(page);
+        assert.equal(await lit(page), "", `${vp.name}: a press that wandered 30 px and came back lit ${await lit(page)}`);
       }
       await page.getByRole("button", { name: "Return to the present" }).click();
       await settle(page);

@@ -857,6 +857,10 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
         const delta = shortestHourDelta(lastDragHours, cur);
         lastDragHours = cur;
         handlers.onScrub(delta);
+      } else if (pressedRing !== null) {
+        // Once a press has travelled past the slop it is a drag for good:
+        // coming back to where it started does not make it a tap again.
+        if (!isTap(p.x - pressedAt.x, p.y - pressedAt.y, DPR)) pressedRing = null;
       } else {
         dial.style.cursor = overSun(p) ? "grab" : overRing(p) !== null ? "pointer" : "default";
       }

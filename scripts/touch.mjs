@@ -21,7 +21,9 @@
 //     ink box is measured against its element, every clipping ancestor and
 //     the viewport, so "40.0°N 74…" and an "H" where HOLD stood both fail;
 //   - the constellation rows, the TONIGHT toggle and the station fields reach
-//     the floors named in FLOORS, with the reason each cannot reach 44.
+//     the floors named in FLOORS, with the reason each cannot reach 44;
+//   - the ring key's five buttons (DEC-055) are full 44px targets in
+//     Stargazer, and its names, echo and hint are content at 12px or more.
 // The hit box is measured, not read from CSS: `elementFromPoint` is probed
 // outward from each control's centre until the browser hands the point to
 // something else. Screenshots the rail at phone and tablet sizes.
@@ -61,7 +63,8 @@ const THUMB = 44;
 const TEXT_FLOOR = 11;
 const CONTENT_FLOOR = 12;
 const CONTENT = ".bay .v,.bay .s,#station-bay .v,.stationbar input,.lrow .n,.lrow .d,.crow .n,.crow .d," +
-  ".prow .pbtn .n,.ptimes,.pwhere,.pcap,.chart-sub,.chart-where,.focus-context,#trouble-text";
+  ".prow .pbtn .n,.ptimes,.pwhere,.pcap,.chart-sub,.chart-where,.focus-context,#trouble-text," +
+  ".kbtn .kn,.ringecho,.ringhint";
 const DIAL_FLOOR = 320;
 /** The narrowest a stepper's half of a cell may get, in CSS px: the hit box
  *  PR #39 gave the arrows. The phone rail floors its cells at 58px to keep it. */
@@ -85,6 +88,8 @@ const EXPECTED = [
 ];
 const isRow = (c) => c.classes.includes("lrow");
 const isSkyRow = (c) => c.classes.includes("crow");
+/** The ring key's five buttons (DEC-055), matched by class like the rows. */
+const isKey = (c) => c.classes.includes("kbtn");
 /** Where the plinth has no 44px to give, the floor each control must still
  *  reach, and why (DEC-053 names these as the documented exceptions).
  *  Everything not listed here must reach THUMB both ways. */
@@ -103,6 +108,8 @@ const FLOORS = [
     why: "three glance rows at 44px would push the ledger off a 390×844 fold with the dial" },
   { match: isSkyRow, width: THUMB, height: THUMB,
     why: "the constellation lists scroll, so every row is a full thumb target" },
+  { match: isKey, width: THUMB, height: THUMB,
+    why: "the ring key's five buttons are full thumb targets (DEC-055)" },
 ];
 
 const settle = (page) => page.evaluate(async () => {
@@ -177,7 +184,8 @@ const measure = (page) => page.evaluate((STEP) => {
   // past the viewport. Measured from a Range over the contents, which is the
   // text's real extent even where `overflow:hidden` would paint less of it.
   const CONTENT_SEL = ".bay .v,.bay .s,#station-bay .v,.stationbar input,.lrow .n,.lrow .d,.crow .n,.crow .d," +
-    ".prow .pbtn .n,.ptimes,.pwhere,.pcap,.chart-sub,.chart-where,.focus-context,#trouble-text";
+    ".prow .pbtn .n,.ptimes,.pwhere,.pcap,.chart-sub,.chart-where,.focus-context,#trouble-text," +
+    ".kbtn .kn,.ringecho,.ringhint";
   const texts = [];
   for (const el of document.querySelectorAll("body *")) {
     if (["CANVAS", "SCRIPT", "STYLE", "IMG"].includes(el.tagName)) continue;
@@ -290,7 +298,7 @@ const checkText = (vp, view, texts, pageWidth, width) => {
 
 /** Hit boxes for one view: every control reaches its floor, none steals. */
 const checkTargets = (vp, view, controls, expected) => {
-  const named = controls.filter((c) => !isRow(c) && !isSkyRow(c)).map((c) => c.label);
+  const named = controls.filter((c) => !isRow(c) && !isSkyRow(c) && !isKey(c)).map((c) => c.label);
   const missing = expected.filter((name) => !named.includes(name));
   assert.deepEqual(missing, [], `${vp} ${view}: controls missing: ${missing.join(", ")}`);
   const unlisted = named.filter((name) => !expected.includes(name));
@@ -331,6 +339,8 @@ const check = (vp, measured, width) => {
   const { controls, containers, rail, slops, viewportMeta } = measured;
   checkTargets(vp, "Stargazer", controls, EXPECTED);
   assert(controls.some(isRow), `${vp}: no tonight rows`);
+  assert.deepEqual(controls.filter(isKey).map((c) => c.label), ["Mercury", "Venus", "Mars", "Jupiter", "Saturn"],
+    `${vp}: the ring key is not five buttons in ring order`);
   checkText(vp, "Stargazer", measured.texts, measured.pageWidth, width);
 
   // The page stays zoomable; only the double-tap gesture goes.

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import { CONTENT_FLOOR_PX, CONTENT_SELECTORS, TARGET_FLOOR_PX, TARGET_PX, TEXT_FLOOR_PX } from "./legibility";
 import { NUMERAL_FLOOR_PX } from "./dial";
 import { COMPASS_PX } from "./chart";
+import { SWATCH_H, SWATCH_W } from "./ringkey";
 
 const indexHtml = import.meta.glob("../../index.html", {
   eager: true,
@@ -97,6 +98,40 @@ describe("nothing is cut off, and focus is visible (DEC-053)", () => {
     for (const f of css().matchAll(/\.bay \.[vs]\s*\{([^}]*)\}/g)) {
       expect(f[1]).not.toMatch(/white-space\s*:\s*nowrap/);
     }
+  });
+});
+
+describe("the ring key, its echo and its hint (DEC-055)", () => {
+  /** The declarations of one rule, by selector. */
+  const rule = (selector: string): string => {
+    const m = new RegExp(`(?:^|[}\\s])${selector.replace(/[.[\]"=]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(css());
+    expect(m, `${selector} has no rule`).not.toBeNull();
+    return (m as RegExpExecArray)[1] as string;
+  };
+
+  it("gives each key button the full thumb target it claims", () => {
+    expect(rule(".kbtn")).toMatch(new RegExp(`min-height\\s*:\\s*${TARGET_PX}px`));
+    expect(rule(".kbtn")).toMatch(new RegExp(`min-width\\s*:\\s*${TARGET_PX}px`));
+  });
+
+  it("sizes the swatch as the painter paints it", () => {
+    expect(rule(".sw")).toMatch(new RegExp(`width\\s*:\\s*${SWATCH_W}px`));
+    expect(rule(".sw")).toMatch(new RegExp(`height\\s*:\\s*${SWATCH_H}px`));
+    expect(rule(".sw canvas")).toMatch(new RegExp(`width\\s*:\\s*${SWATCH_W}px`));
+  });
+
+  it("takes no room for an empty echo, and marks the chosen key in the sun's gold", () => {
+    expect(rule(".ringecho:empty")).toMatch(/display\s*:\s*none/);
+    expect(rule('.kbtn[aria-pressed="true"] .kn')).toMatch(/color\s*:\s*var\(--sunlight\)/);
+  });
+
+  it("keeps the key, the echo and the hint in the markup the shell addresses", () => {
+    for (const id of ["ring-key", "ring-echo", "ring-hint"]) {
+      expect(indexHtml, `#${id} is missing`).toContain(`id="${id}"`);
+    }
+    // The key is a group with a name, inside the ledger's header so it is
+    // visible with the fold closed.
+    expect(indexHtml).toMatch(/<div class="ledger-h">[\s\S]*?id="ring-key"[^>]*role="group"[^>]*aria-label="[^"]+"/);
   });
 });
 

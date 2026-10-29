@@ -57,6 +57,19 @@ export function litRingSentence(lit: LitRing | null | undefined): string {
     : `${lit.name}'s ring is lit, up from ${lit.riseHHMM} until ${lit.setHHMM}.`;
 }
 
+/** "Jupiter · up until 4:35 am" — the lit ring echoed in plain words under
+ * the dial (DEC-055), for a viewer who lit a ring and wants it named. The
+ * same facts as `litRingSentence`, in the ledger's own shape (parts joined
+ * by " · ", so the shell wraps it only at the separator). A lit planet with
+ * no ring on this date is said so, not left blank; nothing lit is "". */
+export function ringEchoLine(name: string | null, lit: LitRing | null): string {
+  if (name === null) return "";
+  if (lit === null) return `${name} · no ring today`;
+  return lit.up
+    ? `${name} · up until ${lit.setHHMM}`
+    : `${name} · up from ${lit.riseHHMM} until ${lit.setHHMM}`;
+}
+
 /** One paragraph a screen reader can speak about the sky right now. */
 export function transcript(s: TranscriptState): string {
   const sun =

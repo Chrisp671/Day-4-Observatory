@@ -37,7 +37,7 @@ import type {
   SceneTonight,
 } from "./scene";
 import { isTravelled, moonDayFor } from "./scene-core";
-import { compassAbbrev, compassPoint, transcript, type LitRing } from "./transcript";
+import { compassAbbrev, compassPoint, ringEchoLine, transcript, type LitRing } from "./transcript";
 import { VERSE_VERSION, verseOfDay } from "./verse";
 
 export interface PlinthInput {
@@ -215,7 +215,7 @@ function moonTimesLine(r: SceneRequest): string {
 const BLANK_READOUTS: SceneReadouts = {
   verse: "", verseRef: "", heroKind: "", heroValue: "", travelledDate: "", zoneNote: "",
   sunRise: "", sunSet: "", moonPhase: "", moonTimes: "", station: "", clock: "", zone: "",
-  passion: "",
+  passion: "", ringEcho: "",
 };
 
 /** Every string the header and plinth show, final and in the page's voice. */
@@ -272,6 +272,10 @@ export function sceneReadouts(input: PlinthInput): SceneReadouts {
       passion: inPassion && passion !== null
         ? `The sixth hour to the ninth · ${fmt12(passion.fromUnixMillis)}–${fmt12(passion.toUnixMillis)}`
         : "",
+      // The lit ring in words (DEC-055), from the same day-anchored arc the
+      // rete draws and the transcript speaks. A name that is not a planet
+      // lights nothing on the rete, so it is echoed as nothing too.
+      ringEcho: r.lit !== null && RING_ORDER.includes(r.lit) ? ringEchoLine(r.lit, litRingNow(r)) : "",
     };
   }, BLANK_READOUTS);
 }

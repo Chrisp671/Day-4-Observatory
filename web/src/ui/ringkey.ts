@@ -4,8 +4,8 @@
  * The ledger's swatch used to be a 16×3 bar of the planet's colour, and the
  * eye had to match a colour name to a thin arc on the dial. Now the swatch is
  * a short arc drawn exactly as the rete draws the ring — the same keel, the
- * same colour, the same weight (lit glows, dim fades) and the same gold peak
- * diamond — so the eye matches mark to mark. A planet with no ring today gets
+ * same colour and the same gold peak diamond, the lit one glowing — so the eye
+ * matches mark to mark. Unlike the ring, it never fades (`swatchWeight`). A planet with no ring today gets
  * a dotted stub, which is also honest.
  *
  * A pure painter, like the rest of ui/: a context, its pixel ratio, one ring
@@ -14,7 +14,7 @@
  */
 import { goldLeaf } from "./theme";
 import { keelChannels, RING_KEEL, RING_STROKE } from "./planetarcs";
-import type { SceneRing } from "../app/scene";
+import type { RingWeight, SceneRing } from "../app/scene";
 
 /** CSS size of the swatch; the stylesheet in index.html agrees. */
 export const SWATCH_W = 30;
@@ -23,9 +23,19 @@ export const SWATCH_H = 12;
 const KEEL = `rgba(${keelChannels(RING_KEEL.color)},${RING_KEEL.alpha})`;
 const KEEL_DEEP = `rgba(${keelChannels(RING_KEEL.color)},0.8)`;
 
+/**
+ * The weight a swatch is drawn at: the lit ring glows, every other ring is
+ * drawn at full weight. The rete fades a ring whose planet is down in daylight
+ * (DEC-036), and that honesty belongs on the dial; the swatch is the legend,
+ * and a faded legend cannot be read (DEC-053, DEC-055).
+ */
+export function swatchWeight(weight: RingWeight): RingWeight {
+  return weight === "lit" ? "lit" : "bright";
+}
+
 /** Everything the swatch shows, as one string: when it is unchanged, so is the picture. */
 export function swatchKey(ring: SceneRing | null, color: string, dpr: number): string {
-  return `${ring?.weight ?? "none"}|${ring === null || ring.peakHours === null ? "nopeak" : "peak"}|${color}|${dpr}`;
+  return `${ring === null ? "none" : swatchWeight(ring.weight)}|${ring === null || ring.peakHours === null ? "nopeak" : "peak"}|${color}|${dpr}`;
 }
 
 /** Paint the swatch into a context whose canvas is SWATCH_W×SWATCH_H CSS px at `dpr`. */
@@ -65,7 +75,8 @@ export function drawRingSwatch(
     return;
   }
 
-  const { width, alpha } = RING_STROKE[ring.weight];
+  const weight = swatchWeight(ring.weight);
+  const { width, alpha } = RING_STROKE[weight];
   // Keel first, as on the rete, so the colour sits on the bed the gate measures.
   ctx.globalAlpha = 1;
   ctx.strokeStyle = KEEL;
@@ -75,7 +86,7 @@ export function drawRingSwatch(
   ctx.stroke();
 
   ctx.save();
-  if (ring.weight === "lit") {
+  if (weight === "lit") {
     ctx.shadowColor = color;
     ctx.shadowBlur = 5 * dpr;
   }
@@ -103,7 +114,7 @@ export function drawRingSwatch(
       ctx.closePath();
       ctx.fill();
     };
-    ctx.globalAlpha = ring.weight === "dim" ? 0.35 : 1;
+    ctx.globalAlpha = 1;
     ctx.fillStyle = KEEL_DEEP;
     diamond(halfLong + 1.2 * dpr, halfWide + 1.2 * dpr);
     ctx.fillStyle = goldLeaf(ctx, py - halfLong, py + halfLong);

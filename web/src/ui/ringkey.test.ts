@@ -1,6 +1,7 @@
 /**
  * The ring key's swatch (DEC-055): it is drawn as the ring is drawn, on the
- * same keel, at the same weight, so the legend cannot drift from the rete.
+ * same keel, so the legend cannot drift from the rete; but at full weight,
+ * because a legend that fades with its ring cannot be read.
  */
 import { describe, expect, it } from "vitest";
 import { drawRingSwatch, SWATCH_H, SWATCH_W, swatchKey } from "./ringkey";
@@ -62,14 +63,19 @@ describe("the swatch is a piece of the ring (DEC-055)", () => {
     expect(painterSource).toMatch(/keelChannels\(RING_KEEL\.color\)/);
   });
 
-  it("strokes the keel, then the colour at the ring's own weight, for every weight", () => {
+  it("strokes the keel, then the colour: lit glows, every other weight at full weight", () => {
+    // Owner (DEC-055): the legend is drawn at full weight. A dim ring's swatch
+    // at the rete's 0.24 alpha was all but invisible in the phone captures.
+    const expected = { lit: "lit", bright: "bright", faint: "bright", dim: "bright" } as const;
     for (const weight of ["lit", "bright", "faint", "dim"] as const) {
       const r = recorder();
       drawRingSwatch(r.ctx, 2, ring(weight), "#C9A84C");
+      const drawn = RING_STROKE[expected[weight]];
       // Two strokes: keel then colour; the colour at exactly the rete's width and alpha.
-      expect(r.widths).toEqual([(RING_STROKE[weight].width + 1.6) * 2, RING_STROKE[weight].width * 2]);
+      expect(r.widths).toEqual([(drawn.width + 1.6) * 2, drawn.width * 2]);
       expect(r.alphas[0]).toBe(1);
-      expect(r.alphas[1]).toBe(RING_STROKE[weight].alpha);
+      expect(r.alphas[1]).toBe(drawn.alpha);
+      expect(r.alphas[1]).toBeGreaterThanOrEqual(0.9);
       expect(r.styles[1]).toBe("#C9A84C");
       expect(r.styles[0]).toMatch(/^rgba\(/);
     }
@@ -107,6 +113,8 @@ describe("swatchKey", () => {
     const a = swatchKey(ring("lit"), "#fff", 2);
     expect(swatchKey(ring("lit"), "#fff", 2)).toBe(a);
     expect(swatchKey(ring("dim"), "#fff", 2)).not.toBe(a);
+    // Faint and dim are both drawn at full weight, so one picture, one key.
+    expect(swatchKey(ring("dim"), "#fff", 2)).toBe(swatchKey(ring("faint"), "#fff", 2));
     expect(swatchKey(ring("lit", null), "#fff", 2)).not.toBe(a);
     expect(swatchKey(ring("lit"), "#eee", 2)).not.toBe(a);
     expect(swatchKey(ring("lit"), "#fff", 1)).not.toBe(a);

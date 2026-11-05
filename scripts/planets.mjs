@@ -75,7 +75,10 @@ const photo = (page, name) => page.locator(`#planet-detail-${name.toLowerCase()}
     target: a.target,
     rel: a.rel,
     band: getComputedStyle(f.querySelector(".pband")).backgroundColor,
-    swatch: getComputedStyle(row.querySelector(".pbtn .sw")).backgroundColor,
+    // The swatch is a canvas painted as the ring (DEC-055); the row's name
+    // carries the same token as an inline colour, so that is what is compared.
+    swatch: getComputedStyle(row.querySelector(".pbtn .n > span")).color,
+    swatchCanvas: row.querySelector(".pbtn .sw canvas") !== null,
   };
 });
 
@@ -201,7 +204,8 @@ try {
       assert.match(ph.href, /^https:\/\/images\.nasa\.gov\/details\/PIA\d+$/, `${name}: credit links to NASA`);
       assert.equal(ph.target, "_blank", `${name}: credit opens in a new tab`);
       assert(ph.rel.includes("noopener") && ph.rel.includes("noreferrer"), `${name}: rel="noopener noreferrer"`);
-      assert.equal(ph.band, ph.swatch, `${name}: the band is the swatch's colour (one theme token)`);
+      assert.equal(ph.band, ph.swatch, `${name}: the band is the row's colour (one theme token)`);
+      assert(ph.swatchCanvas, `${name}: the row's swatch is not drawn as a piece of its ring`);
       const req = photoRequests.filter((r) => r.path === ph.src);
       assert.equal(req.length, 1, `${name}: its photo was fetched exactly once`);
       assert.equal(req[0].status, 200);

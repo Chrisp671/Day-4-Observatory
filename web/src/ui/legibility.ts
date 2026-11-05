@@ -23,4 +23,6 @@ export const CONTENT_SELECTORS: readonly string[] = [
   ".lrow .n", ".lrow .d", ".crow .n", ".crow .d",
   ".prow .pbtn .n", ".ptimes", ".pwhere", ".pcap", ".chart-sub", ".chart-where",
   ".focus-context", "#trouble-text",
+  // The ring key's names, the echo line and the first-visit hint (DEC-055).
+  ".kbtn .kn", ".ringecho", ".ringhint",
 ];

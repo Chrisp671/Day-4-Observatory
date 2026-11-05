@@ -94,6 +94,46 @@ describe("sceneReadouts", () => {
   });
 });
 
+describe("the echo line (DEC-055)", () => {
+  it("is empty when nothing is lit, so the plinth shows no gap", () => {
+    expect(sceneReadouts(input(NIGHT, null)).ringEcho).toBe("");
+    expect(sceneReadouts(input(NOON, null)).ringEcho).toBe("");
+  });
+
+  it("names the lit planet and the set the arc is drawn to, in the clock's 12-hour words", () => {
+    for (const name of RING_ORDER) {
+      const echo = sceneReadouts(input(NIGHT, name)).ringEcho;
+      const ring = sceneRete(input(NIGHT, name)).find((r) => r.weight === "lit");
+      expect(echo.startsWith(`${name} · `), echo).toBe(true);
+      if (ring === undefined) {
+        expect(echo).toBe(`${name} · no ring today`);
+        continue;
+      }
+      expect(echo).toMatch(/ · up (until|from \d{1,2}:\d{2} [ap]m until) \d{1,2}:\d{2} [ap]m$/);
+      const setHours = Math.floor(ring.setHours);
+      const h12 = setHours % 12 === 0 ? 12 : setHours % 12;
+      expect(echo).toMatch(new RegExp(`until ${h12}:\\d{2} ${setHours < 12 ? "am" : "pm"}$`));
+    }
+  });
+
+  it("agrees with the spoken transcript: the same planet, the same set", () => {
+    for (const name of RING_ORDER) {
+      const echo = sceneReadouts(input(NIGHT, name)).ringEcho;
+      const spoken = sceneSpoken(input(NIGHT, name));
+      if (!spoken.includes("ring is lit")) {
+        expect(echo).toBe(`${name} · no ring today`);
+        continue;
+      }
+      const until = /until (\d{1,2}:\d{2} [ap]m)\.$/.exec(spoken)?.[1];
+      expect(echo.endsWith(`until ${until}`), `${echo} vs ${spoken}`).toBe(true);
+    }
+  });
+
+  it("echoes nothing for a name that is not a planet, as the rete lights nothing", () => {
+    expect(sceneReadouts(input(NIGHT, "Pluto")).ringEcho).toBe("");
+  });
+});
+
 describe("sceneTonight", () => {
   it("leads the glance with the lit planet and shows at most three rows", () => {
     const out = sceneTonight(input(NOON, "Jupiter"));

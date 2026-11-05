@@ -299,6 +299,31 @@ describe("the rete's rings, on the keel they are drawn on (DEC-053)", () => {
   });
 });
 
+describe("the ring key, its echo and its hint (DEC-055)", () => {
+  it("sets the key's names, the echo and the hint in inks that clear AA on the plinth", () => {
+    // The names are inkMid, scripture when up, sunlight when lit; the echo is
+    // inkHi; the hint is goldSoft. All type, all on the plinth's scrim.
+    for (const [name, color] of [
+      ["inkMid", THEME.inkMid],
+      ["scripture", "#F3ECDA"],
+      ["sunlight", THEME.sunlight],
+      ["inkHi", THEME.inkHi],
+      ["goldSoft", "#E7BE5A"],
+    ] as const) {
+      expectAtLeast(worstContrast(color, plinthBackground), AA_TEXT, `${name} in the ring key`);
+    }
+  });
+
+  it("draws the swatch at the ring's own weight, so the lit and bright keys clear the graphic floor like the rings", () => {
+    // The swatch painter takes its width and alpha from RING_STROKE and its
+    // bed from RING_KEEL (ringkey.test.ts); the numbers measured above for
+    // the rete are therefore the swatch's numbers too. Pinned here so that
+    // a second stroke table for the key cannot appear without failing.
+    expect(RING_STROKE.lit.alpha).toBe(1);
+    expect(RING_STROKE.bright.alpha).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
 describe("the sweep itself", () => {
   it("covers astronomical night through high noon, which is the whole page", () => {
     expect(ALTITUDE_SWEEP.from).toBeLessThanOrEqual(-18);

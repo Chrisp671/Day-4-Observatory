@@ -6,12 +6,14 @@
  *   - the shell: DOM binding and input (app/shell.ts).
  *   - the painters: pure functions of a Scene slice (ui/*).
  * State here is exactly what the viewer can change: the station, the travel
- * offset, the lit ring, and the mode. Nothing else is remembered.
+ * offset, the lit ring, the mode, and whether the first-visit hint has done
+ * its job. Nothing else is remembered.
  */
 import { scene, type Scene } from "./app/scene";
 import { bind, type Shell, type Stage } from "./app/shell";
 import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
+import { hintSeen, markHintSeen } from "./app/hint";
 import { chartLoader, type Chart } from "./app/charts";
 import { clockAt, needsTick, returnToPresent, scrubClock, stepClock } from "./app/freeze";
 import {
@@ -55,6 +57,10 @@ let lit: string | null = (() => {
     return "Saturn";
   }
 })();
+
+/** The first-visit hint (DEC-055) has done its job once a planet has been
+ * lit or released on any visit — by ring, by key or by row. */
+let hinted = hintSeen();
 
 /** Which view is showing: Day 4 on a first visit, then whatever was chosen
  * last. The station and the travel offset are shared by every view. */
@@ -183,6 +189,12 @@ const shell = bind(document, {
     } catch {
       /* private mode: the choice simply does not persist */
     }
+    if (!hinted) {
+      // The first choice, however it was made, retires the hint for good.
+      hinted = true;
+      markHintSeen();
+      shell.showHint(false);
+    }
     tick();
   },
   onScrub: (deltaHours: number) => {
@@ -303,6 +315,7 @@ function tick(): void {
 
 /* ————— boot ————— */
 shell.showStation(station);
+shell.showHint(!hinted);
 tick();
 // The heavens move slowly; for those who ask for reduced motion, the
 // instrument follows them once a minute instead of every second.

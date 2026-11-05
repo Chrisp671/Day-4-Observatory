@@ -60,8 +60,9 @@ export interface ModeStore {
   setItem(key: string, value: string): void;
 }
 
-/** localStorage when the browser grants it; null in private mode or Node. */
-function browserStore(): ModeStore | null {
+/** localStorage when the browser grants it; null in private mode or Node.
+ * Shared with the hint (app/hint.ts), which remembers the same way. */
+export function browserStore(): ModeStore | null {
   try {
     const s = (globalThis as { localStorage?: ModeStore }).localStorage;
     return s === undefined ? null : s;

@@ -264,7 +264,9 @@
     /* the ledger: tonight's program */
     .ledger{border-top:1px solid var(--hair);padding:10px 2px 0}
     .ledger-h{display:flex;align-items:baseline;gap:10px;padding-bottom:3px}
-    .ledger-h button{font-family:var(--caps);font-weight:700;font-size:11px;
+    /* The word TONIGHT is the header's own button (a direct child); the ring
+       key's buttons live one level down and keep their own dress (DEC-055). */
+    .ledger-h > button{font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.3em;color:var(--ink-mid);background:transparent;border:none;
       cursor:pointer;padding:0;border-bottom:1px dotted transparent;position:relative}
     /* About 28px is what the ledger allows (DEC-053): the row above is the
@@ -272,8 +274,8 @@
        planets' own buttons, so the slop reaches exactly the ledger's own
        padding above the word and the header's padding below it, and no
        further — a slop over either neighbour would steal their taps. */
-    .ledger-h button::after{content:"";position:absolute;left:-4px;right:-4px;top:-10px;bottom:-3px}
-    .ledger-h button:hover{border-bottom-color:var(--ink-mid)}
+    .ledger-h > button::after{content:"";position:absolute;left:-4px;right:-4px;top:-10px;bottom:-3px}
+    .ledger-h > button:hover{border-bottom-color:var(--ink-mid)}
     .ledger-h em{font-family:var(--serif);font-style:italic;font-weight:600;
       font-size:12px;color:var(--ink-mid)}
     .ledger-h .rule{flex:1;height:1px;background:var(--hair-soft);align-self:center}
@@ -299,9 +301,67 @@
     .lrow[data-planet]:not([data-planet=""]){cursor:pointer}
     .lrow.chosen .n{color:var(--sunlight)!important}
     .lrow.chosen .d{color:var(--scripture)}
-    .lrow .sw{display:inline-block;width:16px;height:3px;vertical-align:middle;
-      margin-right:7px;border-radius:1px}
+    /* The swatch is a piece of the ring (DEC-055): a canvas the shell paints
+       with the ring's own keel, colour, weight and gold peak diamond
+       (ui/ringkey.ts), so the eye matches mark to mark instead of a colour
+       name to a thin arc. Its size is SWATCH_W × SWATCH_H there. */
+    .sw{display:inline-block;width:30px;height:12px;vertical-align:-2px;
+      margin-right:7px;position:relative}
+    .sw canvas{position:absolute;left:0;top:0;width:30px;height:12px}
     .lrow .season{color:var(--gold-soft)}
+
+    /* ————— the ring key (DEC-055) —————
+       Parker: "it's not clear which object each arch line is showing until
+       you toggle them on and off." Five buttons in ring order from the Sun,
+       each a swatch over a plain name, each 44px tall (DEC-053), each
+       lighting its ring exactly as its row does. It stands in the ledger's
+       header, so it is visible while TONIGHT is folded: beside the word on a
+       tablet, where the row has the width and the viewport is locked, so the
+       dial pays for the header's height once (616 → 592px at 820×1180); on
+       its own line under it on a phone, where the page scrolls. The chosen
+       one is in the sun's gold and says so (aria-pressed). The header's
+       children are ordered by `order`: the word, the note, (the echo on a
+       tablet), the rule, the key, then the lines that wrap on a phone. */
+    .ledger-h{flex-wrap:wrap;row-gap:2px}
+    .ledger-h .rule{order:1}
+    .ringkey{display:flex;flex-wrap:wrap;justify-content:center;gap:0 2px;flex:1 1 100%;order:2}
+    .kbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:3px;min-height:44px;min-width:44px;padding:4px 2px;background:transparent;border:0;
+      cursor:pointer;font:inherit;color:inherit;-webkit-appearance:none;appearance:none;border-radius:0}
+    .kbtn .sw{margin:0}
+    .kbtn .kn{font-family:var(--caps);font-weight:600;font-size:12px;letter-spacing:.06em;
+      color:var(--ink-mid);white-space:nowrap}
+    .kbtn.is-up .kn{color:var(--scripture)}
+    .kbtn:hover .kn{color:var(--ink-hi)}
+    .kbtn[aria-pressed="true"] .kn{color:var(--sunlight)}
+    /* The lit ring, echoed in words (DEC-055): "Jupiter · up until 4:35 am",
+       in the same parts-and-separator shape as the rows, so it wraps only at
+       the dot. Empty means nothing is lit, and the line takes no room. */
+    .ringecho{flex:1 1 100%;order:3;font-size:12.5px;line-height:1.4;color:var(--ink-hi);
+      text-align:center;padding:3px 2px 4px;font-variant-numeric:tabular-nums}
+    .ringecho:empty{display:none}
+    /* The first-visit hint (DEC-055), in the plinth's own italic. It stays
+       until a planet has been lit or released once, never on a timer. */
+    .ringhint{flex:1 1 100%;order:4;font-family:var(--serif);font-style:italic;font-weight:600;
+      font-size:13.5px;line-height:1.4;color:var(--gold-soft);text-align:center;
+      padding:3px 2px 2px;text-wrap:pretty}
+    .ringhint[hidden]{display:none}
+    /* On a tablet the TONIGHT header is a small grid: the word, the note and
+       the rule on the first row, the echo under them on the second, the key
+       spanning both rows at the right. The key is 44px tall, so the two rows
+       fit inside its height and the echo costs the dial nothing; the hint, on
+       a first visit only, takes a third row. Scoped to .tonight: the
+       Constellations lists share .ledger-h and keep the plain flex row. */
+    @media (min-width:721px){
+      .tonight .ledger-h{display:grid;grid-template-columns:auto auto 1fr auto;
+        align-items:center;column-gap:10px;row-gap:0}
+      .tonight .ledger-h > button{grid-area:1/1/2/2}
+      .tonight .ledger-h > em{grid-area:1/2/2/3}
+      .tonight .ledger-h > .rule{grid-area:1/3/2/4}
+      .ringkey{grid-area:1/4/3/5;justify-content:flex-end}
+      .ringecho{grid-area:2/1/3/4;text-align:left;padding:2px 0 0}
+      .ringhint{grid-area:3/1/4/5;text-align:left;padding:4px 0 2px}
+    }
 
     /* ————— error reporting (DEC-041) —————
        Dressed as the plinth's own voice: the same caps, the same gold. It is
@@ -650,6 +710,15 @@
           <button id="tonight-toggle" aria-expanded="false" aria-controls="tonight-all">TONIGHT</button>
           <em id="tonight-note"></em>
           <span class="rule"></span>
+          <!-- The ring key (DEC-055): the five planets in ring order from the
+               Sun, each a button that lights its ring, each swatch a piece of
+               the ring itself. The shell builds the buttons from the Scene. -->
+          <div class="ringkey" id="ring-key" role="group" aria-label="Planet rings on the dial, in order from the Sun"></div>
+          <!-- The lit ring's echo line and the first-visit hint (DEC-055): in
+               the header too, so on a tablet the echo shares the key's row and
+               the dial pays for the header's height once. -->
+          <p class="ringecho" id="ring-echo"></p>
+          <p class="ringhint" id="ring-hint" hidden></p>
         </div>
         <div class="tonight-list" id="tonight-list"></div>
         <div class="tonight-all" id="tonight-all" hidden></div>

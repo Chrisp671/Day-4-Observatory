@@ -58,6 +58,31 @@ export function parseChart(raw: unknown): Chart | null {
   };
 }
 
+/** The Greek letters a Bayer designation can begin with, as words. */
+const GREEK = new Set([
+  "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa", "Lambda", "Mu",
+  "Nu", "Xi", "Omicron", "Pi", "Rho", "Sigma", "Tau", "Upsilon", "Phi", "Chi", "Psi", "Omega",
+]);
+const BAYER = /^([A-Z][a-z]+?)(\d*) ([A-Za-z]{3})$/;
+
+/**
+ * A star's name in plain words (DEC-056): a Bayer designation such as
+ * "Beta Sct" or "Theta1 Mic" reads as "Beta Scuti" or "Theta-1 Microscopii",
+ * the Greek letter as the word it already is and the constellation in the
+ * genitive the chart carries. A proper name — Altair, Deneb Algedi — is
+ * returned untouched, and so is a designation the chart cannot expand: one
+ * whose abbreviation is not this chart's, or a chart with no genitive. The
+ * number is joined with a hyphen rather than set as a superscript, which at
+ * 13 px is under the floor a 60-year-old can read (DEC-053).
+ */
+export function starLabel(name: string, chart: Pick<Chart, "abbr" | "genitive">): string {
+  const m = BAYER.exec(name);
+  if (m === null || !GREEK.has(m[1] as string)) return name;
+  if (chart.genitive === "" || (m[3] as string).toLowerCase() !== chart.abbr.toLowerCase()) return name;
+  const number = m[2] === "" ? "" : `-${m[2]}`;
+  return `${m[1]}${number} ${chart.genitive}`;
+}
+
 export interface ChartLoader {
   /** The chart for a constellation by its catalog name; null when there is none. */
   load(name: string): Promise<Chart | null>;

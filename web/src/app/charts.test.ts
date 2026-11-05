@@ -4,7 +4,7 @@
  * and every constellation the app lists has a chart to open.
  */
 import { describe, expect, it } from "vitest";
-import { chartLoader, parseChart, type Chart } from "./charts";
+import { chartLoader, parseChart, starLabel, type Chart } from "./charts";
 import { CONSTELLATIONS } from "./constellations";
 
 /** Every generated file, by its file name, as the browser would receive it. */
@@ -100,5 +100,49 @@ describe("chartLoader", () => {
     expect(b).toBe(a);
     expect(await loader.load("Atlantis")).toBeNull();
     expect(calls).toEqual(["charts/index.json", "charts/Ori.json"]);
+  });
+});
+
+describe("starLabel (DEC-056): names in plain words", () => {
+  const sct = { abbr: "Sct", genitive: "Scuti" };
+
+  it("spells a Bayer designation out with the chart's genitive", () => {
+    expect(starLabel("Beta Sct", sct)).toBe("Beta Scuti");
+    expect(starLabel("Alpha Sex", { abbr: "Sex", genitive: "Sextantis" })).toBe("Alpha Sextantis");
+    expect(starLabel("Gamma CMa", { abbr: "CMa", genitive: "Canis Majoris" })).toBe("Gamma Canis Majoris");
+  });
+
+  it("leaves a proper name alone, one word or two", () => {
+    expect(starLabel("Altair", { abbr: "Aql", genitive: "Aquilae" })).toBe("Altair");
+    expect(starLabel("Deneb Algedi", { abbr: "Cap", genitive: "Capricorni" })).toBe("Deneb Algedi");
+    expect(starLabel("Polaris Galacticus Borealis", { abbr: "Com", genitive: "Comae Berenices" }))
+      .toBe("Polaris Galacticus Borealis");
+  });
+
+  it("joins a lettered number with a hyphen, never a superscript under the floor", () => {
+    expect(starLabel("Theta1 Mic", { abbr: "Mic", genitive: "Microscopii" })).toBe("Theta-1 Microscopii");
+    expect(starLabel("Omicron1 Cnc", { abbr: "Cnc", genitive: "Cancri" })).toBe("Omicron-1 Cancri");
+    expect(starLabel("Gamma2 Nor", { abbr: "Nor", genitive: "Normae" })).toBe("Gamma-2 Normae");
+  });
+
+  it("will not guess: no genitive, another chart's abbreviation, or a word that is not a Greek letter", () => {
+    expect(starLabel("Beta Sct", { abbr: "Sct", genitive: "" })).toBe("Beta Sct");
+    expect(starLabel("Beta Sct", { abbr: "Aql", genitive: "Aquilae" })).toBe("Beta Sct");
+    expect(starLabel("Deneb Sct", sct)).toBe("Deneb Sct");
+    expect(starLabel("Kappa", sct)).toBe("Kappa");
+  });
+
+  it("leaves no abbreviation on any chart the app carries", () => {
+    for (const [file, raw] of Object.entries(FILES)) {
+      if (file === "index.json") continue;
+      const chart = parseChart(raw) as Chart;
+      for (const s of chart.stars) {
+        if (s.name === "") continue;
+        const label = starLabel(s.name, chart);
+        expect(label, `${file} ${s.name}`).not.toMatch(/^[A-Z][a-z]+\d* [A-Z][A-Za-z]{2}$/);
+        expect(label, `${file} ${s.name}`).not.toContain(chart.abbr + " ");
+        expect(label.endsWith(` ${chart.abbr}`), `${file} ${label}`).toBe(false);
+      }
+    }
   });
 });

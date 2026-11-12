@@ -202,6 +202,61 @@ class ContractTests(unittest.TestCase):
         self.assertTrue(is_generated('web/public/charts/index.json'))
         self.assertFalse(is_generated('web/src/app/charts.ts'))
 
+    def test_changed_lines_are_new_file_numbers_of_one_path_only(self):
+        diff = ('diff --git a/web/a.ts b/web/a.ts\n--- a/web/a.ts\n+++ b/web/a.ts\n@@ -1 +1 @@\n-a\n+b\n'
+                'diff --git a/PLAN.md b/PLAN.md\n--- a/PLAN.md\n+++ b/PLAN.md\n'
+                '@@ -10,3 +10,4 @@ heading\n keep\n-old\n+new\n+added\n keep\n'
+                '@@ -40,2 +41,1 @@\n keep\n-gone\n')
+        # 10 is context, 11 and 12 are added, the deletion at old 11 lands on 11;
+        # the second hunk's deletion lands where line 42 would start.
+        self.assertEqual(contract.changed_lines(diff, 'PLAN.md'), {11, 12, 42})
+        self.assertEqual(contract.changed_lines(diff, 'web/a.ts'), {1})
+        self.assertEqual(contract.changed_lines(diff, 'README.md'), set())
+
+    def test_excerpt_keeps_real_line_numbers_and_marks_every_gap(self):
+        text = '\n'.join(f'line {n}' for n in range(1, 31))
+        shown = contract.excerpt(text, {10, 12}, context=1).split('\n')
+        self.assertEqual(shown, ['... lines 1-8 unchanged, not shown', '9: line 9', '10: line 10', '11: line 11',
+                                 '12: line 12', '13: line 13', '... lines 14-30 unchanged, not shown'])
+        # Nothing wanted is all gap, never the whole file.
+        self.assertEqual(contract.excerpt(text, set()), '... lines 1-30 unchanged, not shown')
+        # Lines are numbered as git numbers them, by newline only: a planted
+        # U+2028 or form feed cannot slide the excerpt off the changed line.
+        planted = 'one two\x0cthree\nfour\nfive\n'
+        self.assertEqual(contract.excerpt(planted, {2}, context=0),
+                         '... lines 1-1 unchanged, not shown\n2: four\n... lines 3-3 unchanged, not shown')
+
+    def test_the_plan_travels_as_an_excerpt_and_not_against_the_source_limit(self):
+        plan = '\n'.join(f'- DEC-{n:03d} entry {"x" * 300}' for n in range(1, 900))  # ~280 KB, as PLAN.md grows
+        files = {'PLAN.md': plan, 'web/src/a.ts': 'y' * 250_000}
+        github = unittest.mock.Mock()
+        github.call.return_value = {'tree': [{'path': p, 'type': 'blob', 'mode': '100644', 'size': len(v)} for p, v in files.items()]}
+        github.file.side_effect = lambda p, sha: files[p]
+        changed = [{'filename': 'PLAN.md', 'status': 'modified'}, {'filename': 'web/src/a.ts', 'status': 'modified'}]
+        # Whole, the two would be over the 500,000 limit; the plan no longer counts against it.
+        sources = review.source_context(github, {'head': {'sha': 'a' * 40}}, changed)
+        self.assertEqual(sources['PLAN.md'], plan)  # validation still sees the whole file
+        # Any other file still counts in full.
+        files['web/src/a.ts'] = 'y' * 500_001
+        github.call.return_value = {'tree': [{'path': p, 'type': 'blob', 'mode': '100644', 'size': min(len(v), 300_000)} for p, v in files.items()]}
+        with self.assertRaises(Incomplete):
+            review.source_context(github, {'head': {'sha': 'a' * 40}}, changed)
+
+    def test_review_request_sends_the_plan_as_an_excerpt_around_its_changes(self):
+        github = FakeGitHub()
+        plan = '\n'.join(f'- DEC-{n:03d} entry' for n in range(1, 400))
+        diff = 'diff --git a/PLAN.md b/PLAN.md\n--- a/PLAN.md\n+++ b/PLAN.md\n@@ -200,1 +200,1 @@\n-old\n+- DEC-200 entry\n'
+        github.call = lambda path, data=None, method=None, **kw: (diff if kw.get('accept') else github.pr) if path == '/pulls/7' \
+            else FakeGitHub.call(github, path, data, method, **kw)
+        with patch('review.source_context', return_value={'PLAN.md': plan, 'web/src/a.ts': 'one line'}):
+            _, evidence, sources = review.review_request(github, github.pr, github.changes, 'anthropic', {}, 'rubric')
+        shown = json.loads(evidence)['source_context']
+        self.assertEqual(shown['web/src/a.ts'], '1: one line')
+        self.assertIn('200: - DEC-200 entry', shown['PLAN.md'])
+        self.assertNotIn('100: ', shown['PLAN.md'])
+        self.assertTrue(shown['PLAN.md'].startswith('... lines 1-196 unchanged, not shown'))
+        self.assertEqual(sources['PLAN.md'], plan)
+
     def test_plan_requires_citations_and_includes_canon(self):
         plan = '\n'.join(f'- {key} — policy' for key in sorted(CANON | {'WI-027'}))
         self.assertEqual(set(plan_entries(plan, 'Implements WI-027')), CANON | {'WI-027'})

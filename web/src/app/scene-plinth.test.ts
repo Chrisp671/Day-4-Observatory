@@ -235,45 +235,49 @@ describe("the moon's rise and set, in the sun's own shape (REQ-017)", () => {
     }
   });
 
-  it("says a moon that rises and does not set stays up, in words: Reykjavik, December", () => {
-    // The CHK-001 matrix pins this one: the moon rises on 2026-12-21 at 64°N
-    // and no set follows within the two days the search looks ahead.
-    const station = { lat: 64.1466, lon: -21.9426 };
-    const t = Date.UTC(2026, 11, 21, 12, 0, 0);
-    const day = moonDay(t, station.lat, station.lon);
-    const request: SceneRequest = { displayedUnixMillis: t, nowUnixMillis: t, station, lit: null, chart: null };
-    const out = sceneReadouts({ frame: frame(t, station.lat, station.lon), request });
-    if (day.riseUnixMillis !== null && day.setUnixMillis === null) {
-      expect(out.moonRise).toBe(`↑${fmt12(day.riseUnixMillis)}`);
-      expect(out.moonSet).toBe("no moonset for two days");
-    } else {
-      // In a zone where local midnight splits that day differently the case
-      // may not arise; the wording rule is then exercised by the table below.
-      expect(out.moonSet).not.toBe("");
+  /** A year of days at 85°N, where the moon is up for days, down for days,
+   * and in between rises and sets: each with the Scene's two lines and the
+   * engine's own day. Day-anchoring is by the machine's local midnight, so
+   * WHICH days hold which case moves with the time zone; a year is long
+   * enough that every case turns up in all of them, and the assertions below
+   * are about each day's own engine answer, never about a date. */
+  const POLAR = { lat: 85, lon: -74 };
+  const polar = Array.from({ length: 365 }, (_, i) => {
+    const t = NOON + i * DAY;
+    const request: SceneRequest = { displayedUnixMillis: t, nowUnixMillis: t, station: POLAR, lit: null, chart: null };
+    const out = sceneReadouts({ frame: frame(t, POLAR.lat, POLAR.lon), request });
+    return { t, rise: out.moonRise, set: out.moonSet, day: moonDay(t, POLAR.lat, POLAR.lon), lone: moonSetOfDay(t, POLAR.lat, POLAR.lon) };
+  });
+
+  it("words every polar day as one row of its own table, decided by the engine's day alone", () => {
+    for (const d of polar) {
+      const where = new Date(d.t).toDateString();
+      if (d.day.riseUnixMillis !== null && d.day.setUnixMillis !== null) {
+        expect(d.rise, where).toBe(`↑${fmt12(d.day.riseUnixMillis)}`);
+        expect(d.set.startsWith(`↓${fmt12(d.day.setUnixMillis)}`), `${where}: ${d.set}`).toBe(true);
+      } else if (d.day.riseUnixMillis !== null) {
+        expect(d.rise, where).toBe(`↑${fmt12(d.day.riseUnixMillis)}`);
+        expect(d.set, where).toBe("no moonset for two days");
+      } else if (d.lone !== null) {
+        expect(d.rise, where).toBe("no moonrise today");
+        expect(d.set, where).toBe(`↓${fmt12(d.lone)}`);
+      } else {
+        expect(d.rise, where).toBe("no moonrise today");
+        expect(d.set, where).toBe("no moonset today");
+      }
     }
   });
 
-  it("covers all four cases of its own table at a polar station across a lunation", () => {
-    // 85°N: over a month the moon is up for days, down for days, and in
-    // between rises and sets. Every line must be one of the four wordings.
-    const station = { lat: 85, lon: -74 };
-    const seen = new Set<string>();
-    for (let i = 0; i < 30; i++) {
-      const t = NOON + i * DAY;
-      const request: SceneRequest = { displayedUnixMillis: t, nowUnixMillis: t, station, lit: null, chart: null };
-      const out = sceneReadouts({ frame: frame(t, station.lat, station.lon), request });
-      const rise = /^↑/.test(out.moonRise) ? "rise" : out.moonRise;
-      const set = /^↓/.test(out.moonSet) ? "set" : out.moonSet;
-      expect(["rise", "no moonrise today"]).toContain(rise);
-      expect(["set", "no moonset today", "no moonset for two days"]).toContain(set);
-      // A rise is never followed by "no moonset today": that pairing would be
-      // two different days' worth of answer.
-      if (rise === "rise") expect(set).not.toBe("no moonset today");
-      if (rise === "no moonrise today") expect(set).not.toBe("no moonset for two days");
-      seen.add(`${rise}|${set}`);
-    }
-    expect(seen.has("no moonrise today|no moonset today")).toBe(true);
-    expect(seen.has("rise|no moonset for two days")).toBe(true);
+  it("meets all four rows in a polar year, so none of the wordings is untested", () => {
+    const count = (pick: (d: (typeof polar)[number]) => boolean): number => polar.filter(pick).length;
+    // A rise and a set; a rise the moon then stays up from; a set with no
+    // rise that day; and the days it neither rises nor sets.
+    expect(count((d) => d.day.riseUnixMillis !== null && d.day.setUnixMillis !== null)).toBeGreaterThan(0);
+    expect(count((d) => d.day.riseUnixMillis !== null && d.day.setUnixMillis === null)).toBeGreaterThan(0);
+    expect(count((d) => d.day.riseUnixMillis === null && d.lone !== null)).toBeGreaterThan(0);
+    expect(count((d) => d.day.riseUnixMillis === null && d.lone === null)).toBeGreaterThan(0);
+    expect(polar.some((d) => d.set === "no moonset for two days")).toBe(true);
+    expect(polar.some((d) => d.rise === "no moonrise today" && d.set === "no moonset today")).toBe(true);
   });
 });
 

@@ -150,3 +150,29 @@ export function moonDay(
 ): MoonDay {
   return bodyDay(Body.Moon, unixMillis, latitudeDeg, longitudeDeg);
 }
+
+/**
+ * The moonset that belongs to a calendar day in its own right: the first one
+ * on or after that day's local midnight, or null when the day has none.
+ *
+ * `moonDay` pairs a rise with the set that follows it, which is what an
+ * up-arc needs — and which says nothing at all on the day with no moonrise.
+ * That day still has a moonset: the moon came up late the evening before and
+ * goes down around the middle of this one. Parker asked for the moon's rise
+ * and set as plainly as the sun's (REQ-017), and "no moonrise today" with
+ * nothing after it hides a time that exists. This is that time. A day with
+ * neither is real too — the moon can stay up, or down, for days at high
+ * latitude — and is null here, for the caller to say so.
+ */
+export function moonSetOfDay(
+  unixMillis: number,
+  latitudeDeg: number,
+  longitudeDeg: number,
+): number | null {
+  const d = new Date(unixMillis);
+  const midnight = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const nextMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+  const observer = new Observer(latitudeDeg, longitudeDeg, 0);
+  const set = toUnixOrNull(SearchRiseSet(Body.Moon, observer, -1, midnight, 2));
+  return set === null || set >= nextMidnight.getTime() ? null : set;
+}

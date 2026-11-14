@@ -33,7 +33,7 @@ All from `web/`, Node 22:
 
 ```shell
 npm ci
-npm test                # vitest run — 436 tests
+npm test                # vitest run — 517 tests (2026-11-11)
 npx tsc --noEmit        # strict
 npm run build           # tsc --noEmit && vite build
 npm run dev

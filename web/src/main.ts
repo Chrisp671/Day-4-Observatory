@@ -325,3 +325,13 @@ const cadence = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 
 setInterval(() => {
   if (needsTick(clockAt(Date.now(), offsetMillis, frozenAt))) tick();
 }, cadence);
+// Canvas text is set in whatever face is loaded at the moment it is drawn, and
+// a canvas does not re-flow when the web font arrives later. A held clock
+// (DEC-051) or the reduced-motion cadence would leave the dial's numerals and
+// the chart's names in the fallback face for up to a minute, or for good; so
+// paint once more whenever a font finishes loading.
+try {
+  document.fonts.addEventListener("loadingdone", () => tick());
+} catch {
+  /* no FontFaceSet: the next tick will do */
+}

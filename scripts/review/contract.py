@@ -249,6 +249,66 @@ def strip_generated(diff):
     return '\n'.join(sections)
 
 
+# Files too large to send whole, whose changes the reviewer still needs in
+# place. PLAN.md is ~160 KB: sent whole it overflowed the source limit on #46
+# and forced its plan entries into a PR of their own (#47). The diff carries
+# every changed line, plan_entries carries the cited and standing entries, and
+# a PR that does not touch PLAN.md never received the whole file either; so an
+# excerpt around the changed lines, at their real line numbers, loses nothing a
+# reviewer was otherwise given.
+EXCERPTED = ('PLAN.md',)
+EXCERPT_CONTEXT = 3
+
+
+def changed_lines(diff, path):
+    """The new-file line numbers a unified diff adds to `path`, and the line at
+    which each run of pure deletions lands, so a deletion is shown in place."""
+    wanted = set()
+    current, in_hunk, line = None, False, 0
+    for text in diff.split('\n'):
+        if text.startswith('diff --git '):
+            current = text.split(' b/', 1)[1] if ' b/' in text else None
+            in_hunk = False
+            continue
+        if current != path:
+            continue
+        hunk = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@', text)
+        if hunk:
+            in_hunk, line = True, int(hunk[1])
+            continue
+        if not in_hunk:
+            continue
+        if text.startswith('+'):
+            wanted.add(line)
+            line += 1
+        elif text.startswith('-'):
+            wanted.add(max(line, 1))
+        elif text.startswith(' '):
+            line += 1
+    return wanted
+
+
+def excerpt(text, wanted, context=EXCERPT_CONTEXT):
+    """`text` as numbered lines, keeping only those within `context` of a wanted
+    line; each run left out is one marker naming the lines it stands for.
+    Lines are split on newlines only, as git numbers them: splitlines() would
+    also break on U+2028, form feeds and the like, and a PR could plant those
+    to slide the excerpt off the lines its diff changes."""
+    lines = text.split('\n')
+    if lines and lines[-1] == '':
+        lines.pop()
+    keep = sorted({n for w in wanted for n in range(w - context, w + context + 1) if 1 <= n <= len(lines)})
+    out, previous = [], 0
+    for n in keep:
+        if n != previous + 1:
+            out.append(f'... lines {previous + 1}-{n - 1} unchanged, not shown')
+        out.append(f'{n}: {lines[n - 1]}')
+        previous = n
+    if previous < len(lines):
+        out.append(f'... lines {previous + 1}-{len(lines)} unchanged, not shown')
+    return '\n'.join(out)
+
+
 def relevant(path):
     return path.startswith(('web/', 'scripts/review/')) or path in {
         'PLAN.md', '.github/review-rubric.md', '.github/workflows/review-web.yml',

@@ -9,7 +9,7 @@ import sys
 from urllib.parse import quote
 
 from api import GitHub, model_request
-from contract import (is_generated, strip_generated, IMAGES, MANUAL_DESCRIPTIONS, MANUAL_MARK, MANUAL_PROVIDER,
+from contract import (is_generated, strip_generated, changed_lines, excerpt, EXCERPTED, IMAGES,MANUAL_DESCRIPTIONS, MANUAL_MARK, MANUAL_PROVIDER,
                       MANUAL_REVIEWER, ROUTED_UNKNOWN, SCHEMA, Incomplete, plan_entries, provider_config,
                       read_artifact, relevant, require, safe_text, strict_json, validate_review)
 
@@ -70,7 +70,9 @@ def source_context(github, pr, changed):
         require(item.get('type') == 'blob' and item.get('mode') in ('100644', '100755'), 'Context path is not a regular source file.')
         require(item.get('size', 300_001) <= 300_000, 'Context file too large.')
         sources[path] = github.file(path, sha)
-        total += len(sources[path])
+        # An excerpted file travels as an excerpt bounded by the diff, which the
+        # payload limit in review_request already counts (contract.EXCERPTED).
+        total += 0 if path in EXCERPTED else len(sources[path])
         require(total <= 500_000, 'Source context too large; split the PR.')
     for path in sorted(paths):
         load(path)
@@ -142,7 +144,8 @@ def review_request(github, pr, changed, builder, manifest, rubric):
     evidence = json.dumps({'head': sha, 'base': pr['base']['sha'], 'builder_family': builder,
         'pr_body': body, 'diff': diff, 'plan_entries': plan_entries(plan, body),
         'base_design_canon': plan_entries(baseline, 'DEC-026'), 'capture': manifest,
-        'source_context': {name: '\n'.join(f'{i}: {line}' for i, line in enumerate(text.splitlines(), 1))
+        'source_context': {name: excerpt(text, changed_lines(diff, name)) if name in EXCERPTED
+                           else '\n'.join(f'{i}: {line}' for i, line in enumerate(text.splitlines(), 1))
                            for name, text in sources.items()}}, ensure_ascii=False)
     require(len(evidence) <= 700_000, 'Review payload too large; split the PR.')
     instructions = ('You are an independent, read-only PR reviewer. Follow the trusted rubric below. '

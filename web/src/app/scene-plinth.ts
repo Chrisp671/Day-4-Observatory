@@ -23,7 +23,7 @@ import { PLANET_COLORS } from "../ui/theme";
 import { fmt12, fmt12c } from "./clock12";
 import { mismatchPhrase, zoneReport } from "./clockzone";
 import { altAz, CONSTELLATIONS, isDarkEnough, skyEntry, tonightBoard, type SkyEntry } from "./constellations";
-import { formatCountdown, nextSunEvent } from "./hero";
+import { eventAt, formatCountdown, nextSunEvent, whenLine } from "./hero";
 import { passionHours } from "./hours";
 import { GLANCE_ROWS, MOVEMENTS } from "./scene-consts";
 import type {
@@ -36,7 +36,8 @@ import type {
   SceneRow,
   SceneTonight,
 } from "./scene";
-import { isTravelled, moonDayFor } from "./scene-core";
+import { isTravelled, moonDayFor, moonSetFor } from "./scene-core";
+import { toEntryValue } from "./timeentry";
 import { compassAbbrev, compassPoint, ringEchoLine, transcript, type LitRing } from "./transcript";
 import { VERSE_VERSION, verseOfDay } from "./verse";
 
@@ -197,25 +198,43 @@ const phaseName = (phaseAngleDeg: number): string => {
   return PHASE_NAMES[phaseIdx] ?? "";
 };
 
-/** "↑6:12a · ↓9:40p Thu" / "no moonrise today" — the moon's day, worded. */
-function moonTimesLine(r: SceneRequest): string {
-  const d = new Date(r.displayedUnixMillis);
+/**
+ * The moon's day in the sun's own shape (REQ-017): a rise line and a set
+ * line, each a time or the plain words for there being none.
+ *
+ *   rise and set      "↑6:12 am"            "↓9:40 pm"  ("↓4:35 am Thu" on another date)
+ *   rise, no set      "↑6:12 am"            "no moonset for two days"
+ *   no rise, a set    "no moonrise today"   "↓12:05 pm"
+ *   neither           "no moonrise today"   "no moonset today"
+ *
+ * The set is the one that follows the rise, as the up-arc on the dial is
+ * drawn (REQ-008), so it may fall on the next date and says which. The search
+ * for it looks two days ahead; past that the moon is up for days, at high
+ * latitude, and the line says the length it knows. On the day with no
+ * moonrise the set shown is that day's own — the moon that rose the evening
+ * before — which the old single line left out.
+ */
+function moonLines(r: SceneRequest): { readonly rise: string; readonly set: string } {
   const md = moonDayFor(r);
-  if (md.riseUnixMillis === null) return "no moonrise today";
-  let out = `↑${fmt12c(md.riseUnixMillis)}`;
-  if (md.setUnixMillis !== null) {
-    const setD = new Date(md.setUnixMillis);
-    // The moon often sets on the next date; say so instead of confusing.
-    const dayTag = setD.getDate() === d.getDate() ? "" : ` ${WEEKDAY[setD.getDay()] ?? ""}`;
-    out += ` · ↓${fmt12c(md.setUnixMillis)}${dayTag}`;
+  if (md.riseUnixMillis === null) {
+    const lone = moonSetFor(r);
+    return {
+      rise: "no moonrise today",
+      set: lone === null ? "no moonset today" : `↓${fmt12(lone)}`,
+    };
   }
-  return out;
+  return {
+    rise: `↑${fmt12(md.riseUnixMillis)}`,
+    set: md.setUnixMillis === null
+      ? "no moonset for two days"
+      : dayTagged("↓", md.setUnixMillis, r.displayedUnixMillis),
+  };
 }
 
 const BLANK_READOUTS: SceneReadouts = {
-  verse: "", verseRef: "", heroKind: "", heroValue: "", travelledDate: "", zoneNote: "",
-  sunRise: "", sunSet: "", moonPhase: "", moonTimes: "", station: "", clock: "", zone: "",
-  passion: "", ringEcho: "",
+  verse: "", verseRef: "", when: "", heroKind: "", heroValue: "", heroAt: "", zoneNote: "",
+  sunRise: "", sunSet: "", moonPhase: "", moonRise: "", moonSet: "", station: "", clock: "", zone: "",
+  entryValue: "", passion: "", ringEcho: "",
 };
 
 /** Every string the header and plinth show, final and in the page's voice. */
@@ -232,11 +251,14 @@ export function sceneReadouts(input: PlinthInput): SceneReadouts {
     const ev = nextSunEvent(s.sun.nextRiseUnixMillis, s.sun.nextSetUnixMillis);
     const heroKind = ev === null ? "Polar day or night" : ev.kind === "sunset" ? "Sunset in" : "Sunrise in";
     const heroValue = ev === null ? "" : formatCountdown(ev.atUnixMillis - t);
+    // The countdown says how long; this says to when, on the event's own date.
+    const heroAt = ev === null ? "" : eventAt(ev.atUnixMillis, t);
 
-    // Travelled: the header says where you have landed — the date Parker
-    // steps toward, month by month, looking for Saturn season (DEC-031).
-    const travelledDate = !isTravelled(r) ? ""
-      : new Date(t).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    // The date and time the instrument shows, always (REQ-017). It is also
+    // where a journey is read: the date Parker steps toward, month by month,
+    // looking for Saturn season (DEC-031), and the day a drag of the sun has
+    // carried it into.
+    const when = whenLine(t, r.nowUnixMillis, isTravelled(r));
 
     // Times are rendered in the device's zone; say so, and say when that is not
     // the clock the station keeps (a New York sunrise on a Chicago clock).
@@ -248,6 +270,7 @@ export function sceneReadouts(input: PlinthInput): SceneReadouts {
     const sd = sunDayNow(r);
     const sunRise = sd.riseUnixMillis === null ? "—" : `↑${fmt12(sd.riseUnixMillis)}`;
     const sunSet = sd.setUnixMillis === null ? "" : `↓${fmt12(sd.setUnixMillis)}`;
+    const moon = moonLines(r);
 
     // The sixth hour to the ninth, counted from sunrise as Scripture counts
     // them (Mark 15:33). The caption speaks only while they are passing.
@@ -257,18 +280,21 @@ export function sceneReadouts(input: PlinthInput): SceneReadouts {
     return {
       verse: verse.text,
       verseRef: `${verse.reference} · ${VERSE_VERSION}`,
+      when,
       heroKind,
       heroValue,
-      travelledDate,
+      heroAt,
       zoneNote,
       sunRise,
       sunSet,
       // The phase by name; the age lives in the spoken transcript.
       moonPhase: phaseName(s.moon.phaseAngleDeg),
-      moonTimes: moonTimesLine(r),
+      moonRise: moon.rise,
+      moonSet: moon.set,
       station: `${Math.abs(station.lat).toFixed(1)}°${station.lat >= 0 ? "N" : "S"} ${Math.abs(station.lon).toFixed(1)}°${station.lon >= 0 ? "E" : "W"}`,
       clock: fmt12(t),
       zone: zone.label,
+      entryValue: toEntryValue(t),
       passion: inPassion && passion !== null
         ? `The sixth hour to the ninth · ${fmt12(passion.fromUnixMillis)}–${fmt12(passion.toUnixMillis)}`
         : "",

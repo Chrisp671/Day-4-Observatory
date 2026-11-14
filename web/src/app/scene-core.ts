@@ -11,7 +11,7 @@
  * Never throws. Polar cases (no rise, no set) pass through as null.
  */
 import type { FrameState } from "../engine/frame";
-import { moonDay } from "../engine/planets";
+import { moonDay, moonSetOfDay } from "../engine/planets";
 import { FACE, localHoursOfDay } from "../ui/clockface";
 import { groundStrength } from "../ui/ground";
 import { moonDialHours } from "../ui/moon";
@@ -117,6 +117,15 @@ export function moonDayFor(request: SceneRequest): ReturnType<typeof moonDay> {
   const { lat, lon } = request.station;
   const t = request.displayedUnixMillis;
   return memoByDay("moonDay", t, lat, lon, () => moonDay(t, lat, lon));
+}
+
+/** The moonset that falls on the displayed calendar day in its own right
+ * (REQ-017): what the readout shows on the day with no moonrise. Day-anchored
+ * and memoised like the rise; null when the day has no moonset. */
+export function moonSetFor(request: SceneRequest): number | null {
+  const { lat, lon } = request.station;
+  const t = request.displayedUnixMillis;
+  return memoByDay("moonSet", t, lat, lon, () => moonSetOfDay(t, lat, lon));
 }
 
 /** Live means the displayed instant and the present are within a second;

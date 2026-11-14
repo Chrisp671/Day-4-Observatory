@@ -141,21 +141,41 @@ export interface SceneMarks {
 export interface SceneReadouts {
   readonly verse: string;
   readonly verseRef: string;
+  /** The date and time the instrument is showing, above the hero (REQ-017):
+   * "Sat Nov 14 · 3:10 pm" while it follows the present; with the seconds,
+   * "Fri Oct 2 · 9:07:25 pm", once it has been moved, and with the year when
+   * that is not the present one. Never empty: the date is on the page whether
+   * or not anything has been travelled. */
+  readonly when: string;
   /** "Sunset in" / "Sunrise in" / "Polar day or night". */
   readonly heroKind: string;
   /** "2h 37m", or "" when there is no next event. */
   readonly heroValue: string;
-  /** "Friday, October 2" while travelled; "" when live. */
-  readonly travelledDate: string;
+  /** When that event falls, beside the countdown: "at 4:52 pm", or with its
+   * date when it is not the displayed one, "at 6:41 am Sun Nov 15". "" when
+   * there is no next event. The same instant the countdown counts to. */
+  readonly heroAt: string;
   /** "readouts in CDT — …" when the device clock is not the station's; else "". */
   readonly zoneNote: string;
   readonly sunRise: string;
   readonly sunSet: string;
   readonly moonPhase: string;
-  readonly moonTimes: string;
+  /** The moon's rise and set for the displayed calendar day, in the sun's own
+   * shape so the two bays read alike (REQ-017): "↑6:12 am" and "↓9:40 pm",
+   * the set carrying its weekday when it falls on another date ("↓4:35 am
+   * Thu"). A day without one says so in words: "no moonrise today" — with
+   * that day's own moonset beneath it, which exists — "no moonset today",
+   * or "no moonset for two days" when the moon rises and stays up. */
+  readonly moonRise: string;
+  readonly moonSet: string;
   readonly station: string;
   readonly clock: string;
   readonly zone: string;
+  /** The displayed instant in the dialect of the browser's own date-and-time
+   * field, "2026-11-14T15:10:25" (app/timeentry.ts). The shell writes it into
+   * the field and hands back whatever the viewer leaves there; it never reads
+   * it as a time. */
+  readonly entryValue: string;
   /** "The sixth hour to the ninth · 11:55 am–3:10 pm" only while it passes. */
   readonly passion: string;
   /** The lit ring, echoed in words under the dial (DEC-055): "Jupiter · up

@@ -25,4 +25,11 @@ export const CONTENT_SELECTORS: readonly string[] = [
   ".focus-context", "#trouble-text",
   // The ring key's names, the echo line and the first-visit hint (DEC-055).
   ".kbtn .kn", ".ringecho", ".ringhint",
+  // The date and time above the countdown, the event's time beside it, the
+  // moon's phase on its key, and the date-and-time entry (REQ-017, DEC-057).
+  ".when", ".hero i", ".bay .k .phase", ".timeentry input", ".timeentry-note",
 ];
+
+/** A field's type must be at least this, or iOS Safari zooms the whole page
+ * the moment it is focused and leaves the reader to pinch back out. */
+export const FIELD_NO_ZOOM_PX = 16;

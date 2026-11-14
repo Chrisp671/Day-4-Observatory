@@ -64,10 +64,12 @@ const TEXT_FLOOR = 11;
 const CONTENT_FLOOR = 12;
 const CONTENT = ".bay .v,.bay .s,#station-bay .v,.stationbar input,.lrow .n,.lrow .d,.crow .n,.crow .d," +
   ".prow .pbtn .n,.ptimes,.pwhere,.pcap,.chart-sub,.chart-where,.focus-context,#trouble-text," +
-  ".kbtn .kn,.ringecho,.ringhint";
+  ".kbtn .kn,.ringecho,.ringhint,.when,.hero i,.bay .k .phase,.timeentry input,.timeentry-note";
 const DIAL_FLOOR = 320;
 /** The narrowest a stepper's half of a cell may get, in CSS px: the hit box
- *  PR #39 gave the arrows. The phone rail floors its cells at 58px to keep it. */
+ *  PR #39 gave the arrows. Six units stand three to a row on a phone (REQ-017),
+ *  so a half there is 48px or more; one row of six on a tablet keeps them near
+ *  44. This is the floor under both. */
 const STEPPER = 28;
 /** How far a rail label's ink must sit from each of its arrows, in CSS px: the
  *  glyph's padding on a phone, which is all the 390px rail can afford. */
@@ -82,8 +84,10 @@ const TABS = ["tab-day4", "tab-constellations", "tab-planets"];
 const EXPECTED = [
   ...TABS,
   "station", "Latitude", "Longitude", "set-station", "locate",
-  ...["hour", "day", "phase", "month"].flatMap((unit) => [`Back one ${unit}`, `Forward one ${unit}`]),
+  ...["second", "minute", "hour", "day", "phase", "month"].flatMap((unit) => [`Back one ${unit}`, `Forward one ${unit}`]),
   "Return to the present", "Hold the clock where it is",
+  // SET TIME and the date-and-time field it opens (DEC-057).
+  "time-toggle", "time-input",
   "tonight-toggle",
 ];
 const isRow = (c) => c.classes.includes("lrow");
@@ -100,6 +104,8 @@ const FLOORS = [
     why: "the rail's buttons fill their cells above and the planets' own rows are directly below; the slop takes the ledger's padding and no more" },
   { match: (c) => c.id === "set-station" || c.id === "locate", width: 40, height: 34,
     why: "the station editor shares a bay with the moon's readout; 44px here would move the rail every time it opens" },
+  { match: (c) => c.id === "time-input", width: THUMB, height: THUMB,
+    why: "the date-and-time field is a full thumb target (DEC-057)" },
   { match: (c) => c.tag === "input", width: THUMB, height: 32,
     why: "the station editor's fields are 32px tall and 4px apart, for the same reason as its buttons" },
   { match: (c) => c.classes.includes("pbtn"), width: THUMB, height: THUMB,
@@ -121,7 +127,9 @@ const shot = async (page, file) => {
   await settle(page);
   await page.screenshot({ path: resolve(out, file), scale: "css", fullPage: false, animations: "disabled" });
 };
-const travelled = (page) => page.locator("#travelled").textContent();
+/** The date and time above the countdown, and whether it is marked as moved. */
+const when = (page) => page.locator("#when").textContent();
+const moved = (page) => page.locator("#when").evaluate((el) => el.classList.contains("shifted"));
 const clock = (page) => page.locator("#timeline").textContent();
 
 /** Every visible control, each with the box the browser actually hands a tap
@@ -185,7 +193,7 @@ const measure = (page) => page.evaluate((STEP) => {
   // text's real extent even where `overflow:hidden` would paint less of it.
   const CONTENT_SEL = ".bay .v,.bay .s,#station-bay .v,.stationbar input,.lrow .n,.lrow .d,.crow .n,.crow .d," +
     ".prow .pbtn .n,.ptimes,.pwhere,.pcap,.chart-sub,.chart-where,.focus-context,#trouble-text," +
-    ".kbtn .kn,.ringecho,.ringhint";
+    ".kbtn .kn,.ringecho,.ringhint,.when,.hero i,.bay .k .phase,.timeentry input,.timeentry-note";
   const texts = [];
   for (const el of document.querySelectorAll("body *")) {
     if (["CANVAS", "SCRIPT", "STYLE", "IMG"].includes(el.tagName)) continue;
@@ -354,7 +362,7 @@ const check = (vp, measured, width) => {
 
   // Each rail label sits clear of both its arrows.
   console.log(`touch: ${vp} — rail labels, ink to arrow (CSS px)`);
-  assert.deepEqual(rail.map((r) => r.label), ["HOUR", "DAY", "PHASE", "MONTH"], `${vp}: the rail's cells`);
+  assert.deepEqual(rail.map((r) => r.label), ["SEC", "MIN", "HOUR", "DAY", "PHASE", "MONTH"], `${vp}: the rail's cells`);
   for (const r of rail) {
     const before = r.text.left - r.back.right, after = r.fwd.left - r.text.right;
     console.log(`  ${r.label.padEnd(6)} cell ${fmt(r.cell).padStart(5)}   ‹ ${fmt(before).padStart(5)} | ${fmt(after).padStart(5)} ›`);
@@ -409,8 +417,14 @@ try {
     await page.locator("#stationbar").waitFor({ state: "visible" });
     await page.locator("#tonight-toggle").click();
     await page.locator("#tonight-all").waitFor({ state: "visible" });
+    // And the date-and-time entry (DEC-057): its field is a thumb target too.
+    await page.locator("#time-toggle").click();
+    await page.locator("#time-entry").waitFor({ state: "visible" });
+    await page.locator("#time-input").blur();
     await settle(page);
     const controls = check(vp.name, await measure(page), vp.width);
+    await page.locator("#time-toggle").click();
+    await page.locator("#time-entry").waitFor({ state: "hidden" });
     await page.locator("#tonight-toggle").click();
     await page.locator("#tonight-all").waitFor({ state: "hidden" });
     await page.locator("#station").click();
@@ -418,9 +432,10 @@ try {
 
     // Five quick taps are five steps. The taps land on the label's half of the
     // cell — the part of the hit box that is new — not on the glyph itself.
-    const before = await travelled(page);
+    const before = await when(page);
     const clockBefore = await clock(page);
-    assert.equal(before, "", `${vp.name}: the page starts travelled`);
+    assert.equal(await moved(page), false, `${vp.name}: the page starts travelled`);
+    assert.match(before, /^Wed Sep 2 · /, `${vp.name}: the date above the countdown is not today's ("${before}")`);
     // Geometry read at tap time: closing the editor moved the rail.
     const tapAt = async (name, side) => {
       const point = await page.evaluate(([label, s]) => {
@@ -434,12 +449,14 @@ try {
     };
     await tapAt("Forward one day", +1);
     await page.waitForTimeout(300);
-    assert.equal(await travelled(page), "Monday, September 7",
-      `${vp.name}: five quick taps forward did not advance exactly five days (${await travelled(page)})`);
+    assert.match(await when(page), /^Mon Sep 7 · /,
+      `${vp.name}: five quick taps forward did not advance exactly five days (${await when(page)})`);
+    assert.equal(await moved(page), true, `${vp.name}: five days on, the date is not marked as moved`);
     assert.equal(await clock(page), clockBefore, `${vp.name}: stepping a day moved the hour`);
     await tapAt("Back one day", -1);
     await page.waitForTimeout(300);
-    assert.equal(await travelled(page), "", `${vp.name}: five quick taps back did not return (${await travelled(page)})`);
+    assert.equal(await when(page), before, `${vp.name}: five quick taps back did not return (${await when(page)})`);
+    assert.equal(await moved(page), false, `${vp.name}: back at the present, the date is still marked as moved`);
     await page.evaluate(() => window.scrollTo(0, 0));
 
     // The Planets view with its second row open: the detail text, the photo's
@@ -498,21 +515,26 @@ try {
     await page.goto(target.href, { waitUntil: "networkidle" });
     await settle(page);
     const moon = await page.evaluate(() => {
-      const el = document.getElementById("moon-times");
-      const bay = el?.closest(".bay");
-      if (!el || !bay) return null;
+      // The moon's rise and set are two lines now, in the sun's shape (REQ-017).
+      const rise = document.getElementById("moon-rise");
+      const set = document.getElementById("moon-set");
+      const bay = rise?.closest(".bay");
+      if (!rise || !set || !bay) return null;
       const right = bay.getBoundingClientRect().right - parseFloat(getComputedStyle(bay).paddingRight);
-      const parts = [...el.querySelectorAll(".part")].map((p) => {
+      const parts = [...bay.querySelectorAll(".part, .phase")].map((p) => {
         const range = document.createRange(); range.selectNodeContents(p);
         return Math.max(...[...range.getClientRects()].map((r) => r.right));
       });
-      return { text: el.textContent.trim(), spill: Math.max(0, ...parts.map((r) => r - right)), over: el.scrollWidth - el.clientWidth };
+      return { text: rise.textContent.trim(), set: set.textContent.trim(), spill: Math.max(0, ...parts.map((r) => r - right)),
+        over: Math.max(rise.scrollWidth - rise.clientWidth, set.scrollWidth - set.clientWidth) };
     });
     assert(moon, `${vp.name}: no moon bay found`);
-    assert.match(moon.text, /no moonrise/, `${vp.name}: ${NO_MOONRISE_TIME} should have no moonrise, read "${moon.text}"`);
+    assert.equal(moon.text, "no moonrise today", `${vp.name}: ${NO_MOONRISE_TIME} should have no moonrise, read "${moon.text}"`);
+    // The day with no moonrise still has a moonset, and the bay now says when.
+    assert.match(moon.set, /^↓\d{1,2}:\d{2} [ap]m$/, `${vp.name}: the no-moonrise day lost its moonset, read "${moon.set}"`);
     assert(moon.spill <= 0.5 && moon.over <= 1,
-      `${vp.name}: "${moon.text}" spills ${fmt(moon.spill)}px past its bay (scroll overflow ${moon.over}px)`);
-    console.log(`touch: ${vp.name} "${moon.text}" fits its bay`);
+      `${vp.name}: "${moon.text}" / "${moon.set}" spills ${fmt(moon.spill)}px past its bay (scroll overflow ${moon.over}px)`);
+    console.log(`touch: ${vp.name} "${moon.text}" / "${moon.set}" fits its bay`);
     await context.close();
   }
 } finally {

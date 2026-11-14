@@ -91,6 +91,23 @@ export function scrubClock(
 }
 
 /**
+ * Going straight to a typed date and time (REQ-017, DEC-057).
+ *
+ * The same two cases as stepping, for the same reason. A live clock takes the
+ * instant as a travel offset and keeps running from it — type 9:00 pm and a
+ * minute later the dial reads 9:01. A held clock is pinned at the typed
+ * instant and stays there, because a hold that a typed time silently released
+ * would be a control doing something it did not say.
+ */
+export function setClock(
+  state: ClockState,
+  targetUnixMillis: number,
+): { readonly offsetMillis: number; readonly frozenAt: number | null } {
+  if (state.mode === "frozen") return { offsetMillis: 0, frozenAt: targetUnixMillis };
+  return { offsetMillis: targetUnixMillis - state.nowUnixMillis, frozenAt: null };
+}
+
+/**
  * What "return to the present" means (DEC-051).
  *
  * Clearing the travel offset is *not* enough while the clock is held: the offset

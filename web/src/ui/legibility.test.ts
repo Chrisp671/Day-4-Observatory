@@ -8,7 +8,9 @@
  * `outline:none` all fail here, each naming what it found.
  */
 import { describe, expect, it } from "vitest";
-import { CONTENT_FLOOR_PX, CONTENT_SELECTORS, TARGET_FLOOR_PX, TARGET_PX, TEXT_FLOOR_PX } from "./legibility";
+import {
+  CONTENT_FLOOR_PX, CONTENT_SELECTORS, FIELD_NO_ZOOM_PX, TARGET_FLOOR_PX, TARGET_PX, TEXT_FLOOR_PX,
+} from "./legibility";
 import { NUMERAL_FLOOR_PX } from "./dial";
 import { COMPASS_PX } from "./chart";
 import { SWATCH_H, SWATCH_W } from "./ringkey";
@@ -132,6 +134,75 @@ describe("the ring key, its echo and its hint (DEC-055)", () => {
     // The key is a group with a name, inside the ledger's header so it is
     // visible with the fold closed.
     expect(indexHtml).toMatch(/<div class="ledger-h">[\s\S]*?id="ring-key"[^>]*role="group"[^>]*aria-label="[^"]+"/);
+  });
+});
+
+describe("the date and time, and the controls that set them (REQ-017, DEC-057)", () => {
+  /** The declarations of one rule, by selector; the first rule that has it. */
+  const rule = (selector: string): string => {
+    const m = new RegExp(`(?:^|[}\\s])${selector.replace(/[.[\]"=:()]/g, "\\$&")}\\s*\\{([^}]*)\\}`).exec(css());
+    expect(m, `${selector} has no rule`).not.toBeNull();
+    return (m as RegExpExecArray)[1] as string;
+  };
+  /** One element's opening tag, by id. */
+  const tag = (id: string): string => {
+    const m = new RegExp(`<[a-z0-9]+\\b[^>]*\\bid="${id}"[^>]*>`).exec(indexHtml);
+    expect(m, `#${id} is missing`).not.toBeNull();
+    return (m as RegExpExecArray)[0];
+  };
+
+  it("puts the date and time above the countdown, and the event's time inside it", () => {
+    const when = indexHtml.indexOf('id="when"');
+    const hero = indexHtml.indexOf('class="hero"');
+    expect(when).toBeGreaterThan(0);
+    expect(hero).toBeGreaterThan(when);
+    expect(indexHtml).toMatch(/<div class="hero">[^\n]*id="hero-k"[^\n]*id="hero-v"[^\n]*id="hero-at"/);
+    // The line that used to say only the travelled date has left (DEC-026).
+    expect(indexHtml).not.toContain('id="travelled"');
+  });
+
+  it("takes no room for an event time that is not there, and marks a moved clock in gold", () => {
+    expect(rule(".hero i:empty")).toMatch(/display\s*:\s*none/);
+    expect(rule(".when.shifted")).toMatch(/color\s*:\s*var\(--sunlight\)/);
+  });
+
+  it("gives the moon a rise line and a set line where the sun has them", () => {
+    const sun = /id="rise"[\s\S]*?id="set"/.exec(indexHtml);
+    const moon = /id="moon-rise"[\s\S]*?id="moon-set"/.exec(indexHtml);
+    expect(sun).not.toBeNull();
+    expect(moon).not.toBeNull();
+    // The same two classes, in the same order: `.v` then `.s`.
+    expect(tag("rise")).toContain('class="v"');
+    expect(tag("moon-rise")).toContain('class="v"');
+    expect(tag("set")).toContain('class="s"');
+    expect(tag("moon-set")).toContain('class="s"');
+    expect(indexHtml).not.toContain('id="moon-times"');
+  });
+
+  it("makes the entry the browser's own date-and-time field, to the second, with a label", () => {
+    const input = tag("time-input");
+    expect(input).toContain('type="datetime-local"');
+    expect(input).toContain('step="1"');
+    expect(indexHtml).toMatch(/<label for="time-input">[^<]+<\/label>/);
+  });
+
+  it("sizes the field so a phone neither zooms on it nor misses it", () => {
+    const sizes = fontSizes().filter((f) => f.selector === ".timeentry input");
+    expect(sizes.length).toBeGreaterThan(0);
+    for (const f of sizes) expect(minimumPx(f.value), f.value).toBeGreaterThanOrEqual(FIELD_NO_ZOOM_PX);
+    expect(rule(".timeentry input")).toMatch(new RegExp(`min-height\\s*:\\s*${TARGET_PX}px`));
+  });
+
+  it("opens the entry from a word that is always on the rail, and hides it until then", () => {
+    const toggle = tag("time-toggle");
+    expect(toggle).toContain('aria-expanded="false"');
+    expect(toggle).toContain('aria-controls="time-entry"');
+    expect(indexHtml).toMatch(/id="time-toggle"[^>]*>SET TIME<\/button>/);
+    expect(tag("time-entry")).toMatch(/\bhidden\b/);
+    // `display:flex` on the row would otherwise beat the hidden attribute.
+    expect(rule(".timeentry[hidden]")).toMatch(/display\s*:\s*none/);
+    // Inside the rail's own group, so a reader meets it with the steppers.
+    expect(indexHtml).toMatch(/<div class="rail" role="group"[^>]*>[\s\S]*?id="time-toggle"[\s\S]*?id="time-entry"/);
   });
 });
 

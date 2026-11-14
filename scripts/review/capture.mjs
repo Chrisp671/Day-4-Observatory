@@ -74,7 +74,7 @@ export async function capture(url, output) {
         const beforeCanvas = await page.locator('canvas').evaluateAll((nodes) => nodes.map((node) => node.toDataURL()));
         if (state === 'month') {
           await page.getByRole('button', { name: 'Forward one month', exact: true }).click();
-          await page.waitForFunction(() => document.querySelector('#travelled')?.textContent?.includes('October'));
+          await page.waitForFunction(() => document.querySelector('#when')?.textContent?.includes('Oct '));
         } else if (state === 'tonight') {
           await page.locator('#tonight-toggle').click();
           await page.waitForFunction(() => document.querySelector('#tonight-toggle')?.getAttribute('aria-expanded') === 'true');

@@ -16,6 +16,8 @@ export const VIEWPORTS = [
 // as Day 4's second-row state did), and the Constellations chart as opened.
 export const STATES = ['loaded', 'month', 'tonight', 'planets', 'constellations'];
 export const FIXED_TIME = '2026-09-02T23:00:00.000Z';
+// The phone's tonight frame must hold at least this many whole ledger rows.
+export const LEDGER_ROWS_IN_FRAME = 3;
 
 export async function settle(page) {
   await page.evaluate(async () => {
@@ -121,14 +123,34 @@ export async function capture(url, output) {
           const afterCanvas = await page.locator('canvas').evaluateAll((nodes) => nodes.map((node) => node.toDataURL()));
           assert.notDeepEqual(afterCanvas, beforeCanvas, `${state} did not change the rendered canvases`);
         }
-        // Clicking scrolls controls into view; all screenshots use the same top-of-page frame.
-        await page.evaluate(() => window.scrollTo(0, 0));
+        // Clicking scrolls controls into view, so every state is framed from the top
+        // of the page, with one exception. On the phone the header, dial and time
+        // rail fill the 844 px viewport and the whole TONIGHT section starts below
+        // it, so a top-of-page frame of the tonight state repeats phone-loaded.png
+        // and shows none of the ledger it opened. That one frame starts at the
+        // section instead: its heading and ring key, then the expanded rows.
+        const ledgerFrame = viewport.name === 'phone' && state === 'tonight';
+        await page.evaluate((atLedger) => {
+          const section = atLedger ? document.getElementById('tonight-all').closest('section') : null;
+          const top = section ? section.getBoundingClientRect().top + window.scrollY : 0;
+          window.scrollTo({ left: 0, top: Math.round(top), behavior: 'instant' });
+        }, ledgerFrame);
         await settle(page);
+        if (ledgerFrame) {
+          // A picture cannot fail by itself: the rows must really be in the frame.
+          const rows = await page.locator('#tonight-all .lrow').evaluateAll((nodes) => nodes.filter((node) => {
+            const box = node.getBoundingClientRect();
+            return box.height > 0 && box.top >= 0 && box.bottom <= window.innerHeight;
+          }).length);
+          assert(rows >= LEDGER_ROWS_IN_FRAME, `${viewport.name}-${state}: the expanded TONIGHT ledger is not in the frame (${rows} whole rows)`);
+        }
         const file = `${viewport.name}-${state}.png`;
         await page.screenshot({ path: resolve(output, file), scale: 'css', fullPage: false, animations: 'disabled' });
         manifest.screenshots.push({ file, viewport: { width: viewport.width, height: viewport.height },
           state, canvasText: await page.evaluate(() => window.__reviewCanvasText),
-          scrollHeight: await page.evaluate(() => document.documentElement.scrollHeight), errors });
+          scrollHeight: await page.evaluate(() => document.documentElement.scrollHeight),
+          // Measured, not assumed: where the frame actually starts on the page.
+          scrollY: await page.evaluate(() => Math.round(window.scrollY)), errors });
         await writeFile(resolve(output, 'manifest.json'), JSON.stringify(manifest, null, 2));
         await context.close();
         assert.deepEqual(errors, [], `${file}: browser errors`);

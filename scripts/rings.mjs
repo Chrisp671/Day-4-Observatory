@@ -334,12 +334,6 @@ try {
     {
       const name = RING_ORDER.find(async (n) => (await ringTimes(page, n)) !== null) ?? "Saturn";
       const times = await ringTimes(page, name);
-      // `tap` scrolls to the top before it taps, so the dial has to be
-      // measured from there too. The key's buttons, clicked just above, sit
-      // below a 390×844 fold now that the rail carries six units and a third
-      // row (REQ-017), and clicking them leaves the page scrolled.
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await settle(page);
       const g = await geometry(page);
       const hour = (times.rise + sweepHours(times.rise, times.set) / 2) % 24;
       await tap(page, pointAt(g, hour, ringFraction(name)));

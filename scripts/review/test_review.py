@@ -242,6 +242,32 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(Incomplete):
             review.source_context(github, {'head': {'sha': 'a' * 40}}, changed)
 
+    def test_manual_path_allows_more_source_than_the_model_path(self):
+        files = {f'web/src/f{n}.ts': 'y' * 200_000 for n in range(3)}  # 600 KB in all
+        github = unittest.mock.Mock()
+        github.call.return_value = {'tree': [{'path': p, 'type': 'blob', 'mode': '100644', 'size': len(v)} for p, v in files.items()]}
+        github.file.side_effect = lambda p, sha: files[p]
+        changed = [{'filename': p, 'status': 'modified'} for p in files]
+        with self.assertRaises(Incomplete):
+            review.source_context(github, {'head': {'sha': 'a' * 40}}, changed)
+        self.assertEqual(set(review.source_context(github, {'head': {'sha': 'a' * 40}}, changed, 'manual')), set(files))
+        files['web/src/f3.ts'] = 'y' * 200_001  # 800,001 in all: over the manual limit too
+        github.call.return_value = {'tree': [{'path': p, 'type': 'blob', 'mode': '100644', 'size': len(v)} for p, v in files.items()]}
+        with self.assertRaises(Incomplete):
+            review.source_context(github, {'head': {'sha': 'a' * 40}}, [{'filename': p, 'status': 'modified'} for p in files], 'manual')
+
+    def test_manual_path_allows_a_larger_payload_and_the_model_path_does_not(self):
+        github = FakeGitHub()
+        diff = 'diff --git a/web/src/a.ts b/web/src/a.ts\n--- a/web/src/a.ts\n+++ b/web/src/a.ts\n@@ -1,1 +1,1 @@\n-old\n+' + 'z' * 750_000 + '\n'
+        github.call = lambda path, data=None, method=None, **kw: (diff if kw.get('accept') else github.pr) if path == '/pulls/7' \
+            else FakeGitHub.call(github, path, data, method, **kw)
+        with patch('review.source_context', return_value={'web/src/a.ts': 'one line'}):
+            with self.assertRaises(Incomplete):
+                review.review_request(github, github.pr, github.changes, 'anthropic', {}, 'rubric')
+            _, evidence, _ = review.review_request(github, github.pr, github.changes, 'anthropic', {}, 'rubric', 'manual')
+        self.assertGreater(len(evidence), 700_000)
+        self.assertEqual(review.LIMITS['model'], {'source': 500_000, 'payload': 700_000})
+
     def test_review_request_sends_the_plan_as_an_excerpt_around_its_changes(self):
         github = FakeGitHub()
         plan = '\n'.join(f'- DEC-{n:03d} entry' for n in range(1, 400))

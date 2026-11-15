@@ -48,7 +48,8 @@ def publish(github, inputs, run_url, actor=''):
     changed = changed_files(github, pr)
     run = evidence_run(github, pr)
     evidence_url = f'https://github.com/{github.repo}/actions/runs/{run["id"]}/attempts/{run["run_attempt"]}'
-    sources = source_context(github, pr, changed)
+    # The same context the helper prepared under, so findings validate against it.
+    sources = source_context(github, pr, changed, 'manual')
     review = validate_review(raw, sources)
     conclusion = 'failure' if any(f['severity'] == 'BLOCKING' for f in review['findings']) else 'success'
     message = render(review, github.repo, sha, MANUAL_REVIEWER[0], MANUAL_REVIEWER_LABEL, evidence_url, pr['base']['sha'], builder)

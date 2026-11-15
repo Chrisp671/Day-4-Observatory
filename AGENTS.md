@@ -72,7 +72,10 @@ accepts the status only from GitHub Actions, never from a personal token:
    checkout of `main` (read-only; refuses a moved head, a missing or failed
    evidence run, a bad builder line, or an `openai` builder).
 2. Give `instructions.txt`, `evidence.json` and the eight screenshots to
-   GPT-6.1 Sol through T3/Codex; save its JSON reply as `reply.json`.
+   GPT-6.1 Sol through T3/Codex; save its JSON reply as `reply.json`. For a
+   large PR give it the `parts/` folder in place of `evidence.json`, in a
+   Codex thread of its own, read in ~80-line slices from `parts/INDEX.txt`
+   (DEC-058; `scripts/review/README.md`, "Large reviews").
 3. `gh -R Chrisp671/Day-4-Observatory workflow run review-manual.yml -f pr=<n>
    -f sha=<sha> -F review=@reply.json` (or `-f review="$(cat reply.json)"`).
    The publisher validates the reply exactly as a model's, for the current

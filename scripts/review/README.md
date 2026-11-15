@@ -132,6 +132,12 @@ The exact procedure, from a checkout of `main`:
    the reporter would send a model, built by `review_request` in `review.py`),
    the eight screenshots, `manifest.json` and `meta.json` (PR, head, base,
    builder family, evidence run URL). Nothing is written to GitHub.
+   It builds under the manual limits in `review.py` `LIMITS`: 800,000
+   characters of whole source files and a 1,000,000-character payload, where
+   the model path keeps 500,000 and 700,000 for its provider requests; a
+   feature PR with its browser drivers and tests fits without being split.
+   `manual_publish.py` rebuilds the source context under the same limits, so
+   finding locations validate against what Sol saw.
 2. The orchestrator gives `instructions.txt`, `evidence.json` and the eight
    screenshots to GPT-6.1 Sol through T3/Codex and saves the JSON reply as
    `reply.json`. Plain JSON or one whole-response code fence; nothing else.

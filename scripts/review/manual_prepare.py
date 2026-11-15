@@ -75,7 +75,7 @@ def prepare(github, number, outdir):
     run = evidence_run(github, pr)
     images, manifest = read_artifact(github.artifact(run['id']))
     rubric = github.file(RUBRIC, DEFAULT_BRANCH)
-    instructions, evidence, sources = review_request(github, pr, changed, builder, manifest, rubric)
+    instructions, evidence, sources = review_request(github, pr, changed, builder, manifest, rubric, 'manual')
     fresh = github.call(f'/pulls/{number}')
     require(fresh['state'] == 'open' and fresh['head']['sha'] == sha and fresh['body'] == pr['body']
             and fresh['base']['sha'] == pr['base']['sha'],

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { frame } from "../engine/frame";
+import { moonDay, moonSetOfDay } from "../engine/planets";
+import { fmt12 } from "./clock12";
+import { parseEntry } from "./timeentry";
 import { CONSTELLATIONS, skyEntry } from "./constellations";
 import { RING_ORDER } from "../ui/clockface";
 import { type PlinthInput, sceneConstellation, scenePlanets, sceneReadouts, sceneRete, sceneSpoken, sceneTonight } from "./scene-plinth";
@@ -87,10 +90,194 @@ describe("sceneReadouts", () => {
     expect(out.clock).toMatch(/^\d{1,2}:\d{2} [ap]m$/);
   });
 
-  it("shows the travelled date only when the instrument has left the present", () => {
-    expect(sceneReadouts(input(NOON, null)).travelledDate).toBe("");
-    const travelled = sceneReadouts(input(NOON, null, NOON - 86400000)).travelledDate;
-    expect(travelled).toMatch(/^[A-Z][a-z]+day, [A-Z][a-z]+ \d+$/);
+});
+
+/**
+ * REQ-017, item by item as Parker wrote them. The wording itself is pinned in
+ * hero.test.ts and timeentry.test.ts; these hold the Scene to it — that the
+ * line above the hero is the displayed instant, that the event's time is the
+ * instant the countdown counts to, and that the moon's lines agree with the
+ * engine's own day.
+ */
+describe("the date and time above the countdown (REQ-017)", () => {
+  const DATE = /^(Sun|Mon|Tue|Wed|Thu|Fri|Sat) [A-Z][a-z]{2} \d{1,2}(, \d{4})?$/;
+
+  it("is always on the page: the date and the time to the minute while live", () => {
+    const [date, clock, ...rest] = sceneReadouts(input(NOON, null)).when.split(" · ");
+    expect(rest).toEqual([]);
+    expect(date).toMatch(DATE);
+    expect(clock).toBe(fmt12(NOON));
+  });
+
+  it("follows the displayed instant, not the real one, and shows the seconds once moved", () => {
+    const displayed = NOON + 3 * 86400000 + 25000;
+    const out = sceneReadouts(input(displayed, null, NOON));
+    const [date, clock] = out.when.split(" · ");
+    expect(date).toMatch(DATE);
+    expect(clock).toMatch(/^\d{1,2}:\d{2}:\d{2} [ap]m$/);
+    // The same instant the station bay's clock reads, to the minute.
+    expect(clock?.replace(/:\d{2} /, " ")).toBe(out.clock);
+    expect(out.when).not.toBe(sceneReadouts(input(NOON, null)).when);
+  });
+
+  it("changes its date when the displayed instant crosses into another day, either way", () => {
+    const dates = [-2, -1, 0, 1, 2].map((d) => sceneReadouts(input(NOON + d * 86400000, null, NOON)).when.split(" · ")[0]);
+    expect(new Set(dates).size).toBe(5);
+  });
+
+  it("names the year once a journey has left the present one", () => {
+    expect(sceneReadouts(input(NOON + 400 * 86400000, null, NOON)).when).toMatch(/, 2027 · /);
+    expect(sceneReadouts(input(NOON, null)).when).not.toMatch(/\d{4}/);
+  });
+});
+
+describe("when the event falls, beside the countdown (REQ-017)", () => {
+  it("is the instant the countdown counts to, in the clock's own words", () => {
+    for (const t of [NOON, NIGHT]) {
+      const at = input(t, null);
+      const out = sceneReadouts(at);
+      const next = out.heroKind === "Sunset in" ? at.frame.sun.nextSetUnixMillis : at.frame.sun.nextRiseUnixMillis;
+      expect(next).not.toBeNull();
+      expect(out.heroAt.startsWith(`at ${fmt12(next as number)}`), out.heroAt).toBe(true);
+    }
+  });
+
+  it("names the event's date exactly when it is not the displayed one", () => {
+    for (const t of [NOON, NIGHT, NOON + 9 * 3600000, NOON + 14 * 3600000]) {
+      const at = input(t, null);
+      const out = sceneReadouts(at);
+      const next = (out.heroKind === "Sunset in" ? at.frame.sun.nextSetUnixMillis : at.frame.sun.nextRiseUnixMillis) as number;
+      const sameDate = new Date(next).toDateString() === new Date(t).toDateString();
+      expect(/ (Sun|Mon|Tue|Wed|Thu|Fri|Sat) [A-Z][a-z]{2} \d{1,2}/.test(out.heroAt), `${out.heroAt} @ ${new Date(t).toString()}`)
+        .toBe(!sameDate);
+    }
+  });
+
+  it("is silent when there is no next event, as the countdown is", () => {
+    // Midsummer at 85°N: the sun neither rises nor sets.
+    const t = NOON;
+    const request: SceneRequest = { displayedUnixMillis: t, nowUnixMillis: t, station: { lat: 85, lon: -74 }, lit: null, chart: null };
+    const out = sceneReadouts({ frame: frame(t, 85, -74), request });
+    expect(out.heroKind).toBe("Polar day or night");
+    expect(out.heroValue).toBe("");
+    expect(out.heroAt).toBe("");
+    // The date and time above it do not depend on the sun.
+    expect(out.when).not.toBe("");
+  });
+});
+
+describe("the date-and-time field's value (DEC-057)", () => {
+  it("is the displayed instant to the second, in the field's own dialect", () => {
+    const displayed = NOON + 5 * 86400000 + 42000;
+    const out = sceneReadouts(input(displayed, null, NOON));
+    expect(out.entryValue).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+    expect(parseEntry(out.entryValue)).toBe(displayed);
+  });
+});
+
+describe("the moon's rise and set, in the sun's own shape (REQ-017)", () => {
+  const DAY = 86400000;
+  /** Sixty consecutive days at the station, each with the Scene's two lines
+   * and the engine's own answers for that calendar day. */
+  const days = Array.from({ length: 60 }, (_, i) => {
+    const t = NOON + i * DAY;
+    const out = sceneReadouts(input(t, null));
+    return {
+      t, rise: out.moonRise, set: out.moonSet, sunRise: out.sunRise, sunSet: out.sunSet,
+      day: moonDay(t, NYC.lat, NYC.lon), lone: moonSetOfDay(t, NYC.lat, NYC.lon),
+    };
+  });
+  const TIME = "\\d{1,2}:\\d{2} [ap]m";
+
+  it("words a rise and a set exactly as the sun's are worded", () => {
+    const both = days.filter((d) => d.day.riseUnixMillis !== null && d.day.setUnixMillis !== null);
+    expect(both.length).toBeGreaterThan(50);
+    for (const d of both) {
+      expect(d.rise).toMatch(new RegExp(`^↑${TIME}$`));
+      expect(d.set).toMatch(new RegExp(`^↓${TIME}( (Sun|Mon|Tue|Wed|Thu|Fri|Sat))?$`));
+      // The sun's lines, for the same day, in the same shape.
+      expect(d.sunRise).toMatch(new RegExp(`^↑${TIME}$`));
+      expect(d.sunSet).toMatch(new RegExp(`^↓${TIME}$`));
+    }
+  });
+
+  it("gives the engine's own times, the set tagged with its weekday when it falls on another date", () => {
+    for (const d of days) {
+      if (d.day.riseUnixMillis === null || d.day.setUnixMillis === null) continue;
+      expect(d.rise).toBe(`↑${fmt12(d.day.riseUnixMillis)}`);
+      expect(d.set.startsWith(`↓${fmt12(d.day.setUnixMillis)}`)).toBe(true);
+      const nextDate = new Date(d.day.setUnixMillis).getDate() !== new Date(d.t).getDate();
+      expect(/ [A-Z][a-z]{2}$/.test(d.set), d.set).toBe(nextDate);
+    }
+    // Both kinds occur: a set the same evening, and one after midnight.
+    expect(days.some((d) => / [A-Z][a-z]{2}$/.test(d.set))).toBe(true);
+    expect(days.some((d) => new RegExp(`^↓${TIME}$`).test(d.set))).toBe(true);
+  });
+
+  it("says so in words on the day with no moonrise, and still gives that day's moonset", () => {
+    const noRise = days.filter((d) => d.day.riseUnixMillis === null);
+    expect(noRise.length).toBeGreaterThanOrEqual(1);
+    for (const d of noRise) {
+      expect(d.rise).toBe("no moonrise today");
+      // From 40°N the moon that rose the evening before sets on this day: the
+      // readout used to stop at "no moonrise today" and hide this time.
+      expect(d.lone).not.toBeNull();
+      expect(d.set).toBe(`↓${fmt12(d.lone as number)}`);
+      expect(new Date(d.lone as number).toDateString()).toBe(new Date(d.t).toDateString());
+    }
+  });
+
+  it("never leaves either line empty, and never shows a dash for a missing time", () => {
+    for (const d of days) {
+      expect(d.rise).not.toBe("");
+      expect(d.set).not.toBe("");
+      expect(`${d.rise}${d.set}`).not.toMatch(/—|null|undefined|NaN/);
+    }
+  });
+
+  /** A year of days at 85°N, where the moon is up for days, down for days,
+   * and in between rises and sets: each with the Scene's two lines and the
+   * engine's own day. Day-anchoring is by the machine's local midnight, so
+   * WHICH days hold which case moves with the time zone; a year is long
+   * enough that every case turns up in all of them, and the assertions below
+   * are about each day's own engine answer, never about a date. */
+  const POLAR = { lat: 85, lon: -74 };
+  const polar = Array.from({ length: 365 }, (_, i) => {
+    const t = NOON + i * DAY;
+    const request: SceneRequest = { displayedUnixMillis: t, nowUnixMillis: t, station: POLAR, lit: null, chart: null };
+    const out = sceneReadouts({ frame: frame(t, POLAR.lat, POLAR.lon), request });
+    return { t, rise: out.moonRise, set: out.moonSet, day: moonDay(t, POLAR.lat, POLAR.lon), lone: moonSetOfDay(t, POLAR.lat, POLAR.lon) };
+  });
+
+  it("words every polar day as one row of its own table, decided by the engine's day alone", () => {
+    for (const d of polar) {
+      const where = new Date(d.t).toDateString();
+      if (d.day.riseUnixMillis !== null && d.day.setUnixMillis !== null) {
+        expect(d.rise, where).toBe(`↑${fmt12(d.day.riseUnixMillis)}`);
+        expect(d.set.startsWith(`↓${fmt12(d.day.setUnixMillis)}`), `${where}: ${d.set}`).toBe(true);
+      } else if (d.day.riseUnixMillis !== null) {
+        expect(d.rise, where).toBe(`↑${fmt12(d.day.riseUnixMillis)}`);
+        expect(d.set, where).toBe("no moonset for two days");
+      } else if (d.lone !== null) {
+        expect(d.rise, where).toBe("no moonrise today");
+        expect(d.set, where).toBe(`↓${fmt12(d.lone)}`);
+      } else {
+        expect(d.rise, where).toBe("no moonrise today");
+        expect(d.set, where).toBe("no moonset today");
+      }
+    }
+  });
+
+  it("meets all four rows in a polar year, so none of the wordings is untested", () => {
+    const count = (pick: (d: (typeof polar)[number]) => boolean): number => polar.filter(pick).length;
+    // A rise and a set; a rise the moon then stays up from; a set with no
+    // rise that day; and the days it neither rises nor sets.
+    expect(count((d) => d.day.riseUnixMillis !== null && d.day.setUnixMillis !== null)).toBeGreaterThan(0);
+    expect(count((d) => d.day.riseUnixMillis !== null && d.day.setUnixMillis === null)).toBeGreaterThan(0);
+    expect(count((d) => d.day.riseUnixMillis === null && d.lone !== null)).toBeGreaterThan(0);
+    expect(count((d) => d.day.riseUnixMillis === null && d.lone === null)).toBeGreaterThan(0);
+    expect(polar.some((d) => d.set === "no moonset for two days")).toBe(true);
+    expect(polar.some((d) => d.rise === "no moonrise today" && d.set === "no moonset today")).toBe(true);
   });
 });
 

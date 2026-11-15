@@ -8,7 +8,7 @@
  * day-of-month (Jan 31 + 1 month = Feb 28/29, never Mar 2-3).
  */
 
-export type StepUnit = "minute" | "hour" | "day" | "phase" | "month" | "year" | "century";
+export type StepUnit = "second" | "minute" | "hour" | "day" | "phase" | "month" | "year" | "century";
 
 export type StepDirection = 1 | -1;
 
@@ -36,6 +36,8 @@ function stepCalendar(base: Date, years: number, months: number, days: number): 
 export function stepTime(unixMillis: number, unit: StepUnit, dir: StepDirection): number {
   const base = new Date(unixMillis);
   switch (unit) {
+    case "second":
+      return unixMillis + dir * 1000;
     case "minute":
       return unixMillis + dir * 60000;
     case "hour":
@@ -53,8 +55,12 @@ export function stepTime(unixMillis: number, unit: StepUnit, dir: StepDirection)
   }
 }
 
-/** Display order and labels for the control strip. */
+/** Display order and labels for the control strip, finest first. The second
+ * and the minute are on the rail because Parker asked for them there
+ * (REQ-017): "I still need to be able to move the time by the minutes and
+ * possibly seconds in the area with the back and forward buttons." */
 export const STEP_UNITS: readonly { readonly unit: StepUnit; readonly label: string }[] = [
+  { unit: "second", label: "SEC" },
   { unit: "minute", label: "MIN" },
   { unit: "hour", label: "HOUR" },
   { unit: "day", label: "DAY" },

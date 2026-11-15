@@ -2,7 +2,7 @@
  * The frozen clock (DEC-051). Four rules, and the reason each one is what it is.
  */
 import { describe, expect, it } from "vitest";
-import { clockAt, needsTick, returnToPresent, scrubClock, stepClock } from "./freeze";
+import { clockAt, needsTick, returnToPresent, scrubClock, setClock, stepClock } from "./freeze";
 import { stepTime, type StepUnit } from "./timecontrol";
 
 const T = (iso: string): number => new Date(iso).getTime();
@@ -232,5 +232,34 @@ describe("returning to the present", () => {
     expect(travelled.displayedUnixMillis).toBe(T("2026-10-02T15:00:00Z"));
     const next = returnToPresent();
     expect(clockAt(now, next.offsetMillis, next.frozenAt).displayedUnixMillis).toBe(now);
+  });
+});
+
+describe("going to a typed date and time (DEC-057)", () => {
+  const now = T("2026-11-14T20:00:00Z");
+  const target = T("2026-12-24T21:00:00Z");
+
+  it("moves a live clock to the typed instant and lets it run on from there", () => {
+    const next = setClock(clockAt(now, 5 * HOUR, null), target);
+    expect(next.frozenAt).toBeNull();
+    expect(clockAt(now, next.offsetMillis, next.frozenAt).displayedUnixMillis).toBe(target);
+    // A minute of real time later, the dial reads a minute past what was typed.
+    expect(clockAt(now + 60000, next.offsetMillis, next.frozenAt).displayedUnixMillis).toBe(target + 60000);
+  });
+
+  it("pins a held clock at the typed instant without releasing the hold", () => {
+    const held = clockAt(now, 0, T("2026-11-14T23:00:00Z"));
+    const next = setClock(held, target);
+    expect(next.frozenAt).toBe(target);
+    const later = clockAt(now + 3 * HOUR, next.offsetMillis, next.frozenAt);
+    expect(later.mode).toBe("frozen");
+    expect(later.displayedUnixMillis).toBe(target);
+  });
+
+  it("is undone by NOW like any other journey", () => {
+    const next = setClock(clockAt(now, 0, null), target);
+    expect(next.offsetMillis).not.toBe(0);
+    const back = returnToPresent();
+    expect(clockAt(now, back.offsetMillis, back.frozenAt).displayedUnixMillis).toBe(now);
   });
 });

@@ -15,7 +15,7 @@ import { loadStation, saveStation, type Station } from "./app/location";
 import { loadMode, saveMode, type Mode } from "./app/mode";
 import { hintSeen, markHintSeen } from "./app/hint";
 import { chartLoader, type Chart } from "./app/charts";
-import { clockAt, needsTick, returnToPresent, scrubClock, stepClock } from "./app/freeze";
+import { clockAt, needsTick, returnToPresent, scrubClock, setClock, stepClock } from "./app/freeze";
 import {
   ErrorBuffer,
   composeReport,
@@ -25,6 +25,7 @@ import {
 } from "./app/erroreport";
 import { drawChart } from "./ui/chart";
 import { stepTime, type StepUnit } from "./app/timecontrol";
+import { parseEntry } from "./app/timeentry";
 import { drawDial } from "./ui/dial";
 import { drawEarth } from "./ui/earth";
 import { drawFiducial } from "./ui/fiducial";
@@ -148,6 +149,16 @@ const shell = bind(document, {
     frozenAt = frozenAt === null ? clockAt(Date.now(), offsetMillis, null).displayedUnixMillis : null;
     if (frozenAt === null) offsetMillis = 0;
     shell.showFrozen(frozenAt !== null);
+    tick();
+  },
+  onTimeEntry: (value: string) => {
+    // What the field holds is not trusted to be a time: cleared, or a year
+    // still being typed, it is no instant, and the dial stays where it is.
+    const target = parseEntry(value);
+    if (target === null) return;
+    const next = setClock(clockAt(Date.now(), offsetMillis, frozenAt), target);
+    offsetMillis = next.offsetMillis;
+    frozenAt = next.frozenAt;
     tick();
   },
   onReport: () => {

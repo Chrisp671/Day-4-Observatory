@@ -9,9 +9,10 @@
  * and everything the page shows arrives as a Scene already worded.
  *
  * The shell does three things and no more:
- *   1. bind(): find the elements once, wire input (steppers, NOW, station
- *      entry, the TONIGHT fold, the tappable ledger rows, the ring key, sun
- *      drag and the ring tap) to the handlers it is given.
+ *   1. bind(): find the elements once, wire input (steppers, NOW, HOLD,
+ *      the date-and-time entry, station entry, the TONIGHT fold, the tappable
+ *      ledger rows, the ring key, sun drag and the ring tap) to the handlers
+ *      it is given.
  *   2. paint(scene): write every readout, row, class and attribute from the
  *      Scene. Idempotent; called once per tick.
  *   3. fit(): size the canvases to the stage and report the face radius.
@@ -23,7 +24,8 @@ import { GLANCE_ROWS } from "./scene-consts";
 import { parseCoordinate, type Station } from "./location";
 import { MODES, stepMode, type Mode } from "./mode";
 import { STEP_UNITS, type StepUnit } from "./timecontrol";
-import { hitSun, pointToDialHours, shortestHourDelta } from "./scrub";
+import { beginDrag, hitSun, moveDrag, type DragState } from "./scrub";
+import { ENTRY_MAX, ENTRY_MIN } from "./timeentry";
 import { isTap, ringAt } from "./ringtap";
 import { RING_HINT } from "./hint";
 import { FACE } from "../ui/clockface";
@@ -39,15 +41,17 @@ export const IDS = {
   transcript: "sky-transcript",
   verseText: "verse-text",
   verseRef: "verse-ref",
+  when: "when",
   heroKind: "hero-k",
   heroValue: "hero-v",
-  travelled: "travelled",
+  heroAt: "hero-at",
   zoneNote: "zone-note",
   passion: "passion",
   sunRise: "rise",
   sunSet: "set",
   moonPhase: "moon",
-  moonTimes: "moon-times",
+  moonRise: "moon-rise",
+  moonSet: "moon-set",
   station: "station",
   stationBay: "station-bay",
   stationBar: "stationbar",
@@ -61,6 +65,10 @@ export const IDS = {
   steppers: "steppers",
   now: "now",
   freeze: "freeze",
+  /* Typing a date and time (DEC-057): the word that opens it, the row, the field. */
+  timeToggle: "time-toggle",
+  timeEntry: "time-entry",
+  timeInput: "time-input",
   /* Error reporting (DEC-041). */
   trouble: "trouble",
   troubleNote: "trouble-note",
@@ -112,6 +120,9 @@ export interface ShellHandlers {
   readonly onNow: () => void;
   /** Freeze-time (DEC-051): hold the clock where it is, or release it. */
   readonly onFreeze: () => void;
+  /** The viewer left a date and time in the entry field (DEC-057). The string
+   * is the field's own, handed over unread: the shell knows no instants. */
+  readonly onTimeEntry: (value: string) => void;
   /** The visitor asked to see the composed problem report. */
   readonly onReport: () => void;
   /** The visitor declined to report it and wants the notice gone (DEC-052). */
@@ -121,7 +132,9 @@ export interface ShellHandlers {
   /** The viewer tapped a planet row, a key button or a ring on the dial
    * (DEC-055); null releases the lit ring. */
   readonly onLit: (name: string | null) => void;
-  /** The sun was dragged by this many dial hours (may cross midnight). */
+  /** The sun was dragged by this many more dial hours since the last call.
+   * The calls of one drag add up to the whole journey, through as many
+   * midnights as the pointer went round (REQ-017). */
   readonly onScrub: (deltaHours: number) => void;
   /** The stage changed size; the app should refit and repaint. */
   readonly onResize: () => void;
@@ -180,8 +193,9 @@ export interface Shell {
 type Role = keyof typeof IDS;
 type Found = Partial<Record<Role, HTMLElement>>;
 
-/** The units the rail carries; drag the sun for minutes (see timecontrol.ts). */
-const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["hour", "day", "month", "phase"]);
+/** The units the rail carries, finest first: the second and the minute are
+ * there because Parker asked for them beside the others (REQ-017). */
+const SHOWN_UNITS: ReadonlySet<StepUnit> = new Set(["second", "minute", "hour", "day", "month", "phase"]);
 
 /** How many glance rows the ledger shows; the rest live behind the fold. */
 const GLANCE_SLOTS = GLANCE_ROWS;
@@ -251,6 +265,12 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   let DPR = 1;
   let chartW = 0;
   let lastScene: Scene | null = null;
+  /** The date-and-time field (DEC-057); null when the page has none. */
+  const timeInput = asInput(els.timeInput);
+  /** What the shell last wrote into that field. The field's own `value` is
+   * no guide: a browser hands "…T19:00:00" back as "…T19:00", so comparing
+   * against it would rewrite the field on every tick of a whole minute. */
+  let entryShown: string | null = null;
 
   const setText = (role: Role, text: string): void => {
     const e = els[role];
@@ -533,15 +553,17 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     const r = scene.readouts;
     setText("verseText", r.verse);
     setText("verseRef", r.verseRef);
+    setLine("when", r.when);
     setText("heroKind", r.heroKind);
     setText("heroValue", r.heroValue);
-    setText("travelled", r.travelledDate);
+    setText("heroAt", r.heroAt);
     setText("zoneNote", r.zoneNote);
     setText("passion", r.passion);
     setLine("sunRise", r.sunRise);
     setLine("sunSet", r.sunSet);
     setText("moonPhase", r.moonPhase);
-    setLine("moonTimes", r.moonTimes);
+    setLine("moonRise", r.moonRise);
+    setLine("moonSet", r.moonSet);
     setText("station", r.station);
     setText("clock", r.clock);
     setText("zone", r.zone);
@@ -553,7 +575,14 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
     doc.documentElement.style.setProperty("--print-1", scene.light.field);
 
     els.clock?.classList.toggle("shifted", scene.marks.travelled);
+    els.when?.classList.toggle("shifted", scene.marks.travelled);
     els.now?.classList.toggle("armed", scene.marks.travelled);
+    // The entry shows the instant on the dial — but never while the viewer is
+    // in the field, or every tick would overwrite what they are typing.
+    if (timeInput !== null && doc.activeElement !== timeInput && entryShown !== r.entryValue) {
+      timeInput.value = r.entryValue;
+      entryShown = r.entryValue;
+    }
 
     paintKey(scene.planets, scene.rete);
     paintGlance(scene.tonight.glance, scene.rete);
@@ -733,6 +762,36 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
   /* ————— freeze: hold the clock, keep the controls (DEC-051) ————— */
   els.freeze?.addEventListener("click", () => handlers.onFreeze());
 
+  /* ————— typing a date and time (DEC-057) —————
+     SET TIME is a word on the rail that opens a row holding the browser's own
+     date-and-time field: on a phone that is the system's picker, and nobody
+     has to learn ours. The field's value is handed to the app as it stands;
+     an instant is the app's business. Leaving the field lets the next paint
+     put the dial's own instant back in it, so a value the app could not use
+     (a cleared field, a year still being typed) never lingers as if it took. */
+  if (timeInput !== null) {
+    timeInput.min = ENTRY_MIN;
+    timeInput.max = ENTRY_MAX;
+    timeInput.addEventListener("change", () => {
+      // The field now holds the viewer's words, not ours.
+      entryShown = null;
+      handlers.onTimeEntry(timeInput.value);
+    });
+    timeInput.addEventListener("blur", () => {
+      entryShown = null;
+      if (lastScene !== null) paint(lastScene);
+    });
+  }
+  els.timeToggle?.addEventListener("click", () => {
+    const row = els.timeEntry;
+    if (row === undefined) return;
+    const open = row.hidden;
+    row.hidden = !open;
+    els.timeToggle?.setAttribute("aria-expanded", String(open));
+    // As the station entry does: opening it puts the reader in the field.
+    if (open) timeInput?.focus();
+  });
+
   /* ————— error reporting (DEC-041) —————
      The button opens a panel and nothing else: the report is already composed,
      and no handler here transmits anything, because there is nowhere to transmit
@@ -815,13 +874,23 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
      The sun is asked first, so a press on the sun is always the start of a
      drag and never a ring. A press on a ring that then travels past the tap
      slop is a drag that lights nothing; only a press and release that stay
-     put is a tap. Tapping the lit ring releases it. */
+     put is a tap. Tapping the lit ring releases it.
+
+     ONE pointer owns a gesture, from its press to its release (REQ-017). A
+     second finger resting on the dial used to be read as the drag's own
+     moves: every delta was then measured against a point that never went
+     round, the turns could not add up, and after a full turn the day was back
+     where it began — Parker's "it jumps back to the beginning". A finger that
+     is not the one that pressed is now not part of the gesture at all. */
   if (dial !== null) {
-    let dragging = false;
-    let lastDragHours = 0;
+    /** The pointer the gesture in progress belongs to; null between gestures. */
+    let owner: number | null = null;
+    /** The sun drag in progress (app/scrub.ts), and the hours already reported. */
+    let drag: DragState | null = null;
+    let reportedHours = 0;
     let pressedRing: string | null = null;
     let pressedAt = { x: 0, y: 0 };
-    const point = (e: PointerEvent): { x: number; y: number } => {
+    const point = (e: { clientX: number; clientY: number }): { x: number; y: number } => {
       const rect = dial.getBoundingClientRect();
       return {
         x: (e.clientX - rect.left) * DPR - W / 2,
@@ -832,32 +901,75 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       lastScene !== null && hitSun(p.x, p.y, lastScene.sun.hours, R);
     const overRing = (p: { x: number; y: number }): string | null =>
       lastScene === null ? null : ringAt(p.x, p.y, R, lastScene.rete);
-    dial.addEventListener("pointerdown", (e) => {
-      const p = point(e);
+    /** Keep the pointer's moves coming to the dial when it leaves it. A
+     * pointer the browser has already let go of cannot be captured, and that
+     * is no reason to lose the press: a touch is delivered to the element it
+     * began on either way. */
+    const capture = (id: number): void => {
+      try {
+        dial.setPointerCapture(id);
+      } catch {
+        /* not capturable: the gesture carries on without it */
+      }
+    };
+    /** Every position the pointer passed through since the last event. A busy
+     * frame folds several moves into one; the ones in between are what keep a
+     * fast turn from being read as the short way back. */
+    const samples = (e: PointerEvent): readonly PointerEvent[] => {
+      const coalesced = typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
+      return coalesced.length > 0 ? coalesced : [e];
+    };
+    /** Carry the drag through these positions and report what they added.
+     * One report however many positions: the app repaints on each, and the
+     * sum is what matters. */
+    const advance = (positions: readonly { clientX: number; clientY: number }[]): void => {
+      if (drag === null) return;
+      for (const position of positions) {
+        const p = point(position);
+        drag = moveDrag(drag, p.x, p.y, R);
+      }
+      const delta = drag.totalHours - reportedHours;
+      if (delta === 0) return;
+      reportedHours = drag.totalHours;
+      handlers.onScrub(delta);
+    };
+    const end = (): void => {
+      owner = null;
+      drag = null;
       pressedRing = null;
+      dial.style.cursor = "default";
+    };
+    dial.addEventListener("pointerdown", (e) => {
+      // A gesture is under way and this is another finger: not part of it. The
+      // same pointer pressing again (a mouse has only one) starts afresh.
+      if (owner !== null && e.pointerId !== owner) return;
+      end();
+      const p = point(e);
       if (overSun(p)) {
-        dragging = true;
-        lastDragHours = pointToDialHours(p.x, p.y);
-        dial.setPointerCapture(e.pointerId);
+        owner = e.pointerId;
+        drag = beginDrag(p.x, p.y);
+        reportedHours = 0;
+        capture(e.pointerId);
         dial.style.cursor = "grabbing";
         e.preventDefault();
         return;
       }
       const name = overRing(p);
       if (name === null) return;
+      owner = e.pointerId;
       pressedRing = name;
       pressedAt = p;
-      dial.setPointerCapture(e.pointerId);
+      capture(e.pointerId);
       e.preventDefault();
     });
     dial.addEventListener("pointermove", (e) => {
+      if (owner !== null && e.pointerId !== owner) return;
+      if (drag !== null) {
+        advance(samples(e));
+        return;
+      }
       const p = point(e);
-      if (dragging) {
-        const cur = pointToDialHours(p.x, p.y);
-        const delta = shortestHourDelta(lastDragHours, cur);
-        lastDragHours = cur;
-        handlers.onScrub(delta);
-      } else if (pressedRing !== null) {
+      if (pressedRing !== null) {
         // Once a press has travelled past the slop it is a drag for good:
         // coming back to where it started does not make it a tap again.
         if (!isTap(p.x - pressedAt.x, p.y - pressedAt.y, DPR)) pressedRing = null;
@@ -866,6 +978,11 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
       }
     });
     dial.addEventListener("pointerup", (e) => {
+      if (owner !== null && e.pointerId !== owner) return;
+      // Where the pointer was let go is the drag's last position. A browser
+      // may fold the final move into the release, and the drag would then stop
+      // a step short of the finger.
+      advance([e]);
       if (pressedRing !== null && lastScene !== null) {
         const p = point(e);
         if (isTap(p.x - pressedAt.x, p.y - pressedAt.y, DPR)) {
@@ -874,14 +991,11 @@ export function bind(doc: Document, handlers: ShellHandlers): Shell {
           handlers.onLit(litNow === pressedRing ? null : pressedRing);
         }
       }
-      pressedRing = null;
-      dragging = false;
-      dial.style.cursor = "default";
+      end();
     });
-    dial.addEventListener("pointercancel", () => {
-      pressedRing = null;
-      dragging = false;
-      dial.style.cursor = "default";
+    dial.addEventListener("pointercancel", (e) => {
+      if (owner !== null && e.pointerId !== owner) return;
+      end();
     });
   }
 

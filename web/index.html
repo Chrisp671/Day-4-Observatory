@@ -69,19 +69,43 @@
       display:flex;align-items:center;justify-content:center;gap:10px}
     .verse-ref::before,.verse-ref::after{content:"";width:18px;height:1px;
       background:var(--gold-soft);opacity:.55}
-    .hero{display:flex;align-items:baseline;gap:.45em;justify-content:center;
-      pointer-events:none;white-space:nowrap;margin-top:clamp(8px,1.6vh,16px);
+    /* The date and time the instrument is showing (REQ-017, DEC-057). Parker:
+       "it still needs the date and time above those words." Always on the
+       page, in the readouts' own mono, so the countdown beneath it has a
+       "from when"; gold once the instrument has left the present, which is
+       what the line under the hero used to say with a date alone. It wraps
+       only at its dot (app/glyphs.ts), and a far year never truncates it. */
+    .when{font-family:var(--mono);font-weight:500;font-size:clamp(15px,2.1vh,18px);
+      line-height:1.3;color:var(--ink-hi);text-align:center;
+      margin-top:clamp(8px,1.4vh,14px);font-variant-numeric:tabular-nums;
+      text-shadow:0 1px 10px rgba(4,10,22,.8)}
+    .when.shifted{color:var(--sunlight)}
+    /* The date and time stand over the countdown as one block. */
+    .heroblock{display:flex;flex-direction:column;align-items:center}
+    /* The hero wraps rather than clips; on a phone the event's time has the
+       line under the countdown to itself (see the phone rules). */
+    .hero{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .45em;justify-content:center;
+      pointer-events:none;white-space:nowrap;margin-top:clamp(2px,.5vh,6px);
       text-shadow:0 1px 12px rgba(4,10,22,.75)}
     .hero span{font-family:var(--serif);font-style:italic;font-weight:700;
       font-size:clamp(23px,3.4vh,32px);color:var(--ink-hi);line-height:1.05}
     .hero b{font-family:var(--mono);font-weight:500;font-style:normal;
       font-size:clamp(21px,3.1vh,29px);color:var(--sunlight);
       letter-spacing:.01em;line-height:1.05;font-variant-numeric:tabular-nums}
-    /* When time has been travelled, the header says where you have landed. */
-    .travelled{font-family:var(--serif);font-style:italic;font-weight:600;font-size:14px;
-      color:var(--sunlight);margin-top:5px;
-      text-shadow:0 1px 8px rgba(4,10,22,.8)}
-    .travelled:empty{display:none}
+    /* When the event falls, beside the countdown: "at 4:52 pm". The countdown
+       says how long; this says to when, on the event's own date. */
+    .hero i{font-family:var(--mono);font-style:normal;font-weight:400;
+      font-size:clamp(14px,1.9vh,16px);color:var(--ink-hi);line-height:1.2;
+      font-variant-numeric:tabular-nums}
+    .hero i:empty{display:none}
+    /* A wide, short screen — a tablet on its side — has no height to give: the
+       dial there is bound by what the header and plinth leave it (249px at
+       1180×820). So the date and time stand beside the countdown on one row
+       instead of over it, and the dial keeps every pixel it had. */
+    @media (min-width:721px) and (max-height:900px){
+      .heroblock{flex-direction:row;flex-wrap:wrap;justify-content:center;align-items:baseline;gap:0 22px}
+      .heroblock .when,.heroblock .hero{margin-top:clamp(8px,1.6vh,16px)}
+    }
     .zone-note{font-family:var(--serif);font-style:italic;font-size:12.5px;
       color:var(--gold-soft);margin-top:4px;text-align:center}
     .zone-note:empty{display:none}
@@ -188,6 +212,13 @@
       font-variant-numeric:tabular-nums}
     .bay .s{font-size:12px;line-height:1.5;color:var(--ink-mid);margin-top:1px;
       font-variant-numeric:tabular-nums}
+    /* The moon's phase rides its key, so the two lines under it are the
+       moon's rise and set in the same places, sizes and inks as the sun's
+       beside them (REQ-017). Where the bay is too narrow for both words it
+       drops under the key as a line of its own; it never shrinks. */
+    .bay .k{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
+    .bay .k .phase{font-family:var(--mono);font-weight:400;font-size:12px;letter-spacing:0;
+      color:var(--ink-hi);white-space:nowrap}
     .part{white-space:nowrap}
     .part.prose{white-space:normal}
     .bay .s b{font-weight:500;color:var(--ink-hi);white-space:nowrap}
@@ -224,18 +255,22 @@
       color:var(--sunlight)}
     #station-status:empty{display:none}
 
-    /* the rail: time travel as one row of cells */
-    .rail{display:flex;align-items:stretch;border-top:1px solid var(--hair)}
+    /* the rail: time travel as one row of cells — six units, finest first
+       (REQ-017: Parker asked for the minute and the second "in the area with
+       the back and forward buttons"), then NOW, HOLD and SET TIME. It wraps:
+       the words take a row of their own wherever the cells need the width,
+       and the date-and-time entry, when open, takes the row under them. */
+    .rail{display:flex;flex-wrap:wrap;align-items:stretch;border-top:1px solid var(--hair)}
     /* 44px tall: a thumb's minimum. NOW and HOLD stretch to the cells' height. */
     .cell{flex:1;display:flex;align-items:stretch;justify-content:center;min-width:0;
       min-height:44px;position:relative}
     .cell button{font-family:var(--mono);font-size:14px;line-height:1;
       color:var(--ink-mid);background:transparent;border:none;
-      padding:9px 8px;cursor:pointer;font-weight:300}
+      padding:9px 5px;cursor:pointer;font-weight:300}
     .cell button:hover{color:var(--ink-hi)}
     .cell span{font-family:var(--caps);font-weight:600;font-size:11px;
-      letter-spacing:.16em;color:var(--ink-mid);text-align:center;
-      min-width:40px;align-self:center}
+      letter-spacing:.1em;color:var(--ink-mid);text-align:center;
+      min-width:34px;align-self:center}
     /* The arrows were 16px wide on a phone and the rail has no width to spare,
        so each stepper's hit box is its half of the cell, the label's half
        included: a transparent box placed against the cell, not the button,
@@ -249,7 +284,7 @@
     .rail-acts{display:flex;flex:0 0 auto;align-items:stretch;min-height:44px}
     #now{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--gold-soft);background:transparent;
-      border:0;padding:9px 14px;cursor:pointer}
+      border:0;padding:9px 12px;cursor:pointer}
     #now:hover{color:var(--scripture)}
     #now.armed{color:var(--sunlight)}
     /* Freeze-time (DEC-051): dressed as the rail's own word, because it is one
@@ -257,9 +292,31 @@
        than a tint on the button alone. */
     #freeze{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:11px;
       letter-spacing:.22em;color:var(--ink-mid);background:transparent;
-      border:0;border-left:1px solid var(--hair-soft);padding:9px 14px;cursor:pointer}
+      border:0;border-left:1px solid var(--hair-soft);padding:9px 12px;cursor:pointer}
     #freeze:hover{color:var(--ink-hi)}
     #freeze[aria-pressed="true"]{color:var(--sunlight)}
+    /* SET TIME (DEC-057): the rail's third word, and the door to typing a date
+       and time. It is a word that is always there, not a gesture: the entry
+       it opens is absent until asked for, so the rail pays for it only then. */
+    #time-toggle{flex:0 0 auto;font-family:var(--caps);font-weight:700;font-size:11px;
+      letter-spacing:.22em;color:var(--ink-mid);background:transparent;
+      border:0;border-left:1px solid var(--hair-soft);padding:9px 12px;cursor:pointer;
+      white-space:nowrap}
+    #time-toggle:hover{color:var(--ink-hi)}
+    #time-toggle[aria-expanded="true"]{color:var(--sunlight)}
+    /* The entry is the browser's own date-and-time field, so on a phone it is
+       the system's picker. 16px type, because iOS Safari zooms the page on
+       focusing any field set smaller; 44px tall, a thumb's target. */
+    .timeentry{flex:1 1 100%;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+      gap:6px 14px;padding:8px 2px 9px;border-top:1px solid var(--hair-soft)}
+    .timeentry[hidden]{display:none}
+    .timeentry label{font-family:var(--caps);font-weight:700;font-size:11px;
+      letter-spacing:.22em;color:var(--ink-mid)}
+    .timeentry input{font-family:var(--mono);font-size:16px;line-height:1.2;color:var(--ink-hi);
+      background:var(--print-0);border:1px solid var(--ink-mid);border-radius:3px;
+      padding:8px 10px;min-height:44px;min-width:0;max-width:100%;color-scheme:dark}
+    .timeentry-note{flex:1 1 100%;font-family:var(--serif);font-style:italic;font-size:12.5px;
+      line-height:1.4;color:var(--ink-mid);text-align:center;text-wrap:pretty}
 
     /* the ledger: tonight's program */
     .ledger{border-top:1px solid var(--hair);padding:10px 2px 0}
@@ -484,6 +541,11 @@
          the whole list a selector it cannot parse appears in. */
       body:has(.tonight.open){overflow-y:auto;height:auto;min-height:100dvh}
       body:has(.tonight.open) .stage{min-height:344px;contain:size}
+      /* And the open date-and-time entry (DEC-057): its row comes out of the
+         dial's share of a locked viewport, which a tablet on its side cannot
+         spare, so while it is open the dial keeps 320px and the page scrolls. */
+      body:has(.timeentry:not([hidden])){overflow-y:auto;height:auto;min-height:100dvh}
+      body:has(.timeentry:not([hidden])) .stage{min-height:344px;contain:size}
     }
 
     /* ————— the Constellations view: one chart, then the sky to choose from (REQ-015) —————
@@ -529,9 +591,16 @@
       .brand img{height:26px}
       .verse{font-size:19px;line-height:1.3;max-width:34ch}
       .verse-ref{font-size:11px;letter-spacing:.3em}
-      .hero{margin-top:14px}
+      .when{margin-top:12px;font-size:16px}
+      .hero{margin-top:3px}
       .hero span{font-size:24px}
       .hero b{font-size:22px}
+      /* On a phone the event's time always takes the line under the
+         countdown. Left to wrap when it had to, it sat beside "25m" and
+         dropped under "10h 15m · Thu Sep 3" — so the header changed height
+         as the sun was dragged past sunset, and the dial moved 18px under
+         the finger that was dragging it. A fixed place cannot do that. */
+      .hero i{font-size:14px;flex-basis:100%;text-align:center}
       .stage{flex:none;padding:4px 16px 2px}
       .plinth{padding:0 16px 14px}
       .bays{grid-template-columns:.95fr 1.3fr 1.1fr;padding:10px 0 9px}
@@ -540,21 +609,22 @@
       .bay .v{font-size:13.5px}
       #station-bay .v{font-size:12.5px}
       .bay .s{font-size:12px}
-      /* The rail is 358px wide at 390 and MONTH is its widest word: equal
-         cells put MONTH's forward arrow on the H. Each cell takes the width
-         its own label needs plus an equal share of what is left, floored at
-         58px so each arrow's half stays 28px wide (touch.mjs holds both).
-         The glyph's 2px padding is the label's clearance. At 11px the four
-         cells and the two words no longer share one row (they measure about
-         386px), so NOW and HOLD take a second row together, each half the
-         rail wide and the full 44px tall (DEC-053) — a 320px phone used to
-         show HOLD as an "H" at the edge. */
-      .rail{flex-wrap:wrap}
-      .cell{flex:1 1 auto;min-width:58px}
+      /* Six units do not share a phone's one row — MONTH alone needs about
+         72px and a 320px rail has 48 for each — so they stand three to a row,
+         finest first: SEC MIN HOUR, then DAY PHASE MONTH (REQ-017). A third
+         of the rail each makes every arrow's half at least 48px wide, a full
+         thumb target, where four cells in a row had left them 28 (DEC-053's
+         exception for the steppers is retired on phones). NOW, HOLD and SET
+         TIME take the row under them, a third each and 44px tall. */
+      .cell{flex:1 1 30%;min-width:58px}
+      /* 45px: the hairline over the second row is inside the cell's box, and
+         the target under it must still be a whole 44. */
+      .cell:nth-child(n+4){border-top:1px solid var(--hair-soft);min-height:45px}
       .cell button{padding:9px 2px}
       .cell span{min-width:0;font-size:11px;letter-spacing:.1em}
       .rail-acts{flex:1 1 100%;border-top:1px solid var(--hair-soft);min-height:45px}
-      #now,#freeze{flex:1 1 0;padding:9px 10px}
+      #now,#freeze,#time-toggle{flex:1 1 0;padding:9px 4px}
+      #time-toggle{letter-spacing:.14em}
       .lrow .d{font-size:12px}
       /* Three tabs at 11px and .1em tracking measure 264px; a 320px phone
          has 288px for them, so the gap gives way before the letters do. */
@@ -653,8 +723,12 @@
       <p class="verse">&ldquo;<span id="verse-text">And let them be for signs and for seasons, and for days and years.</span>&rdquo;</p>
       <div class="verse-ref" id="verse-ref">Genesis 1:14 &middot; ESV</div>
     </div>
-    <div class="hero"><span id="hero-k">—</span><b id="hero-v"></b></div>
-    <div class="travelled" id="travelled"></div>
+    <!-- The date and time the instrument is showing, above the countdown,
+         and when the event falls, beside it (REQ-017). -->
+    <div class="heroblock">
+      <p class="when" id="when"></p>
+      <div class="hero"><span id="hero-k">—</span><b id="hero-v"></b><i id="hero-at"></i></div>
+    </div>
     <div class="zone-note" id="zone-note"></div>
     <div class="modes" id="modes" role="tablist" aria-label="Views"></div>
   </header>
@@ -680,9 +754,11 @@
           <div class="s" id="set"></div>
         </div>
         <div class="bay">
-          <div class="k">MOON</div>
-          <div class="v" id="moon">—</div>
-          <div class="s" id="moon-times"></div>
+          <!-- The moon's rise and set in the sun's own shape (REQ-017); the
+               phase rides the key. -->
+          <div class="k">MOON <span class="phase" id="moon">—</span></div>
+          <div class="v" id="moon-rise">—</div>
+          <div class="s" id="moon-set"></div>
         </div>
         <div class="bay" id="station-bay">
           <div class="k">STATION</div>
@@ -703,6 +779,15 @@
         <div class="rail-acts">
           <button id="now" aria-label="Return to the present">NOW</button>
           <button id="freeze" aria-pressed="false" aria-label="Hold the clock where it is">HOLD</button>
+          <button id="time-toggle" aria-expanded="false" aria-controls="time-entry">SET TIME</button>
+        </div>
+        <!-- Typing a date and time (DEC-057): the browser's own field, so a
+             phone shows its own picker. Absent until SET TIME is pressed. -->
+        <div class="timeentry" id="time-entry" hidden>
+          <label for="time-input">DATE AND TIME</label>
+          <input id="time-input" type="datetime-local" step="1" autocomplete="off"
+            aria-describedby="time-entry-note">
+          <p class="timeentry-note" id="time-entry-note">The dial follows what you enter. NOW returns to the present.</p>
         </div>
       </div>
       <section class="ledger tonight" aria-label="Constellations tonight">

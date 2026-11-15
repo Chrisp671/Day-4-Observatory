@@ -33,7 +33,7 @@ All from `web/`, Node 22:
 
 ```shell
 npm ci
-npm test                # vitest run — 517 tests (2026-11-11)
+npm test                # vitest run — 588 tests (2026-11-14)
 npx tsc --noEmit        # strict
 npm run build           # tsc --noEmit && vite build
 npm run dev
@@ -95,7 +95,9 @@ evidence run id and attempt, so re-running it alone is a silent no-op.
 
 Browser drivers for layout, keyboard and rendering work, after
 `npx vite preview --port 4173 --strictPort --host 127.0.0.1`:
-`node scripts/modes.mjs|planets.mjs|constellations.mjs|freeze.mjs|trouble.mjs <url>`.
+`node scripts/modes.mjs|planets.mjs|constellations.mjs|freeze.mjs|trouble.mjs|timecontrols.mjs <url>`
+(`timecontrols.mjs` drives the steppers, the SET TIME entry and the sun drag with real
+touch points, a resting second finger included — REQ-017).
 Phone touch behaviour has three more: `touch.mjs` (44 px hit boxes, rapid
 stepping), and `zoom.mjs` plus the independently written `zoom-spec.mjs`
 (no point on screen may allow double-tap zoom; desktop browsers cannot

@@ -144,7 +144,7 @@ try {
 
     // 7. Travel a month on Day 4, then switch: the focused view shows the travelled clock.
     await page.getByRole("button", { name: "Forward one month", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector("#travelled")?.textContent?.includes("October"));
+    await page.waitForFunction(() => document.querySelector("#when")?.textContent?.includes("Oct "));
     const travelled = await day4Context(page);
     assert.notEqual(travelled.clock, undefined);
     await tab(page, "Planets").click();
@@ -153,8 +153,9 @@ try {
       "the shared clock is marked as travelled, like Day 4's");
     await shot(page, `${vp.name}-planets-travelled.png`);
     await tab(page, "Stargazer").click();
-    assert.equal(await page.locator("#travelled").textContent(), (await page.locator("#travelled").textContent()));
-    assert(/October/.test(await page.locator("#travelled").textContent()), "Day 4 keeps the travelled date after a round trip");
+    assert(/ Oct \d/.test(await page.locator("#when").textContent()), "Day 4 keeps the travelled date after a round trip");
+    assert(await page.locator("#when").evaluate((el) => el.classList.contains("shifted")),
+      "the date above the countdown is marked as travelled, like the clock");
 
     assert.deepEqual(errors, [], "browser errors");
     await context.close();

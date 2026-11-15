@@ -3,7 +3,7 @@ import copy
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import struct
 import tempfile
 import unittest
@@ -1046,6 +1046,214 @@ class ManualPrepareTests(unittest.TestCase):
         with self.assertRaises(Incomplete):
             self.prepare(FakeGitHub(), taken)
         self.assertEqual({p.name for p in taken.iterdir()}, {'reply.json'})
+
+
+class LongDiffGitHub(FakeGitHub):
+    """A PR whose diff runs to many lines, so it has to be cut into several parts."""
+    DIFF = 'diff --git a/web/src/a.ts b/web/src/a.ts\n' + ''.join(f'+added line {i}\n' for i in range(60)) + '+no line feed at the end'
+
+    def call(self, path, data=None, method=None, **kwargs):
+        if path == '/pulls/7' and kwargs.get('accept'):
+            return self.DIFF
+        return super().call(path, data, method, **kwargs)
+
+
+class ManualPartsTests(unittest.TestCase):
+    """parts/ is evidence.json again as small ordered files: exact, indexed, and unable to leave its folder (DEC-058)."""
+
+    # Paths as a hostile PR could shape them. None is a path by the time it is a file name.
+    HOSTILE = ['../../etc/passwd', '/etc/passwd', 'C:\\Windows\\win.ini', '..\\..\\escape.ts', 'web/../../up.ts',
+               'web/src/a.ts:stream', 'web/src/new\nline\ttab.ts', '..', '.', '', 'web/src/trailing.', 'web/src/a b.ts',
+               'web/src/\u00e9t\u00e9.ts', '~/.ssh/id_rsa', 'CON', 'web/' + 'deep/' * 80 + 'long.ts', 'a//b',
+               '\\\\server\\share\\x', 'web/src/..hidden..ts', 'web/src/a__b.ts', 'web/src/a/b.ts']
+    SOURCES = {'web/src/b.ts': '\n'.join(f'line {i}' for i in range(120)), 'web/src/a.ts': 'one line',
+               'web/src/empty.ts': '', 'web/src/z.css': 'body{} /* café \U0001f319 */\n'}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
+        self.out = Path(self.tmp.name) / 'out'
+
+    def prepare(self, sources=None, out=None, size=64):
+        github = LongDiffGitHub()
+        with patch('review.source_context', return_value=sources or self.SOURCES), \
+             patch.object(manual_prepare, 'PART_CHARS', size):
+            meta = manual_prepare.prepare(github, 7, out or self.out)
+        self.assertEqual(github.writes, [])
+        return meta
+
+    @staticmethod
+    def evidence(diff, sources):
+        return json.dumps({'head': 'a' * 40, 'base': 'b' * 40, 'builder_family': 'anthropic', 'pr_body': 'DEC-036',
+                           'diff': diff, 'plan_entries': {'DEC-036': '1: - DEC-036 \u2014 canon'},
+                           'base_design_canon': {'DEC-026': '9: - DEC-026 \u2014 canon'}, 'capture': {'version': 1},
+                           'source_context': sources}, ensure_ascii=False)
+
+    def test_cut_loses_nothing_and_prefers_line_ends(self):
+        texts = ['', 'x', '\n', 'no line feed', 'a\nb\n', 'one\r\ntwo\r\n', '\n\n\n\n', 'w' * 50 + '\nshort\n' + 'v' * 33,
+                 'caf\u00e9 \u2028 \U0001f319\n' * 9, ''.join(f'{i}: text {i}\n' for i in range(200))]
+        for text in texts:
+            for size in (1, 2, 7, 16, 64, 40_000):
+                with self.subTest(text=text[:12], size=size):
+                    pieces = manual_prepare.cut(text, size)
+                    self.assertEqual(''.join(pieces), text)
+                    self.assertTrue(all(len(piece) <= size for piece in pieces))
+                    self.assertTrue(all(pieces) or text == '')
+        # Ordinary lines are never broken: every piece but the last ends where a line ends.
+        pieces = manual_prepare.cut(texts[-1], 64)
+        self.assertGreater(len(pieces), 20)
+        self.assertLessEqual(len(pieces), 2 * len(texts[-1]) // 64 + 1)  # Pieces are filled, not one line each.
+        self.assertTrue(all(piece.endswith('\n') for piece in pieces[:-1]))
+        # Only a line longer than a whole piece is cut inside the line.
+        self.assertEqual(manual_prepare.cut('w' * 10 + '\nend', 4), ['wwww', 'wwww', 'ww\n', 'end'])
+        self.assertEqual(manual_prepare.PART_CHARS, 40_000)
+
+    def test_parts_rejoin_into_the_diff_and_every_source_exactly(self):
+        diff = ''.join(f'+line {i} ' + 'x' * (i % 37) + '\n' for i in range(400)) + '+no line feed at the end'
+        sources = {'web/src/b.ts': ''.join(f'{i}: text {i}\n' for i in range(1, 300)), 'web/src/a.ts': '1: only line',
+                   'web/src/empty.ts': '', 'PLAN.md': '[lines 1-4 omitted]\n5: - DEC-058 \u2014 parts\n',
+                   'web/src/wide.json': '1: ' + 'w' * 950 + '\n2: after the long line\r\n3: caf\u00e9 \u2028 \U0001f319'}
+        text = self.evidence(diff, sources)
+        parts = manual_prepare.evidence_parts(text, 300)
+        self.assertEqual(''.join(body for name, body, _ in parts if name.startswith('10-diff-')), diff)
+        self.assertGreater(len([name for name, _, _ in parts if name.startswith('10-diff-')]), 30)
+        for position, path in enumerate(sorted(sources), 1):
+            own = [body for name, body, _ in parts if name.startswith(f'20-src-{position:02}-')]
+            self.assertEqual(''.join(own), sources[path], path)
+            self.assertGreaterEqual(len(own), 1)
+        self.assertTrue(all(len(body) <= 300 for name, body, _ in parts if name[:2] in ('10', '20')))
+        # The first part is every other key, unchanged; nothing in the evidence is left out of the parts.
+        rest = json.loads(parts[0][1])
+        self.assertEqual(rest, {key: value for key, value in json.loads(text).items() if key not in manual_prepare.SPLIT_KEYS})
+        self.assertEqual(list(rest), ['head', 'base', 'builder_family', 'pr_body', 'capture'])
+        self.assertEqual([name for name, _, _ in parts[:3]], ['00-meta-and-pr-body.json', '01-plan-entries.txt', '02-base-design-canon.txt'])
+        self.assertIn('===== DEC-036 =====\n1: - DEC-036 \u2014 canon\n', parts[1][1])
+        self.assertIn('===== DEC-026 =====\n9: - DEC-026 \u2014 canon\n', parts[2][1])
+        # A key added to the evidence later is not silently dropped from the reading aid.
+        later = json.dumps(dict(json.loads(text), added_later='kept'))
+        self.assertEqual(json.loads(manual_prepare.evidence_parts(later)[0][1])['added_later'], 'kept')
+
+    def test_prepare_writes_the_parts_beside_an_unchanged_evidence_file(self):
+        meta = self.prepare()
+        self.assertEqual({p.name for p in self.out.iterdir()}, set(manual_prepare.OUTPUTS))
+        self.assertIn('parts', manual_prepare.OUTPUTS)
+        raw = (self.out / 'evidence.json').read_bytes()
+        evidence = json.loads(raw)
+        folder = self.out / 'parts'
+        self.assertEqual(sorted(p.name for p in folder.iterdir()), sorted(meta['parts'] + ['INDEX.txt']))
+        def joined(prefix):
+            return b''.join((folder / name).read_bytes() for name in meta['parts'] if name.startswith(prefix))
+        # Bytes on disk, not text in memory: no newline translation, no re-encoding.
+        self.assertEqual(joined('10-diff-'), evidence['diff'].encode('utf-8'))
+        self.assertEqual(evidence['diff'], LongDiffGitHub.DIFF)
+        self.assertGreater(len([name for name in meta['parts'] if name.startswith('10-diff-')]), 10)
+        self.assertEqual(sorted(evidence['source_context']), sorted(self.SOURCES))
+        for position, path in enumerate(sorted(evidence['source_context']), 1):
+            self.assertEqual(joined(f'20-src-{position:02}-'), evidence['source_context'][path].encode('utf-8'), path)
+        self.assertEqual(json.loads((folder / '00-meta-and-pr-body.json').read_bytes())['pr_body'], evidence['pr_body'])
+        # The parts are a reading aid: how they are cut never reaches evidence.json or instructions.txt.
+        other = Path(self.tmp.name) / 'default-size'
+        again = self.prepare(out=other, size=40_000)
+        self.assertEqual((other / 'evidence.json').read_bytes(), raw)
+        self.assertEqual((other / 'instructions.txt').read_bytes(), (self.out / 'instructions.txt').read_bytes())
+        self.assertEqual([name for name in again['parts'] if name.startswith('10-diff-')], ['10-diff-01.txt'])
+        self.assertEqual((other / 'parts' / '10-diff-01.txt').read_bytes(), evidence['diff'].encode('utf-8'))
+
+    def test_index_lists_every_part_once_in_reading_order_with_true_counts(self):
+        meta = self.prepare()
+        folder = self.out / 'parts'
+        evidence = json.loads((self.out / 'evidence.json').read_bytes())
+        lines = (folder / 'INDEX.txt').read_bytes().decode('utf-8').split('\n')
+        self.assertEqual(lines.pop(), '')
+        rows = [line.split('\t') for line in lines]
+        self.assertTrue(all(len(row) == 4 for row in rows))
+        self.assertEqual([row[0] for row in rows], meta['parts'])
+        # Name order is reading order, past nine parts of one source too (part01..part2N).
+        self.assertEqual(meta['parts'], sorted(meta['parts']))
+        self.assertGreater(len([name for name in meta['parts'] if '-web__src__b.ts.part' in name]), 10)
+        self.assertEqual(meta['parts'][:3], ['00-meta-and-pr-body.json', '01-plan-entries.txt', '02-base-design-canon.txt'])
+        for name, chars, count, what in rows:
+            text = (folder / name).read_bytes().decode('utf-8')
+            self.assertEqual((int(chars), int(count)), (len(text), len(text.splitlines())), name)
+        self.assertEqual(sum(int(row[1]) for row in rows if row[0].startswith('10-diff-')), len(evidence['diff']))
+        diff_rows = [row[3] for row in rows if row[0].startswith('10-diff-')]
+        self.assertEqual(diff_rows, [f'diff, part {n} of {len(diff_rows)}' for n in range(1, len(diff_rows) + 1)])
+        # Sources come in path order and every line names the real path it is a part of.
+        named = [json.loads(row[3].removeprefix('source_context ').rsplit(', part ', 1)[0]) for row in rows if row[0].startswith('20-src-')]
+        self.assertEqual(list(dict.fromkeys(named)), sorted(evidence['source_context']))
+        for path in evidence['source_context']:
+            self.assertEqual(sum(int(row[1]) for row in rows if row[3].startswith(f'source_context {json.dumps(path)}, part ')),
+                             len(evidence['source_context'][path]), path)
+        empty = [row for row in rows if '"web/src/empty.ts"' in row[3]]
+        self.assertEqual([(row[1], row[2], row[3].rsplit(', ', 1)[1]) for row in empty], [('0', '0', 'part 1 of 1')])
+
+    def test_a_part_name_cannot_leave_the_parts_folder(self):
+        for path in self.HOSTILE:
+            with self.subTest(path=path):
+                slug = manual_prepare.part_slug(path)
+                self.assertRegex(slug, r'\A[A-Za-z0-9._-]*\Z')
+                self.assertNotIn('..', slug)
+                self.assertFalse(slug.endswith('.'))
+                self.assertLessEqual(len(slug), 100)
+        self.assertEqual(manual_prepare.part_slug('web/src/app/shell.ts'), 'web__src__app__shell.ts')
+        self.assertEqual(manual_prepare.part_slug('../../etc/passwd'), '______etc__passwd')
+        sources = {path: f'source {index}' for index, path in enumerate(self.HOSTILE)}
+        meta = self.prepare(sources)
+        root = Path(self.tmp.name).resolve()
+        out, folder = self.out.resolve(), (self.out / 'parts').resolve()
+        written = [p.resolve() for p in root.rglob('*') if p.is_file()]
+        # Every file the helper wrote is in the output folder or its parts folder, nowhere above or beside them.
+        self.assertTrue(all(p.parent in (out, folder) for p in written))
+        self.assertEqual(sorted(p.name for p in written if p.parent == folder), sorted(meta['parts'] + ['INDEX.txt']))
+        self.assertEqual({p.name for p in self.out.iterdir()}, set(manual_prepare.OUTPUTS))
+        for name in meta['parts']:
+            self.assertRegex(name, r'\A[0-9][A-Za-z0-9._-]*\Z')
+            self.assertNotIn('..', name)
+            self.assertEqual((PurePosixPath(name).name, PureWindowsPath(name).name), (name, name))
+        # Slugs may collide (a/b.ts and a__b.ts); the numbering keeps every source apart and whole.
+        evidence = json.loads((self.out / 'evidence.json').read_bytes())
+        self.assertEqual(len(evidence['source_context']), len(self.HOSTILE))
+        for position, path in enumerate(sorted(sources), 1):
+            own = [name for name in meta['parts'] if name.startswith(f'20-src-{position:02}-')]
+            self.assertEqual(len(own), 1, path)
+            self.assertEqual((folder / own[0]).read_bytes().decode('utf-8'), evidence['source_context'][path])
+        # A path holding a line feed and a tab cannot forge or break an INDEX line.
+        index = (folder / 'INDEX.txt').read_bytes().decode('utf-8')
+        self.assertEqual(index.count('\n'), len(meta['parts']))
+        rows = [line.split('\t') for line in index.splitlines()]
+        self.assertEqual(len(rows), len(meta['parts']))
+        self.assertTrue(all(len(row) == 4 for row in rows))
+        named = [json.loads(row[3].removeprefix('source_context ').rsplit(', part ', 1)[0]) for row in rows if row[0].startswith('20-src-')]
+        self.assertEqual(named, sorted(sources))
+
+    def test_a_name_that_is_not_a_plain_file_name_is_refused_before_any_write(self):
+        # Defence in depth: were part_slug ever weakened, the finished name is still checked.
+        for case, slug in enumerate(('../escape', '..\\escape', '/abs', 'C:evil', 'a/b', 'x' * 200, 'dot..dot', 'new\nline', 'caf\u00e9')):
+            with self.subTest(slug=slug), patch.object(manual_prepare, 'part_slug', return_value=slug):
+                out = self.out / f'case-{case}'
+                with self.assertRaises(Incomplete):
+                    self.prepare(out=out)
+                self.assertEqual(list(out.iterdir()), [])
+        self.assertEqual([p for p in Path(self.tmp.name).rglob('*') if p.is_file()], [])
+
+    def test_a_part_that_would_resolve_outside_the_folder_is_refused_before_any_write(self):
+        # The third control, independent of the two above: prepare itself resolves every
+        # target and requires it to sit directly in parts/, whatever handed it the name.
+        inside = Path(self.tmp.name) / 'sibling.txt'
+        for case, name in enumerate(('../escape.txt', '../../sibling.txt', 'sub/inner.txt', str(inside), '.', '..')):
+            parts = [('00-meta-and-pr-body.json', '{}', 'first'), (name, 'escaped', 'hostile')]
+            with self.subTest(name=name), patch.object(manual_prepare, 'evidence_parts', return_value=parts):
+                out = self.out / f'case-{case}'
+                with self.assertRaises(Incomplete):
+                    self.prepare(out=out)
+                self.assertEqual(list(out.iterdir()), [])
+        self.assertEqual([p for p in Path(self.tmp.name).rglob('*') if p.is_file()], [])
+
+    def test_an_existing_parts_folder_is_never_written_into(self):
+        (self.out / 'parts').mkdir(parents=True)
+        with self.assertRaises(Incomplete):
+            self.prepare()
+        self.assertEqual([p.name for p in self.out.iterdir()], ['parts'])
+        self.assertEqual(list((self.out / 'parts').iterdir()), [])
 
 
 class ManualPublishTests(unittest.TestCase):

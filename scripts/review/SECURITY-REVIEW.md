@@ -235,7 +235,9 @@ Top 25 and LLM Top 10 questions against the diff:
   (exact-key schema, located findings, eight judgements).
 - Path handling (CWE-22): `manual_prepare.py` writes fixed names from the
   contract into a folder the maintainer chose, refused unless empty (`:69`);
-  no name from the artifact or the PR reaches a path.
+  no name from the artifact or the PR reaches a path. (True when written.
+  Since DEC-058 source paths from the PR do shape file names under `parts/`;
+  the walk for that is the last section of this file.)
 - Credentials (CWE-798): none in code; the helper's token comes from the
   environment or `gh auth token` and is never printed; the workflow grants the
   reporter's permissions and no more (`review-manual.yml:25-30`), checks out
@@ -263,3 +265,74 @@ this change). `rafter run` refused because no RAFTER_API_KEY is configured;
 this is not a claim of a clean remote SAST/SCA scan. No live dispatch of
 `review-manual.yml` was made: it cannot run until it exists on `main`, which
 is why the owner admin-merges this PR once.
+
+## Evidence parts and the phone TONIGHT frame (DEC-058)
+
+Rafter code review (after implementation, 2026-11-15), walked with the CWE
+Top 25 questions for a Python CLI against the diff. The surface is one thing:
+`manual_prepare.py` now builds file names from source paths, and those paths
+come from the PR (the changed-file list and the head's Git tree). The helper
+runs on the maintainer's machine with their file permissions, so a name that
+left the output folder would be a write wherever that account can write.
+
+- Path traversal (CWE-22), the question "is the result canonicalised and
+  verified to stay under an allow-root?": three controls, each sufficient
+  alone and each with a test that fails when it is removed.
+  1. `part_slug` (`manual_prepare.py:100`) maps a path onto
+     `A-Z a-z 0-9 . _ -`: `/` becomes `__`; backslash, drive colon, control
+     characters, spaces and everything non-ASCII become `_`; a run of dots or
+     a final dot becomes `_`; the result is cut to 100 characters. No
+     separator survives, and `..` cannot appear even where the slug meets the
+     `.partK.txt` that follows it.
+  2. `evidence_parts` (`:160`) checks every finished name against
+     `PART_NAME` (`:49`: starts with a digit, the same alphabet, at most 160
+     characters), refuses `..` anywhere, and requires the names unique
+     ignoring case. The slug sits between a fixed numbered prefix and a fixed
+     suffix, so a name is never `.`, `..`, hidden, or a Windows device name.
+  3. `prepare` (`:192-193`) resolves every target and requires its parent to
+     be the resolved `parts/` folder. This is the canonicalise-and-contain
+     check, and it does not depend on the first two.
+  All three run before the first byte is written (`:191-194`, ahead of the
+  first write at `:206`), so a refusal leaves the folder empty, as every
+  other refusal of the helper does.
+- Overwrite and link following (CWE-59, CWE-73): the output folder must be
+  empty (`:180`), `parts/` is created by a `mkdir` that fails if it exists
+  (`:211`), and each part is opened `'xb'` (`:213`), which creates and never
+  replaces or follows an existing entry. Nothing is deleted.
+- Platform names (Windows): a colon would address an alternate data stream
+  and is replaced; `CON`, `NUL` and the like cannot be a whole name because
+  of the prefix; a trailing dot or space cannot end a name because of the
+  suffix; names that differ only by case are refused rather than merged.
+- Output neutralisation (CWE-117): INDEX.txt is one tab-separated line per
+  part. The only PR text on a line is the source path, written with
+  `json.dumps` (`:157`), so a path holding a line feed, a tab or a Unicode
+  line separator stays one escaped field and cannot forge or split a line.
+- Resource use (CWE-400): the evidence is already bounded at 1,000,000
+  characters and 120 source files (`review.py` `LIMITS`, `source_context`).
+  `cut` yields at most `2 * len / 40,000 + 1` pieces per text, so the folder
+  holds a few hundred small files at most, all inside the chosen folder.
+- Deserialization (CWE-502): `json.loads` (`:141`) on the evidence text this
+  same process built a moment earlier; no pickle, no eval, no new parser.
+- Model boundary (LLM01): the parts carry exactly the untrusted text
+  `evidence.json` already carries, and `instructions.txt` is unchanged and
+  still marks all of it untrusted. The publisher never reads `parts/`; it
+  rebuilds the source context from the head and validates the reply against
+  that, so a part cannot change what a verdict is checked against.
+- Injection, credentials, network, dependencies: no new subprocess, no shell
+  string, no secret, no request, standard library only.
+
+`capture.mjs` runs in the unprivileged PR build job as before. The change
+scrolls one state to a fixed element (`:132-137`) and adds a measured
+`scrollY` to the manifest (`:153`); it takes no new input, and `contract.py`
+does not constrain manifest keys beyond those it reads, so main's reporter
+accepts the new manifest unchanged (checked by passing the new captures
+through `read_artifact`).
+
+No blocking finding. Validation: 71 Python tests pass (63 before this
+change). Nineteen defects were reintroduced one at a time in a copy of
+`manual_prepare.py`; eighteen fail a named test, among them each of the three
+path controls removed on its own. The nineteenth (`mkdir` allowed to reuse an
+existing `parts/`) cannot be reached while the empty-folder refusal stands, so
+no test can tell it apart. `rafter secrets scripts/review` found nothing.
+`rafter run` refused because no RAFTER_API_KEY is configured; the remote
+SAST/SCA scan is deferred to the owner and this is not a claim of a clean one.

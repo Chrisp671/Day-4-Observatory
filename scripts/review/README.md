@@ -131,7 +131,9 @@ The exact procedure, from a checkout of `main`:
    family. It writes `instructions.txt` and `evidence.json` (byte-for-byte what
    the reporter would send a model, built by `review_request` in `review.py`),
    the eight screenshots, `manifest.json` and `meta.json` (PR, head, base,
-   builder family, evidence run URL). Nothing is written to GitHub.
+   builder family, evidence run URL), and a `parts/` folder holding the same
+   evidence as small files for a large review (see "Large reviews" below).
+   Nothing is written to GitHub.
    It builds under the manual limits in `review.py` `LIMITS`: 800,000
    characters of whole source files and a 1,000,000-character payload, where
    the model path keeps 500,000 and 700,000 for its provider requests; a
@@ -141,6 +143,8 @@ The exact procedure, from a checkout of `main`:
 2. The orchestrator gives `instructions.txt`, `evidence.json` and the eight
    screenshots to GPT-6.1 Sol through T3/Codex and saves the JSON reply as
    `reply.json`. Plain JSON or one whole-response code fence; nothing else.
+   For a large PR, give it `parts/` in place of `evidence.json` ("Large
+   reviews" below).
 3. Publish it from inside Actions (the reply may also be pasted inline with
    `-f review="$(cat reply.json)"`):
 
@@ -170,6 +174,51 @@ The exact procedure, from a checkout of `main`:
    must list a `Web review` context in state `success` with the manual
    description. A green `gh pr checks` alone is not proof (RSK-007).
 
+### Large reviews
+
+`evidence.json` is a single line, and under the manual limits (`LIMITS` in
+`review.py`, raised in #53: 800,000 characters of source and a
+1,000,000-character payload) it can approach a megabyte. On #51 it was 845 KB
+and Sol could not get through it: its file tool returned a truncated piece and
+the review stopped. `manual_prepare.py` therefore also writes `parts/`
+(DEC-058), the same evidence cut into ordered files of at most 40,000
+characters:
+
+| File | Holds |
+|---|---|
+| `INDEX.txt` | One line per part in reading order: name, characters, lines, what it holds (tab-separated). |
+| `00-meta-and-pr-body.json` | Every evidence key except the four below (head, base, builder family, PR body, capture manifest). |
+| `01-plan-entries.txt`, `02-base-design-canon.txt` | The cited and standing PLAN.md entries, one block per entry. |
+| `10-diff-NN.txt` | The diff, cut after a line end. Joined in order they are the diff exactly. |
+| `20-src-NN-<path>.partK.txt` | One changed or imported source file per `NN`, in path order, with `/` written `__`. Joined in order they are that file's entry exactly. |
+
+The parts are a reading aid and nothing else. `evidence.json` stays the
+authority and is byte-for-byte what it was; the publisher never reads `parts/`
+and validates the reply against the head itself. The INDEX line names each
+source's real path, which is the path a finding must cite: the file name is
+only a label, with every character outside `A-Z a-z 0-9 . _ -` replaced.
+
+For a PR whose `evidence.json` is more than a few hundred kilobytes, this is
+the procedure that got #51 reviewed:
+
+1. Run Sol in its own top-level Codex thread, not as a turn inside a busy one,
+   so the review has the thread to itself.
+2. Give it `instructions.txt`, the eight screenshots and the `parts/` folder,
+   and tell it to read `parts/INDEX.txt` first and then every part in INDEX
+   order, about 80 lines at a time. The line count in the INDEX says how many
+   slices a part needs.
+3. If a turn stops early, or the reply says `"complete": false`, send a short
+   resume message in the same thread ("resume from the next unread part in
+   INDEX.txt") instead of starting over. Never publish a reply with
+   `"complete": false`: the publisher rejects it, as it rejects a model's.
+4. Before publishing, strip a UTF-8 byte order mark from `reply.json` if the
+   file has one. Windows PowerShell 5.1 writes one with `>` and `Out-File`,
+   and the publisher's strict JSON parse rejects a reply that starts with it:
+
+   ```sh
+   python -c "import pathlib,sys; p=pathlib.Path(sys.argv[1]); p.write_bytes(p.read_bytes().removeprefix(bytes([0xEF,0xBB,0xBF])))" reply.json
+   ```
+
 Setting `REVIEW_PROVIDER=manual` is the owner's switch, made in the repository
 variables after the PR carrying this mode has merged. That PR itself must be
 admin-merged once: `review-manual.yml` can only be dispatched after it exists on
@@ -190,15 +239,23 @@ Constellations only. Each state starts with clean storage, station 40°N/74°W,
 America/New_York time, en-US locale and 2026-09-02 23:00 UTC. Screenshots are CSS
 pixels with no zoom. Month/ring actions must change the dial; expansion must open
 the programme. Browser errors fail capture. A manifest records the fixture,
-canvas text observations, dimensions, state and page height.
+canvas text observations, dimensions, state, page height and the measured
+scroll position of each frame (`scrollY`).
 
 The five states are independent because opening TONIGHT hides its compact list
 and each view replaces the last. The Planets and Constellations states must
 change the rendered canvases (a lit ring; a drawn chart).
 The month button is selected by its accessible name. The second compact row must
-actually be a planet. Each image starts at scroll position zero. A long expanded
-programme can extend below the viewport: these eight captures assess the visible
-viewport, not every offscreen row. Owner phone observations remain authoritative.
+actually be a planet. Each image starts at scroll position zero, with one
+exception: `phone-tonight.png` starts at the top of the TONIGHT section
+(DEC-058). Since #51 the header, dial and time rail fill the 390×844 viewport,
+so the section begins below the fold and a top-of-page frame repeated
+`phone-loaded.png` without one ledger row in it. The capture now fails unless
+at least three whole ledger rows are inside that frame, and the manifest's
+`scrollY` says where the frame starts (zero for the other seven). The image
+names, count and dimensions are unchanged. A long expanded programme still
+extends below the viewport: these eight captures assess one viewport each, not
+every offscreen row. Owner phone observations remain authoritative.
 
 The model receives the PR diff, cited PLAN entries, baseline design canon,
 trusted rubric, complete changed text files (excluding lockfile context),

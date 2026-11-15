@@ -197,3 +197,43 @@ The reviewer must keep every string field at most 1000 characters. The schema
 declares maxLength but the provider does not enforce it, so the instruction says
 so in prose: validation stays strict and a review that still runs long fails
 rather than being truncated or retried.
+
+## Phone TONIGHT frame and evidence parts (DEC-058)
+
+Two amendments, both to what a reviewer is able to see. Neither changes what
+is trusted or what a verdict is validated against.
+
+The capture kept one rule for all eight images: frame the top of the page.
+#51 made the phone's header and time rail taller, the TONIGHT section moved
+to y=847 in an 844 px viewport, and `phone-tonight.png` became a second copy
+of `phone-loaded.png`: the state opened the ledger and then photographed
+none of it. The phone's tonight state now starts its frame at the top of the
+TONIGHT section, so the heading, the ring key and the first rows with their
+wrapping are in the picture. It is the only state whose frame moves; the
+tablet has no tonight state. Two things keep the exception honest. The
+capture asserts that at least three whole ledger rows are inside the frame,
+so the next layout change that pushes the ledger out fails the capture
+instead of producing a plausible picture of something else. And the manifest
+records the measured `scrollY` of every frame (zero for the other seven), so
+a reviewer is told where the frame is rather than left to infer it. Archive
+contents are unchanged (eight images plus manifest, same names and sizes),
+and `contract.py` reads no manifest key this adds, so it needs no change and
+main's reporter accepts the new manifest as it stands.
+
+The manual path's limits (`LIMITS`, #53) let `evidence.json` approach a
+megabyte on one line. On #51 that was more than Sol's file tool would return
+in one piece. `manual_prepare.py` therefore also writes `parts/`: the same
+text in ordered files of at most 40,000 characters with an INDEX. Three
+choices shape it. The parts are derived by parsing the evidence text itself,
+not by running the builder a second time, so they cannot disagree with the
+file they are a reading aid for; joining a text's parts gives that text
+exactly, which the tests check on the bytes on disk. `evidence.json` stays
+the authority and nothing reads the parts back: the publisher rebuilds the
+source context from the head, so a part cannot alter what a reply is checked
+against. And a source path is PR data, so it is never used as a path: it is
+reduced to a label inside a numbered name, the finished name is checked
+against a fixed pattern, and every target is resolved and required to sit
+directly in `parts/`, all before the first write (SECURITY-REVIEW has the
+walk). The real path, the one a finding must cite, is carried in the INDEX
+line as a JSON string. The model path is untouched: a provider request has
+no folder to read.

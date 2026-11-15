@@ -43,7 +43,7 @@
 import { describe, expect, it } from "vitest";
 import { Refraction } from "astronomy-engine";
 import { frame } from "./frame";
-import { moonDay } from "./planets";
+import { moonDay, moonSetOfDay } from "./planets";
 import { HORIZONS_REFERENCE, type HorizonEvent } from "./horizons-reference";
 
 // The moon's day-anchored rise and set are sought from local midnight, and the
@@ -248,4 +248,35 @@ describe.each(HORIZONS_REFERENCE.map((c) => [c.id, c] as const))("CHK-001 %s", (
       expect(minutes, `${c.id} ${kind} was ${minutes.toFixed(3)} min out`).toBeLessThanOrEqual(EVENT_MINUTES);
     },
   );
+});
+
+/**
+ * REQ-017: the moonset that falls on a day in its own right (`moonSetOfDay`),
+ * which the readout shows on the day with no moonrise. Held to the same JPL
+ * crossings as the paired set above, by a different route: each pinned
+ * moonset is asked for again as "the first set of the UTC day it falls in".
+ * A wrong search direction, a wrong midnight or a wrong body all move it by
+ * hours; the tolerance is the quarter-minute the paired events are held to.
+ * Worst measured residual over the eleven: 0.006 min, under half a second.
+ */
+describe("moonSetOfDay against JPL's moonsets", () => {
+  const pinned = HORIZONS_REFERENCE.flatMap((c) =>
+    c.events
+      .filter((e) => e.kind === "moonset" && e.jplCrossingUtc !== null)
+      .map((e) => ({ c, crossing: Date.parse(e.jplCrossingUtc as string) })));
+
+  it("has the eleven moonsets the matrix pins to compare with", () => {
+    // Twelve cases, less Reykjavik's December moon: it rises on the 21st and no
+    // set follows within two days, so the matrix pins no crossing for it.
+    expect(pinned).toHaveLength(11);
+  });
+
+  it.each(pinned.map((p) => [p.c.id, p] as const))("puts %s's moonset where JPL puts it", (_id, p) => {
+    const dayStart = Math.floor(p.crossing / 86400000) * 86400000;
+    // Asked from noon of that UTC day, as a reader looking at that date would.
+    const found = moonSetOfDay(dayStart + 12 * 3600000, p.c.location.latDeg, p.c.location.lonDeg);
+    expect(found, `${p.c.id}: no moonset found on the day JPL has one`).not.toBeNull();
+    const minutes = Math.abs(p.crossing - (found as number)) / 60000;
+    expect(minutes, `${p.c.id} was ${minutes.toFixed(3)} min out`).toBeLessThanOrEqual(EVENT_MINUTES);
+  });
 });

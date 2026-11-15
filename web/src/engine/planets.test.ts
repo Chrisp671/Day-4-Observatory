@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { moonDay, planetBoard, planetDays, PLANETS, sunDay } from "./planets";
+import { moonDay, moonSetOfDay, planetBoard, planetDays, PLANETS, sunDay } from "./planets";
 
 const NYC = { lat: 40.0, lon: -74.0 };
 const T = new Date(2026, 7, 21, 21, 0, 0).getTime(); // evening, 21 Aug 2026
@@ -64,6 +64,62 @@ describe("moonDay", () => {
     }
     expect(missing).toBeGreaterThanOrEqual(1);
     expect(missing).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("moonSetOfDay (REQ-017: the set on a day with no moonrise)", () => {
+  /** Every day of a 60-day run, with what the two questions answer for it. */
+  const sweep = Array.from({ length: 60 }, (_, i) => {
+    const t = T + i * DAY;
+    const dayStart = new Date(new Date(t).getFullYear(), new Date(t).getMonth(), new Date(t).getDate()).getTime();
+    const nextStart = new Date(new Date(t).getFullYear(), new Date(t).getMonth(), new Date(t).getDate() + 1).getTime();
+    return { t, dayStart, nextStart, day: moonDay(t, NYC.lat, NYC.lon), set: moonSetOfDay(t, NYC.lat, NYC.lon) };
+  });
+
+  it("is inside the asked calendar day whenever it is a time at all", () => {
+    for (const d of sweep) {
+      if (d.set === null) continue;
+      expect(d.set).toBeGreaterThanOrEqual(d.dayStart);
+      expect(d.set).toBeLessThan(d.nextStart);
+    }
+  });
+
+  it("holds steady across the calendar day, like the rise", () => {
+    const morning = moonSetOfDay(new Date(2026, 7, 21, 6, 0).getTime(), NYC.lat, NYC.lon);
+    const night = moonSetOfDay(new Date(2026, 7, 21, 23, 30).getTime(), NYC.lat, NYC.lon);
+    expect(morning).toBe(night);
+  });
+
+  it("finds a moonset on the day with no moonrise: the time the old readout hid", () => {
+    const noRise = sweep.filter((d) => d.day.riseUnixMillis === null);
+    expect(noRise.length).toBeGreaterThanOrEqual(1);
+    for (const d of noRise) {
+      // From 40°N the moon that rose late last evening sets in this day.
+      expect(d.set, new Date(d.t).toDateString()).not.toBeNull();
+    }
+  });
+
+  it("is the same instant moonDay pairs with a rise, when that set lands in the day it is asked about", () => {
+    // Two routes to one event: the set that follows yesterday's rise, and the
+    // first set of today. Where the first falls today, they must agree.
+    let compared = 0;
+    for (let i = 1; i < sweep.length; i++) {
+      const yesterday = sweep[i - 1];
+      const today = sweep[i];
+      if (yesterday === undefined || today === undefined) continue;
+      const paired = yesterday.day.setUnixMillis;
+      if (paired === null || paired < today.dayStart || paired >= today.nextStart) continue;
+      expect(today.set).not.toBeNull();
+      expect(Math.abs((today.set as number) - paired)).toBeLessThan(1000);
+      compared++;
+    }
+    expect(compared).toBeGreaterThan(20);
+  });
+
+  it("has a day with no moonset too, about once a month, and says null for it", () => {
+    const none = sweep.filter((d) => d.set === null).length;
+    expect(none).toBeGreaterThanOrEqual(1);
+    expect(none).toBeLessThanOrEqual(3);
   });
 });
 

@@ -247,7 +247,7 @@ try {
     await page.waitForFunction(() => document.getElementById("station")?.textContent?.startsWith("85.0°N"));
     // Midsummer at 85°N: the sun and some planets never set.
     for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "Back one month", exact: true }).click();
-    await page.waitForFunction(() => document.querySelector("#travelled")?.textContent?.includes("June"));
+    await page.waitForFunction(() => document.querySelector("#when")?.textContent?.includes("Jun "));
     await page.getByRole("tab", { name: "Planets", exact: true }).click();
     await settle(page);
     const polar = [];

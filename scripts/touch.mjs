@@ -23,7 +23,9 @@
 //   - the constellation rows, the TONIGHT toggle and the station fields reach
 //     the floors named in FLOORS, with the reason each cannot reach 44;
 //   - the ring key's five buttons (DEC-055) are full 44px targets in
-//     Stargazer, and its names, echo and hint are content at 12px or more.
+//     Stargazer, and its names, echo and hint are content at 12px or more;
+//   - the moon's phase, with each of its four longest names showing, stays
+//     inside its bay at 320, 360 and 390: it wraps at its space (DEC-059).
 // The hit box is measured, not read from CSS: `elementFromPoint` is probed
 // outward from each control's centre until the browser hands the point to
 // something else. Screenshots the rail at phone and tablet sizes.
@@ -48,6 +50,15 @@ const out = resolve(process.argv[3] ?? "web/.shots/touch");
 const FIXED_TIME = "2026-09-02T23:00:00.000Z";
 /** Noon in New York on a day with no moonrise at 40N 74W (the moon bay is worded). */
 const NO_MOONRISE_TIME = "2026-10-04T16:00:00.000Z";
+/** Noon in New York on a day when each of the four longest phase names is the
+ *  one the moon bay shows (app/scene-plinth.ts PHASE_NAMES; the driver asserts
+ *  the name it reads, so a date that drifts off its phase fails by name). */
+const LONG_PHASES = [
+  ["2026-09-06T16:00:00.000Z", "waning crescent"],
+  ["2026-09-13T16:00:00.000Z", "waxing crescent"],
+  ["2026-09-21T16:00:00.000Z", "waxing gibbous"],
+  ["2026-09-28T16:00:00.000Z", "waning gibbous"],
+];
 const VIEWPORTS = [
   { name: "phone-320", width: 320, height: 640, isMobile: true },
   { name: "phone-360", width: 360, height: 780, isMobile: true },
@@ -536,6 +547,61 @@ try {
       `${vp.name}: "${moon.text}" / "${moon.set}" spills ${fmt(moon.spill)}px past its bay (scroll overflow ${moon.over}px)`);
     console.log(`touch: ${vp.name} "${moon.text}" / "${moon.set}" fits its bay`);
     await context.close();
+  }
+
+  // The moon's phase on a narrow phone, at a time when each of the four
+  // longest names is the one showing. Found by an independent review of #51:
+  // the phase dropped under MOON as a line of its own but could not break
+  // inside that line, so "waxing crescent" (108px at 12px) ran 5px past the
+  // edge of a 320px phone's bay, which has 96px for it. It must wrap at its
+  // space, stay 12px and stay whole (DEC-053, DEC-059).
+  for (const vp of VIEWPORTS.filter((v) => v.width <= 390)) {
+    for (const [time, name] of LONG_PHASES) {
+      const context = await browser.newContext({
+        viewport: { width: vp.width, height: vp.height }, deviceScaleFactor: 1,
+        hasTouch: true, isMobile: vp.isMobile,
+        locale: "en-US", timezoneId: "America/New_York", reducedMotion: "reduce", serviceWorkers: "block",
+      });
+      const page = await context.newPage();
+      page.setDefaultTimeout(15000);
+      await page.clock.setFixedTime(new Date(time));
+      await page.addInitScript(() => {
+        localStorage.clear();
+        localStorage.setItem("day4-observatory.station", JSON.stringify({ lat: 40, lon: -74 }));
+      });
+      await page.goto(target.href, { waitUntil: "networkidle" });
+      await settle(page);
+      const phase = await page.evaluate(() => {
+        const el = document.getElementById("moon");
+        const bay = el?.closest(".bay");
+        if (!el || !bay) return null;
+        const box = bay.getBoundingClientRect();
+        const range = document.createRange(); range.selectNodeContents(el);
+        const ink = [...range.getClientRects()];
+        const cs = getComputedStyle(el);
+        const clips = (node) => getComputedStyle(node).overflowX !== "visible" && node.scrollWidth > node.clientWidth + 1;
+        return { text: el.textContent, px: parseFloat(cs.fontSize),
+          right: Math.max(el.getBoundingClientRect().right, ...ink.map((r) => r.right)),
+          left: Math.min(...ink.map((r) => r.left)),
+          bayLeft: box.left, bayRight: box.right,
+          column: box.right - parseFloat(getComputedStyle(bay).paddingRight),
+          lines: new Set(ink.map((r) => Math.round(r.top))).size,
+          cut: cs.textOverflow === "ellipsis" || clips(el) || clips(el.parentElement) || clips(bay),
+          pageWidth: document.documentElement.scrollWidth };
+      });
+      assert(phase, `${vp.name}: no moon phase found`);
+      assert.equal(phase.text, name, `${vp.name}: ${time} should show "${name}", read "${phase.text}"`);
+      assert(phase.px + 0.01 >= CONTENT_FLOOR, `${vp.name}: "${name}" shrank to ${phase.px}px (floor ${CONTENT_FLOOR})`);
+      assert(phase.right <= phase.column + 0.5 && phase.left + 0.5 >= phase.bayLeft,
+        `${vp.name}: "${name}" spills ${fmt(phase.right - phase.column)}px past its bay's column ` +
+        `(right edge ${fmt(phase.right)}, column ${fmt(phase.column)}, bay ${fmt(phase.bayRight)})`);
+      assert.equal(phase.cut, false, `${vp.name}: "${name}" is clipped or ends in an ellipsis`);
+      assert(phase.lines <= 2, `${vp.name}: "${name}" broke into ${phase.lines} lines; it has one space to break at`);
+      assert(phase.pageWidth <= vp.width, `${vp.name}: with "${name}" showing the page is ${phase.pageWidth}px wide in a ${vp.width}px viewport`);
+      console.log(`touch: ${vp.name} "${name}" on ${phase.lines} line${phase.lines === 1 ? "" : "s"}, ` +
+        `right edge ${fmt(phase.right)} inside the bay's ${fmt(phase.bayRight)} (column ${fmt(phase.column)})`);
+      await context.close();
+    }
   }
 } finally {
   await browser.close();

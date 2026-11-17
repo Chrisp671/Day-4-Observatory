@@ -101,6 +101,16 @@ describe("nothing is cut off, and focus is visible (DEC-053)", () => {
       expect(f[1]).not.toMatch(/white-space\s*:\s*nowrap/);
     }
   });
+
+  it("lets the moon's phase break at its space: no nowrap on the key or the phase (DEC-059)", () => {
+    // "waxing crescent" is 108px at 12px and a 320px phone's moon bay has 96.
+    const rules = [...css().matchAll(/\.bay \.k(?: \.phase)?\s*\{([^}]*)\}/g)];
+    expect(rules.length).toBeGreaterThanOrEqual(2);
+    for (const f of rules) {
+      expect(f[1]).not.toMatch(/white-space\s*:\s*nowrap/);
+      expect(f[1]).not.toMatch(/flex-wrap\s*:\s*nowrap/);
+    }
+  });
 });
 
 describe("the ring key, its echo and its hint (DEC-055)", () => {

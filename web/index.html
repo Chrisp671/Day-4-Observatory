@@ -214,11 +214,14 @@
       font-variant-numeric:tabular-nums}
     /* The moon's phase rides its key, so the two lines under it are the
        moon's rise and set in the same places, sizes and inks as the sun's
-       beside them (REQ-017). Where the bay is too narrow for both words it
-       drops under the key as a line of its own; it never shrinks. */
+       beside them (REQ-017). Where the bay is too narrow to hold the phase
+       beside MOON it drops under the key as a line of its own, and where
+       that line is still wider than the bay ("waxing crescent" is 108px
+       and a 320px phone's bay has 96) it breaks at its space into two.
+       It stays 12px and is never cut off (DEC-053, DEC-059). */
     .bay .k{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}
     .bay .k .phase{font-family:var(--mono);font-weight:400;font-size:12px;letter-spacing:0;
-      color:var(--ink-hi);white-space:nowrap}
+      color:var(--ink-hi)}
     .part{white-space:nowrap}
     .part.prose{white-space:normal}
     .bay .s b{font-weight:500;color:var(--ink-hi);white-space:nowrap}

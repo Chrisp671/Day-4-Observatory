@@ -180,7 +180,8 @@ The exact procedure, from a checkout of `main`:
 `review.py`, raised in #53: 800,000 characters of source and a
 1,000,000-character payload) it can approach a megabyte. On #51 it was 845 KB
 and Sol could not get through it: its file tool returned a truncated piece and
-the review stopped. `manual_prepare.py` therefore also writes `parts/`
+the review stopped (a compressing proxy in front of Codex turned out to be
+the larger cause; step 1 below). `manual_prepare.py` therefore also writes `parts/`
 (DEC-058), the same evidence cut into ordered files of at most 40,000
 characters:
 
@@ -201,17 +202,35 @@ only a label, with every character outside `A-Z a-z 0-9 . _ -` replaced.
 For a PR whose `evidence.json` is more than a few hundred kilobytes, this is
 the procedure that got #51 reviewed:
 
-1. Run Sol in its own top-level Codex thread, not as a turn inside a busy one,
-   so the review has the thread to itself.
-2. Give it `instructions.txt`, the eight screenshots and the `parts/` folder,
+1. Run Sol on a Codex session that talks to the model directly, not through
+   a proxy that compresses or rewrites tool output (DEC-059). This was the
+   real cause of the reviews that stopped early: behind such a proxy a file
+   Sol read came back shortened or rewritten (a JSON array arrived as a
+   one-line summary of its shape plus a truncation note), so it never saw
+   the evidence. Use a Codex provider instance set up without the proxy, or
+   pass the equivalent overrides, with your proxy's MCP server name in place
+   of `<proxy>`:
+
+   ```sh
+   codex -c openai_base_url=https://chatgpt.com/backend-api/codex -c mcp_servers.<proxy>.enabled=false
+   ```
+
+   On a direct session Sol read all 70 parts of #51 in one turn and replied
+   `"complete": true`.
+2. Give it its own top-level thread, not a turn inside a busy one.
+3. Give it `instructions.txt`, the eight screenshots and the `parts/` folder,
    and tell it to read `parts/INDEX.txt` first and then every part in INDEX
    order, about 80 lines at a time. The line count in the INDEX says how many
-   slices a part needs.
-3. If a turn stops early, or the reply says `"complete": false`, send a short
-   resume message in the same thread ("resume from the next unread part in
-   INDEX.txt") instead of starting over. Never publish a reply with
-   `"complete": false`: the publisher rejects it, as it rejects a model's.
-4. Before publishing, strip a UTF-8 byte order mark from `reply.json` if the
+   slices a part needs. The slices are still needed on a direct session:
+   Codex's own tool output is cut at about 10,000 tokens. Tell it that any
+   range that comes back truncated must be read again in smaller slices.
+4. Expect one turn to finish the review. As a fallback only, if a turn stops
+   early or the reply says `"complete": false`, send a short resume message
+   in the same thread ("resume from the next unread part in INDEX.txt")
+   instead of starting over, and check step 1 before trying again. Never
+   publish a reply with `"complete": false`: the publisher rejects it, as it
+   rejects a model's.
+5. Before publishing, strip a UTF-8 byte order mark from `reply.json` if the
    file has one. Windows PowerShell 5.1 writes one with `>` and `Out-File`,
    and the publisher's strict JSON parse rejects a reply that starts with it:
 

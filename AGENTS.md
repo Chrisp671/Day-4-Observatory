@@ -33,7 +33,7 @@ All from `web/`, Node 22:
 
 ```shell
 npm ci
-npm test                # vitest run — 588 tests (2026-11-14)
+npm test                # vitest run — 589 tests (2026-11-17)
 npx tsc --noEmit        # strict
 npm run build           # tsc --noEmit && vite build
 npm run dev
@@ -75,7 +75,9 @@ accepts the status only from GitHub Actions, never from a personal token:
    GPT-6.1 Sol through T3/Codex; save its JSON reply as `reply.json`. For a
    large PR give it the `parts/` folder in place of `evidence.json`, in a
    Codex thread of its own, read in ~80-line slices from `parts/INDEX.txt`
-   (DEC-058; `scripts/review/README.md`, "Large reviews").
+   (DEC-058; `scripts/review/README.md`, "Large reviews"). Run Sol on a
+   Codex session that reaches the model directly, not through a proxy that
+   compresses tool output (DEC-059).
 3. `gh -R Chrisp671/Day-4-Observatory workflow run review-manual.yml -f pr=<n>
    -f sha=<sha> -F review=@reply.json` (or `-f review="$(cat reply.json)"`).
    The publisher validates the reply exactly as a model's, for the current

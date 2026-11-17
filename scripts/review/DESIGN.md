@@ -222,7 +222,11 @@ main's reporter accepts the new manifest as it stands.
 
 The manual path's limits (`LIMITS`, #53) let `evidence.json` approach a
 megabyte on one line. On #51 that was more than Sol's file tool would return
-in one piece. `manual_prepare.py` therefore also writes `parts/`: the same
+in one piece. (Most of what stopped those reviews was later traced to a
+proxy in front of Codex that compresses tool output; the reviewer now runs
+on a session that reaches the model directly, DEC-059. The parts are still
+needed, because Codex's own tool output is cut near 10,000 tokens.)
+`manual_prepare.py` therefore also writes `parts/`: the same
 text in ordered files of at most 40,000 characters with an INDEX. Three
 choices shape it. The parts are derived by parsing the evidence text itself,
 not by running the builder a second time, so they cannot disagree with the
